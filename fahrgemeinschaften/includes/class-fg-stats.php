@@ -1,0 +1,133 @@
+<?php
+/**
+ * Aggregate, non-identifying usage statistics.
+ *
+ * @package Fahrgemeinschaften
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+/**
+ * Daily counters stored without form contents or direct identifiers.
+ */
+final class FG_Stats {
+	/**
+	 * Counter definitions.
+	 *
+	 * @return array<string, string>
+	 */
+	public static function labels() {
+		return array(
+			'publish_form_total'     => 'Veröffentlichungsformulare gesamt',
+			'publish_valid_email'    => 'Gültige E-Mail-Adresse',
+			'publish_invalid_email'  => 'Ungültige oder nicht hinterlegte E-Mail-Adresse',
+			'publish_pending'        => 'Vorgemerkte Einträge',
+			'publish_confirmed'      => 'Bestätigte Veröffentlichungen',
+			'publish_deleted'        => 'Gelöschte Vormerkungen/Einträge',
+			'publish_personal_data'  => 'Einträge mit zurückgewiesenen persönlichen Angaben',
+			'contact_total'          => 'Kontaktversuche gesamt',
+			'contact_valid_email'    => 'Gültige Kontaktadressen',
+			'contact_invalid_email'  => 'Ungültige Kontaktadressen',
+			'contact_mail_sent'      => 'Kontakt-E-Mails an Ersteller übergeben',
+			'contact_requester_mail' => 'Bestätigungen an Anfragende übergeben',
+			'bot_honeypot'           => 'Honeypot-Treffer',
+			'bot_fast_submit'        => 'Auffällig schnelle Absendungen',
+			'mail_send_failed'       => 'Fehlgeschlagene E-Mail-Übermittlungen',
+		);
+	}
+
+	/**
+	 * Increment one daily counter.
+	 *
+	 * @param string $key Counter key.
+	 * @param int    $amount Increment.
+	 * @return void
+	 */
+	public function increment( $key, $amount = 1 ) {
+		$key = sanitize_key( $key );
+		if ( ! array_key_exists( $key, self::labels() ) ) {
+			return;
+		}
+
+		$stats = get_option( FG_STATS_OPTION, array() );
+		if ( ! is_array( $stats ) ) {
+			$stats = array();
+		}
+
+		$today = current_time( 'Y-m-d' );
+		if ( ! isset( $stats[ $today ] ) || ! is_array( $stats[ $today ] ) ) {
+			$stats[ $today ] = array();
+		}
+
+		$stats[ $today ][ $key ] = isset( $stats[ $today ][ $key ] )
+			? (int) $stats[ $today ][ $key ] + max( 0, (int) $amount )
+			: max( 0, (int) $amount );
+
+		update_option( FG_STATS_OPTION, $stats, false );
+	}
+
+	/**
+	 * Get counters for the last N days, including today.
+	 *
+	 * @param int $days Number of days.
+	 * @return array<string, int>
+	 */
+	public function get_recent( $days = 30 ) {
+		$days   = max( 1, absint( $days ) );
+		$stats  = get_option( FG_STATS_OPTION, array() );
+		$result = array_fill_keys( array_keys( self::labels() ), 0 );
+
+		if ( ! is_array( $stats ) ) {
+			return $result;
+		}
+
+		$timezone = wp_timezone();
+		$today    = current_datetime()->setTimezone( $timezone );
+
+		for ( $offset = 0; $offset < $days; $offset++ ) {
+			$date = $today->modify( '-' . $offset . ' days' )->format( 'Y-m-d' );
+			if ( isset( $stats[ $date ] ) && is_array( $stats[ $date ] ) ) {
+				foreach ( $result as $key => $unused ) {
+					$result[ $key ] += isset( $stats[ $date ][ $key ] ) ? (int) $stats[ $date ][ $key ] : 0;
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Get the stored daily counters.
+	 *
+	 * @return array<string, array<string, int>>
+	 */
+	public function get_daily() {
+		$stats = get_option( FG_STATS_OPTION, array() );
+
+		return is_array( $stats ) ? $stats : array();
+	}
+
+	/**
+	 * Remove counters older than the configured retention period.
+	 *
+	 * @return void
+	 */
+	public function cleanup() {
+		$stats = get_option( FG_STATS_OPTION, array() );
+		if ( ! is_array( $stats ) || empty( $stats ) ) {
+			return;
+		}
+
+		$cutoff = current_datetime()
+			->modify( '-' . FG_STATISTICS_RETENTION_DAYS . ' days' )
+			->format( 'Y-m-d' );
+
+		foreach ( array_keys( $stats ) as $date ) {
+			if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) $date ) || $date < $cutoff ) {
+				unset( $stats[ $date ] );
+			}
+		}
+
+		update_option( FG_STATS_OPTION, $stats, false );
+	}
+}

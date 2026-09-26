@@ -1,0 +1,205 @@
+.fg-wrapper {
+	--fg-border: #d7dce2;
+	--fg-muted: #5f6b76;
+	--fg-accent: #1f6f43;
+	--fg-accent-dark: #155334;
+	--fg-surface: #f7f9fa;
+	max-width: 980px;
+	color: #1f2933;
+}
+
+.fg-wrapper * {
+	box-sizing: border-box;
+}
+
+.fg-notice {
+	margin: 0 0 1.25rem;
+	padding: 0.9rem 1rem;
+	border-left: 4px solid var(--fg-accent);
+	background: #eef8f2;
+}
+
+.fg-notice-error {
+	border-left-color: #a52828;
+	background: #fff1f1;
+}
+
+.fg-section,
+.fg-ride {
+	margin: 0 0 1.5rem;
+	padding: 1.25rem;
+	border: 1px solid var(--fg-border);
+	border-radius: 6px;
+	background: #fff;
+}
+
+.fg-section > h2,
+.fg-section > h3,
+.fg-ride > h4 {
+	margin-top: 0;
+}
+
+.fg-date,
+.fg-meta,
+.fg-hint {
+	color: var(--fg-muted);
+}
+
+.fg-hint {
+	font-size: 0.92rem;
+}
+
+.fg-form-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 1rem;
+}
+
+.fg-field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+
+.fg-field-full {
+	grid-column: 1 / -1;
+}
+
+.fg-field label,
+.fg-field legend {
+	font-weight: 600;
+}
+
+.fg-field input[type="text"],
+.fg-field input[type="email"],
+.fg-field input[type="date"],
+.fg-field input[type="time"],
+.fg-field select,
+.fg-field textarea {
+	width: 100%;
+	min-height: 2.6rem;
+	padding: 0.55rem 0.65rem;
+	border: 1px solid #9da7b1;
+	border-radius: 4px;
+	background: #fff;
+	font: inherit;
+}
+
+.fg-choice {
+	display: flex;
+	gap: 0.4rem;
+	align-items: center;
+}
+
+.fg-consent {
+	display: flex;
+	gap: 0.6rem;
+	align-items: flex-start;
+	line-height: 1.45;
+}
+
+.fg-consent input {
+	margin-top: 0.25rem;
+}
+
+.fg-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin-top: 1.25rem;
+}
+
+.fg-button,
+.fg-button-secondary {
+	display: inline-block;
+	padding: 0.65rem 1rem;
+	border: 1px solid var(--fg-accent);
+	border-radius: 4px;
+	background: var(--fg-accent);
+	color: #fff;
+	font: inherit;
+	font-weight: 600;
+	line-height: 1.2;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.fg-button:hover,
+.fg-button:focus {
+	border-color: var(--fg-accent-dark);
+	background: var(--fg-accent-dark);
+	color: #fff;
+}
+
+.fg-button-secondary {
+	background: #fff;
+	color: var(--fg-accent-dark);
+}
+
+.fg-button-secondary:hover,
+.fg-button-secondary:focus {
+	background: #eef8f2;
+	color: var(--fg-accent-dark);
+}
+
+.fg-ride + .fg-ride {
+	margin-top: 1rem;
+}
+
+.fg-contact-form {
+	margin-top: 1rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--fg-border);
+}
+
+.fg-contact-form .fg-field {
+	max-width: 520px;
+}
+
+.fg-empty {
+	padding: 1.25rem;
+	border: 1px dashed var(--fg-border);
+	background: var(--fg-surface);
+}
+
+.fg-honeypot {
+	position: absolute !important;
+	left: -10000px !important;
+	width: 1px !important;
+	height: 1px !important;
+	overflow: hidden !important;
+}
+
+.fg-stats-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 1rem;
+}
+
+.fg-stat-card {
+	padding: 1rem;
+	border: 1px solid #c7ced6;
+	border-radius: 5px;
+	background: #fff;
+}
+
+.fg-stat-card strong {
+	display: block;
+	margin-top: 0.35rem;
+	font-size: 1.6rem;
+}
+
+@media (max-width: 640px) {
+	.fg-form-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.fg-field-full {
+		grid-column: auto;
+	}
+
+	.fg-section,
+	.fg-ride {
+		padding: 1rem;
+	}
+}

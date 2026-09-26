@@ -1,0 +1,154 @@
+<?php
+/**
+ * Plugin Name:       Fahrgemeinschaften
+ * Description:       Öffentliche Fahrgemeinschaften für Vereinsarbeitsdienste mit sicherer E-Mail-Bestätigung.
+ * Version:           1.0.0
+ * Requires at least: 6.4
+ * Requires PHP:      7.4
+ * Author:            Verein
+ * License:           GPL-2.0-or-later
+ * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
+ * Text Domain:       fahrgemeinschaften
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+define( 'FG_VERSION', '1.0.0' );
+define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
+define( 'FG_EVENTS_PAGE_SLUG', 'fahrgemeinschaften-events' );
+define( 'FG_RIDES_PAGE_SLUG', 'fahrgemeinschaften-rides' );
+define( 'FG_STATS_OPTION', 'fg_daily_statistics' );
+define( 'FG_CLEANUP_OPTION', 'fg_last_cleanup' );
+define( 'FG_PENDING_TOKEN_TTL', 48 * HOUR_IN_SECONDS );
+define( 'FG_PUBLISHED_DELETE_TOKEN_TTL', 30 * DAY_IN_SECONDS );
+define( 'FG_STATISTICS_RETENTION_DAYS', 90 );
+define( 'FG_CONSENT_VERSION', '1.0' );
+define( 'FG_RIDE_STATUS_PENDING', 'pending' );
+define( 'FG_RIDE_STATUS_PUBLISHED', 'published' );
+define( 'FG_RIDE_MODE_OFFER', 'offer' );
+define( 'FG_RIDE_MODE_SEARCH', 'search' );
+
+require_once __DIR__ . '/includes/class-fg-security.php';
+require_once __DIR__ . '/includes/class-fg-records.php';
+require_once __DIR__ . '/includes/class-fg-schema.php';
+require_once __DIR__ . '/includes/class-fg-store.php';
+require_once __DIR__ . '/includes/class-fg-repository.php';
+require_once __DIR__ . '/includes/class-fg-stats.php';
+require_once __DIR__ . '/includes/class-fg-mailer.php';
+require_once __DIR__ . '/includes/class-fg-public.php';
+require_once __DIR__ . '/includes/class-fg-actions.php';
+require_once __DIR__ . '/includes/class-fg-admin.php';
+require_once __DIR__ . '/includes/class-fg-admin-events.php';
+require_once __DIR__ . '/includes/class-fg-admin-rides.php';
+require_once __DIR__ . '/includes/class-fg-privacy.php';
+
+/**
+ * Main plugin coordinator.
+ */
+final class FG_Plugin {
+	/**
+	 * Registered service objects.
+	 *
+	 * @var array<string, object>
+	 */
+	private $services = array();
+
+	/**
+	 * Register all WordPress hooks.
+	 *
+	 * @return void
+	 */
+	public function register() {
+		$this->services['public']  = new FG_Public();
+		$this->services['actions'] = new FG_Actions();
+		$this->services['admin']   = new FG_Admin();
+		$this->services['privacy'] = new FG_Privacy();
+
+		// A schema change has to be applied without asking the site owner to
+		// deactivate the plugin again, so it runs on every load and does
+		// nothing once the stored version matches.
+		add_action( 'plugins_loaded', array( __CLASS__, 'maybe_install_schema' ), 5 );
+		add_action( 'init', array( $this, 'ensure_cleanup_scheduled' ) );
+		add_action( 'admin_init', array( $this, 'maybe_run_cleanup_fallback' ), 20 );
+	}
+
+	/**
+	 * Create the tables when they are missing or outdated.
+	 *
+	 * @return void
+	 */
+	public static function maybe_install_schema() {
+		FG_Schema::maybe_install();
+	}
+
+	/**
+	 * Keep cleanup scheduled after updates without relying on activation only.
+	 *
+	 * @return void
+	 */
+	public function ensure_cleanup_scheduled() {
+		if ( ! wp_next_scheduled( 'fg_daily_cleanup' ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'fg_daily_cleanup' );
+		}
+	}
+
+	/**
+	 * Run the daily cleanup from the admin as a fallback.
+	 *
+	 * Expired pending entries, expired delete tokens and old statistics must
+	 * disappear even when WP-Cron is disabled or too rarely triggered by
+	 * traffic. The marker option keeps this to one run per day.
+	 *
+	 * @return void
+	 */
+	public function maybe_run_cleanup_fallback() {
+		$last = (int) get_option( FG_CLEANUP_OPTION, 0 );
+
+		if ( $last > time() - DAY_IN_SECONDS ) {
+			return;
+		}
+
+		$this->services['actions']->daily_cleanup();
+	}
+
+	/**
+	 * Activation routine.
+	 *
+	 * @return void
+	 */
+	public static function activate() {
+		FG_Schema::install();
+
+		if ( ! wp_next_scheduled( 'fg_daily_cleanup' ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'fg_daily_cleanup' );
+		}
+	}
+
+	/**
+	 * Deactivation routine. Stored content is intentionally retained.
+	 *
+	 * @return void
+	 */
+	public static function deactivate() {
+		wp_clear_scheduled_hook( 'fg_daily_cleanup' );
+	}
+}
+
+register_activation_hook( __FILE__, array( 'FG_Plugin', 'activate' ) );
+register_deactivation_hook( __FILE__, array( 'FG_Plugin', 'deactivate' ) );
+
+/**
+ * Boot the plugin.
+ *
+ * @return void
+ */
+function fg_bootstrap_plugin() {
+	static $plugin = null;
+
+	if ( null === $plugin ) {
+		$plugin = new FG_Plugin();
+		$plugin->register();
+	}
+}
+
+fg_bootstrap_plugin();

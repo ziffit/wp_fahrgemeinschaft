@@ -1,0 +1,31 @@
+# Vom Testsatz bei jedem Lauf erzeugt, niemals versionieren.
+#
+# tests/cookies.txt   enthält ein echtes WordPress-Session-Cookie des
+#                     Administrators (wordpress_logged_in_...)
+# tests/fixture.json  Nonces sowie Bestätigungs- und Lösch-Token
+# tests/*.html        abgelegte Antworten des Adminbereichs mit _wpnonce
+tests/cookies.txt
+tests/fixture.json
+tests/*.html
+
+# Lieferfertiges Paket, wird aus dem Quellbaum erzeugt, nicht eingecheckt.
+# Bauen mit:
+#   cd <Projektverzeichnis> && python3 - <<'PY'
+#   import os, zipfile
+#   files = sorted(
+#       os.path.join(b, n)
+#       for b, d, ns in os.walk("fahrgemeinschaften") for n in ns
+#   )
+#   with zipfile.ZipFile("fahrgemeinschaften.zip", "w", zipfile.ZIP_DEFLATED) as z:
+#       for f in files:
+#           z.write(f, f)
+#   PY
+fahrgemeinschaften.zip
+
+# Betriebssystem und Editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/

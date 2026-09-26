@@ -1,0 +1,76 @@
+Ich möchte ein Wordpress-Plugin entwicklen:
+Kontext: fahrgemeinchaften Bilden für den Arbeitsdienst im Fischereiverein.
+
+Ziel: Mitglieder die zu einem Arbeitsdienst eingeladen sind, sollen sich absprechen können, um Fahrgemeinschaften zu bilden.
+
+Anzeige aller aktuellen Fahrgemeinschaften darunter 
+
+Formular öffentlich "Fahrgemeinschaft anbieten/suchen":
+Radio: "Ich biete, Ich suche
+Arbeitsdienst (Dropdown mit den anstehenden Arbeitsdiensten)
+Bezeichnung (z.B. Mein Vorname/Spitzname/Fahrguppe;lesbare Bezeichnung, wird frei veröffentlich, deshalb keinen ganzen Namen eintragen, eher "Spitzi,Mögeldorfer, Peter")
+Ortsteil der Abfahrt und weiteres wie Anzahl Plätze (Freitext, 500 Zeichen, Anzeige im Netzt, geb nicht die genaue Adresse, Name E-Mail oder telefonnummer ein!)
+E-Mail (wird nicht im Netz angezegt, dient der Kontaktaufnahme, muss im Arbeitsdienst hinterlegt sein)
+
+Admin Bereich:
+
+Anzeige aller fahrgemeinchaften
+
+Möglichkeit zum Ändern und Löschen von Fahrgemeinschaften
+
+Anlegen, Ändern, Löschen von Arbeitsdiensten mit:
+Name: z.B. Laber
+Datum: 12.12.2000
+Teilnehmer: Liste an E-Mail Adressen
+UUID (Datenbank ID) wird nur angezeigt, nicht erstellt
+
+Wird ein Arbeitsdienst gelöscht, werden auch alle Fahrgemeinschaften gelöscht.
+
+Arbeitsdienste die in der Vergangenheit liegen werden automatisch im Frontend (öffentlicher Bereich) nicht angezeigt.
+
+Funktionalität:
+Trägt ein Benutzer eine fahrgemeinschaft ein, wird diese in der DB gespeichert und im Frontend und adminbereich angezeigt.
+Trägt der benuter eine E-Mail ein, die nicht in der Liste der teilnhemer zum areitsdienst ist, kann er das Formular nicht absenden.
+Der benutzer bekommt eine Erfolgsmeldung, wenn die Eintragung geht.
+
+Der Benutzer bekommt nach Eintragung in das System eine E-Mail zugestellt:
+-----
+Hallo <Bezeichnung>,
+danke für die veröffentlichung der Fahrgemeinschaft.
+
+Du kannst deine Eintragung Löschen wenn du diesen Link aufrufst: <url zum löschen mit der UUID>
+Achtung: es erfolgt keine Rückfrage!
+
+Wenn  sich jemand zu deiner Eintragung meldet, erhälst du eine E-Mail.
+Jetzt könnt ihr euch austauschen, z.B. auch Telefonnummern.
+
+Ist der Arbeitsdienst vorbei, wird dein Eintrag automatisch entfernt.
+
+Bei Fragen nutze das Konaktformular auf der Webseite.
+----
+
+Hinweis: DIe UUID darf nie im Internet angezeigt werden! Sonst kann ja jeder löschen.
+
+In der Liste der Fahrgemeinschaften kann man unter jedem Eintrag in ein Input seine E-Mail-Adresse eingebn und den Button "Kontakt aufnehmen" klicken.
+Ist die eingetragene E-Mail in der Liste der E-mails des Arbeitsdiensts bekommt der Ersteller der Fahrgemeinschaft eine Nachricht. Ansonsten kommt eine Fehlermeldung "E-mail-Adresse nicht Teil des Arbeitsdienstes. Nutze die im Verein hinterlegte E-Mail oder nimm Kontakt mit uns auf.".
+
+E-Mail ans Ersteller:
+-----
+Hallo <Bezeichnung>,
+du hast einen Interessenten für deine Fahrgemeinschaft.
+<E-Mail-Adresse>
+Schreib doch gleich eine Mail, damit ihr euch abstimmen könnt.
+Wenn du magst, kannst du jetzt auch deine Telefonnummer schreiben.
+
+Bitte melde dich auch bei dem Interessenten, wenn es nicht klappt. Er/Sie wartet auf eine Antwort. 
+-----
+
+E-Mail an den Anfragenden:
+----
+Hallo,
+wir haben die Fahrgemeinschaft benachrichtig.
+Hoffentlich meldet Sie sich bald bei dir.
+----
+
+
+Aufgabe: Prüfe das Vorgehen. Auch auf Datenschutz und Risiken. Danach überlege was wir in Wordpress tun müssten.
