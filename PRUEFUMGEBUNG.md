@@ -79,7 +79,7 @@ Fahrgemeinschaften sowie die Statistik-Option, es gibt also keinen Zustand vom V
 | Suite | Datei | Vorgehen |
 | --- | --- | --- |
 | CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–16: Tabellen, Aktivitätsgrenze, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene |
-| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel sowie Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data` |
+| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data` sowie das Verhalten der Schaltflächen im Stylesheet |
 | Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo` |
 | Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der vier Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau |
 
@@ -174,6 +174,31 @@ Abstand zwischen Straßennamen und Hausnummer (`\D{0,12}` zu `\D{0,2}`) würde
 Straßenname. Jede Verschärfung dieser Art tauscht also eine echte Adresse gegen eine zu enge
 Ablehnung, und die Wahl ist eine Abwägung des Vereins, keine technische. Stand heute wird
 nichts geändert, und der Hinweis nennt bewusst nur Ort und Stadtteil.
+
+Das Aussehen der Schaltflächen wird im ausgelieferten Stylesheet geprüft, und zwar an
+Eigenschaften statt an Zahlen. Vier Prüfungen: Keine Regel, die eine Schaltfläche zeichnet,
+darf eine eigene Schriftgröße setzen, und mindestens eine muss `font: inherit` verwenden.
+Diese Regel erfasst jede Regel, deren Selektor `.fg-button` oder `.fg-contact-toggle`
+nennt, nicht nur `.fg-button` allein — die Kontaktfläche wird zwar von `.fg-button` gezeichnet,
+trägt aber aus Gründen der Absicherung eine zweite Regel mit dem ganzen Pfad, und die kann
+ebenso gut eine Größe bekommen. Die zweite Prüfung liest den Wert von `--fg-button` und
+misst Weiß darauf: 9,62:1, über den 4,5:1, die kleine Schrift braucht. Sie hält nicht den
+Namen und nicht den Farbwert fest, sondern das Verhältnis, damit ein späterer Farbwechsel an
+der Lesbarkeit gemessen wird und nicht an einer veralteten Ziffer. Gegenprobe mit einem
+hellen Gelb lässt sie schlagen; fehlt die Variable, ebenfalls.
+
+Die dritte und vierte Prüfung betreffen die Handhabungsseite, die ihre Formatierung als
+eine Zeile selbst mitbringt und in der die Farbe deshalb ein zweites Mal im Code steht.
+Die dritte vergleicht die Farbe dort mit der des Stylesheets — zwei Kopien laufen
+auseinander, sobald nur eine geändert wird —, die vierte verlangt auch dort ein
+`font: inherit` ohne eigene Größe. Beide lesen die Seite, die Abschnitt 3 bereits geladen
+hat; das bloße Abrufen verändert nichts, erst der POST in Abschnitt 4 bestätigt. Alle vier
+Gegenproben sind gelaufen: eigene Größe auf `.fg-button`, eigene Größe auf der
+Handhabungsseite, dort eine andere Farbe, dort `font: inherit` entfernt — jede schlägt an,
+und jede an der passenden Prüfung. Gegenprobe B ist dabei mit einem Fehler in meinem
+Prüfgerät aufgefallen: Es lud die Seite am Anfang selbst und überschrieb die Änderung, sodass
+drei Prüfungen zunächst grün meldeten, ohne geprüft zu haben. Ein Prüfgerät, das seine eigene
+Eingabe überschreibt, ist das gleiche Problem wie ein Test, der sich selbst bestätigt.
 
 Der Rückkehrweg nach dem Absenden wird über die echte Weiterleitung geprüft, nicht über
 den Quelltext: Die Adresse, auf die der Kontaktversand und ein abgelaufenes Formular

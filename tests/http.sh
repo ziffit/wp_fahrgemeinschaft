@@ -256,6 +256,82 @@ rules = re.findall(r'([^{}]+)\{([^}]*)\}', css)
 ok = any(s.strip() == '.fg-jump' and 'scroll-margin-top' in b for s, b in rules)
 sys.exit(0 if ok else 1)
 " "a jump would end under a header that stays in place"
+	# The button must not carry a font size of its own. A size written on the
+	# button detaches its label from the text around it, and a theme is free to
+	# have an opinion about the body size, so only an inherited size is right.
+	# The contact toggle is drawn by .fg-button and, for its shape, by a rule of
+	# its own, so every rule that names a button is looked at, not just one.
+	struct "$style" "the button takes its font size from the text" "
+import re, sys
+css = re.sub(r'/\*.*?\*/', '', sys.stdin.read(), flags=re.S)
+rules = re.findall(r'([^{}]+)\{([^}]*)\}', css)
+treffen = [(s, b) for s, b in rules
+           if re.search(r'\.fg-button\b|\.fg-contact-toggle\b', s)]
+if not treffen:
+    sys.exit(1)                                   # nothing draws a button
+for _, b in treffen:
+    if re.search(r'(^|;)\s*font-size\s*:', b, re.M):
+        sys.exit(1)                               # a button with a size
+if not any(re.search(r'(^|;)\s*font\s*:\s*inherit', b, re.M) for _, b in treffen):
+    sys.exit(1)                                   # no button inherits
+sys.exit(0)
+" "a button sets a font size of its own, or none of them inherits the size of the text"
+	# The colour of the button is a decision, and white on it has to stay
+	# readable. The check reads the value out of the stylesheet instead of
+	# holding on to the name, so it still means something after the colour is
+	# changed once more: a light button on white text has to fail here.
+	struct "$style" "white on the button stays readable" "
+import re, sys
+css = re.sub(r'/\*.*?\*/', '', sys.stdin.read(), flags=re.S)
+farbe = re.search(r'--fg-button\s*:\s*(#[0-9a-fA-F]{3,8})', css)
+if not farbe:
+    sys.exit(1)                                   # the colour is not set
+def lum(h):
+    h = h.lstrip('#')
+    if len(h) == 3:
+        h = ''.join(c * 2 for c in h)
+    r, g, b = (int(h[i:i+2], 16) / 255 for i in (0, 2, 4))
+    f = lambda c: c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+weiss = lum('#ffffff')
+sys.exit(0 if (weiss + 0.05) / (lum(farbe.group(1)) + 0.05) >= 4.5 else 1)
+" "the colour of the button is missing, or white on it is under 4.5:1"
+	# The confirm page brings its own stylesheet with it, written out in one line
+	# with the colour written into it instead of a variable. Two copies of one
+	# colour drift apart the first time only one of them is changed, so the two
+	# are compared here. The page was fetched in section 3, which does not change
+	# anything; confirming it is a POST in section 4.
+	if [ -s "$DIR/confirm.html" ]; then
+		confirm=$(cat "$DIR/confirm.html")
+		struct "$style
+%%FG_TRENNER%%
+$confirm" "the confirm page uses the same button colour" "
+import re, sys
+style, confirm = sys.stdin.read().split('%%FG_TRENNER%%')
+oeffentlich = re.search(r'--fg-button\s*:\s*(#[0-9a-fA-F]{3,8})', style)
+if not oeffentlich:
+    sys.exit(1)
+# the inline rule is minified, so the background is the only colour that is not
+# a border or a text colour; it is matched as \"background:\" with no space
+bestaetigung = re.search(r'button\{[^}]*background\s*:\s*(#[0-9a-fA-F]{3,8})', confirm)
+if not bestaetigung:
+    sys.exit(1)
+sys.exit(0 if oeffentlich.group(1).lower() == bestaetigung.group(1).lower() else 1)
+" "the confirm page and the public page show the button in two different colours"
+		struct "$confirm" "the confirm page button takes its font size from the text" "
+import re, sys
+html = sys.stdin.read()
+regel = re.search(r'(^|[;{}])button\{([^}]*)\}', html)
+if not regel:
+    sys.exit(1)
+koerper = regel.group(2)
+if re.search(r'(^|;)\s*font-size\s*:', koerper, re.M):
+    sys.exit(1)
+sys.exit(0 if re.search(r'(^|;)\s*font\s*:\s*inherit', koerper, re.M) else 1)
+" "the confirm page button has a font size of its own, or does not take the one of the text"
+	else
+		bad "the confirm page was fetched for the button check" "no $DIR/confirm.html"
+	fi
 else
 	bad "the stylesheet is linked" "no stylesheet with a version on the page"
 fi

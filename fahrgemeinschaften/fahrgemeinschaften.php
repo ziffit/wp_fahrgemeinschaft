@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Fahrgemeinschaften
  * Description:       Öffentliche Fahrgemeinschaften für Vereinsarbeitsdienste mit sicherer E-Mail-Bestätigung.
- * Version:           1.4.0
+ * Version:           1.5.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            Verein
@@ -24,7 +24,7 @@ defined( 'ABSPATH' ) || exit;
  * Mails oder Datenschutzerklärung: sie kennzeichnet die ausgelieferte Fassung,
  * und wer ein Archiv entpackt, soll an der Zahl erkennen, was darin ist.
  */
-define( 'FG_VERSION', '1.4.0' );
+define( 'FG_VERSION', '1.5.0' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
 /**
  * Name of the element that carries a message after a form was sent.

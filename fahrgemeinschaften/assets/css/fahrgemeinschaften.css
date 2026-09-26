@@ -1,8 +1,9 @@
 .fg-wrapper {
 	--fg-border: #d7dce2;
 	--fg-muted: #5f6b76;
-	--fg-accent: #1f6f43;
-	--fg-accent-dark: #155334;
+	--fg-notice-bar: #1f6f43;
+	--fg-button: #004488;
+	--fg-button-hover: #00366d;
 	--fg-surface: #f7f9fa;
 	max-width: 980px;
 	color: #1f2933;
@@ -22,7 +23,7 @@
 .fg-notice {
 	margin: 0 0 1.25rem;
 	padding: 0.9rem 1rem;
-	border-left: 4px solid var(--fg-accent);
+	border-left: 4px solid var(--fg-notice-bar);
 	background: #eef8f2;
 }
 
@@ -145,12 +146,16 @@
 	margin-top: 1.25rem;
 }
 
+/* The button carries no font size of its own: `font: inherit` takes the size of
+   the text around it, so the label cannot drift away from the rest of the page
+   when a theme sets a larger size. What is left to make a button look big is
+   the padding and the weight, and that is what is kept small here. */
 .fg-button {
 	display: inline-block;
-	padding: 0.65rem 1rem;
-	border: 1px solid var(--fg-accent);
-	border-radius: 4px;
-	background: var(--fg-accent);
+	padding: 0.45rem 0.75rem;
+	border: 1px solid var(--fg-button);
+	border-radius: 2px;
+	background: var(--fg-button);
 	color: #fff;
 	font: inherit;
 	font-weight: 600;
@@ -159,10 +164,12 @@
 	cursor: pointer;
 }
 
+/* White on #004488 sits at 9.6:1, the hover shade at 12:1. Both are past the
+   4.5:1 that small text needs, so the label stays readable in either state. */
 .fg-button:hover,
 .fg-button:focus {
-	border-color: var(--fg-accent-dark);
-	background: var(--fg-accent-dark);
+	border-color: var(--fg-button-hover);
+	background: var(--fg-button-hover);
 	color: #fff;
 }
 
@@ -257,7 +264,7 @@ details.fg-contact[open] > summary.fg-contact-toggle > .fg-label-open {
 
 .fg-contact-row .fg-button {
 	flex: 0 0 auto;
-	padding: 0.55rem 0.85rem;
+	padding: 0.4rem 0.65rem;
 }
 
 .fg-list-hint {
