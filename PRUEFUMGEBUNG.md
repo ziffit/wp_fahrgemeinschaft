@@ -4,8 +4,8 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter vollständiger Lauf: 26.09.2026 — **395 Prüfungen, 0 Fehler**
-(CLI 153, öffentliches HTTP 41, Mail-Ebene 66, Admin-Ebene 135).
+Letzter vollständiger Lauf: 26.09.2026 — **399 Prüfungen, 0 Fehler**
+(CLI 153, öffentliches HTTP 41, Mail-Ebene 66, Admin-Ebene 139).
 
 ## Stack
 
