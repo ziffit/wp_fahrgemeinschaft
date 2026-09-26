@@ -17,6 +17,8 @@ define( 'FG_VERSION', '1.0.0' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
 define( 'FG_EVENTS_PAGE_SLUG', 'fahrgemeinschaften-events' );
 define( 'FG_RIDES_PAGE_SLUG', 'fahrgemeinschaften-rides' );
+define( 'FG_SETTINGS_PAGE_SLUG', 'fahrgemeinschaften-settings' );
+define( 'FG_SETTINGS_OPTION', 'fg_settings' );
 define( 'FG_STATS_OPTION', 'fg_daily_statistics' );
 define( 'FG_CLEANUP_OPTION', 'fg_last_cleanup' );
 define( 'FG_PENDING_TOKEN_TTL', 48 * HOUR_IN_SECONDS );
@@ -34,12 +36,14 @@ require_once __DIR__ . '/includes/class-fg-schema.php';
 require_once __DIR__ . '/includes/class-fg-store.php';
 require_once __DIR__ . '/includes/class-fg-repository.php';
 require_once __DIR__ . '/includes/class-fg-stats.php';
+require_once __DIR__ . '/includes/class-fg-mail-templates.php';
 require_once __DIR__ . '/includes/class-fg-mailer.php';
 require_once __DIR__ . '/includes/class-fg-public.php';
 require_once __DIR__ . '/includes/class-fg-actions.php';
 require_once __DIR__ . '/includes/class-fg-admin.php';
 require_once __DIR__ . '/includes/class-fg-admin-events.php';
 require_once __DIR__ . '/includes/class-fg-admin-rides.php';
+require_once __DIR__ . '/includes/class-fg-admin-settings.php';
 require_once __DIR__ . '/includes/class-fg-privacy.php';
 
 /**

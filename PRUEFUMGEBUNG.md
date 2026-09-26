@@ -4,8 +4,8 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter vollständiger Lauf: 26.09.2026 — **334 Prüfungen, 0 Fehler**
-(CLI 153, öffentliches HTTP 41, Mail-Ebene 46, Admin-Ebene 94).
+Letzter vollständiger Lauf: 26.09.2026 — **395 Prüfungen, 0 Fehler**
+(CLI 153, öffentliches HTTP 41, Mail-Ebene 66, Admin-Ebene 135).
 
 ## Stack
 
@@ -80,8 +80,8 @@ Fahrgemeinschaften sowie die Statistik-Option, es gibt also keinen Zustand vom V
 | --- | --- | --- |
 | CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–16: Tabellen, Aktivitätsgrenze, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene |
 | Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML |
-| Mail-Ebene | `tests/mail.sh` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Inhaltstyp, Empfänger, Zustellfehler |
-| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der drei Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung |
+| Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo` |
+| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der vier Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung und Vorschau |
 
 `run-all.sh` endet mit Schritt `5/5 handover`, der den Mail-Recorder wieder abschaltet. Ohne
 diesen Schritt stünde die Instanz anschließend nicht für die Handprüfung mit SureMails zur
@@ -92,6 +92,9 @@ und schreibt über `FG_Repository` (`statuses`, `count`, `count-published`, `cou
 `event`, `ride`, `make-event`, `make-ride`, `find-event`, `exists-*`, `delete-*`, `purge`),
 damit die Skripte den Zustand der Installation prüfen können, ohne WordPress-Beiträge zu
 kennen. Feldzugriffe laufen über eine Whitelist; jeder Befehl gibt genau einen Wert aus.
+Dazu kommen `settings`, `settings-json` und `settings-restore` für die Option `fg_settings`:
+Die Admin-Suite liest die Option vor dem eigenen Lauf und stellt sie danach wieder her, damit
+eine von Hand gepflegte Fußzeile den Testlauf übersteht.
 
 ## Umstieg von den eigenen Beitragstypen
 
@@ -114,6 +117,15 @@ hängt an `pre_wp_mail`, schreibt Empfänger, Betreff, Header, den effektiven In
 den Text und den Rückgabewert in die Tabelle `wp_fg_test_mail_log` und meldet eine
 Zustellung als erfolgreich zurück. Damit ist belegt, dass das Plugin `wp_mail()` mit den
 richtigen Werten aufruft, ohne dass ein SMTP-Server nötig ist.
+
+Weil der Recorder `wp_mail()` an dieser Stelle abbricht, sieht er nur das, was das Plugin
+als Argument übergibt — und das ist der Text. `wp_mail()` hat kein Argument für die zweite
+Alternative einer `multipart/alternative`-Nachricht; die HTML-Fassung setzt das Plugin über
+die Aktion `phpmailer_init` in `Body` und `AltBody`. Der Recorder kann diese Eigenschaften
+nicht mehr sehen, deshalb prüft `tests/mail-mime.php` die fertige Nachricht getrennt: Es baut
+sie in der Reihenfolge von `wp_mail()` nach, ruft `preSend()` auf und untersucht die Bytes,
+die hinausgehen würden. Geprüft werden der Inhaltstyp, die Reihenfolge beider Teile, das
+Escaping eines Besuchereingabewerts, die drei Fußzeilen und das eingebettete Logo.
 
 Die Option `fg_test_mail_fail=1` lässt die Zustellung fehlschlagen. Damit werden die
 Fehlerpfade `email_failed` und `publish_failed` über echtes HTTP geprüft, inklusive

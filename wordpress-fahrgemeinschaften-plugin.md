@@ -134,8 +134,9 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 
 ### 6. E-Mails
 
-- Plain-Text-E-Mails mit festem Absender auf der Vereinsdomain.
-- Keine aus Benutzereingaben erzeugten HTML-Inhalte oder Mailheader.
+- E-Mails als `multipart/alternative` mit festem Absender auf der Vereinsdomain: der Text als Plain-Text in der ersten Alternative, das Layout als HTML in der zweiten.
+- Das Layout, das Logo und die Fußzeile stehen in jeder Mail des Plugins. Das Layout wird im Plugin mitgeliefert und ist nicht über den Adminbereich änderbar; konfigurierbar sind nur Logo und Fußzeile.
+- Keine aus Benutzereingaben erzeugten HTML-Inhalte oder Mailheader: Benutzereingaben stehen im HTML-Teil ausschließlich escaped.
 - `Reply-To` für die Kontakt-E-Mail verwenden.
 - SMTP-Zustellung einrichten und SPF/DKIM/DMARC prüfen.
 - Mailversandfehler nur aggregiert zählen; keine vollständigen Mailinhalte dauerhaft protokollieren.
@@ -182,7 +183,7 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 - Nur gültige Teilnehmeradressen lösen Kontakt-E-Mails aus.
 - Vergangene Arbeitsdienste verschwinden automatisch aus der öffentlichen Anzeige.
 - Das Löschen eines Arbeitsdienstes löscht auch alle zugehörigen Fahrgemeinschaften.
-- Formulareingaben können weder HTML-/JavaScript-Injection noch SQL-Injection auslösen.
+- Formulareingaben können weder HTML-/JavaScript-Injection noch SQL-Injection auslösen. Im HTML-Teil der E-Mails werden sie escaped eingesetzt.
 - Die Statistik enthält keine personenbezogenen Einzelangaben.
 
 ## Bewusst nicht Bestandteil der Minimalversion

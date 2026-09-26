@@ -12,14 +12,19 @@ tests/*.html
 # Bauen mit:
 #   cd <Projektverzeichnis> && python3 - <<'PY'
 #   import os, zipfile
-#   files = sorted(
+#   files = [
 #       os.path.join(b, n)
-#       for b, d, ns in os.walk("fahrgemeinschaften") for n in ns
-#   )
+#       for b, d, ns in os.walk("fahrgemeinschaften")
+#       for n in ns
+#       if not n.startswith(".") and not n.endswith((".pyc", ".orig", ".rej"))
+#   ]
 #   with zipfile.ZipFile("fahrgemeinschaften.zip", "w", zipfile.ZIP_DEFLATED) as z:
-#       for f in files:
+#       for f in sorted(files):
 #           z.write(f, f)
 #   PY
+#   Die Reihenfolge der Einträge ist für WordPress ohne Bedeutung. Maßgeblich
+#   ist, dass genau die Dateien des Plugin-Quellbaums enthalten sind, Stand
+#   26.09.2026: 19 Dateien.
 fahrgemeinschaften.zip
 
 # Betriebssystem und Editor

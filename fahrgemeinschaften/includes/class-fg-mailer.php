@@ -195,11 +195,16 @@ final class FG_Mailer {
 	}
 
 	/**
-	 * Send a plain-text message with a controlled sender.
+	 * Send a message with a controlled sender.
+	 *
+	 * The message goes out as multipart/alternative: the text as plain text in
+	 * the first part, the layout of this plugin as HTML in the second. The
+	 * configured logo is embedded, so no address of the recipient is passed to
+	 * another host.
 	 *
 	 * @param string       $to Recipient.
 	 * @param string       $subject Subject.
-	 * @param string       $body Body.
+	 * @param string       $body Body as plain text.
 	 * @param string[]|null $headers Optional headers.
 	 * @return bool
 	 */
@@ -218,20 +223,24 @@ final class FG_Mailer {
 		$name_filter = static function () use ( $from_name ) {
 			return $from_name;
 		};
-		$type_filter = static function () {
-			return 'text/plain';
+
+		// wp_mail() cannot express the plain-text alternative of a message, so
+		// the text is handed over as the message and the layout is added while
+		// PHPMailer is being set up. See FG_Mail_Templates::apply_alternative().
+		$alternative = static function ( &$phpmailer ) use ( $subject, $body ) {
+			FG_Mail_Templates::apply_alternative( $phpmailer, $subject, $body );
 		};
 
 		add_filter( 'wp_mail_from', $from_filter );
 		add_filter( 'wp_mail_from_name', $name_filter );
-		add_filter( 'wp_mail_content_type', $type_filter );
+		add_action( 'phpmailer_init', $alternative );
 
 		try {
-			$sent = wp_mail( $to, $subject, $body, $headers );
+			$sent = wp_mail( $to, $subject, $body, $headers, array(), FG_Mail_Templates::get_logo_embed() );
 		} finally {
 			remove_filter( 'wp_mail_from', $from_filter );
 			remove_filter( 'wp_mail_from_name', $name_filter );
-			remove_filter( 'wp_mail_content_type', $type_filter );
+			remove_action( 'phpmailer_init', $alternative );
 		}
 
 		return (bool) $sent;

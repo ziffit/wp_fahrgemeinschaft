@@ -81,10 +81,10 @@ else:
     block = m.group(1)
     block = block[block.find(\"<ul class='wp-submenu\"):]
     print(' > '.join(label.strip() for _, label in re.findall(r\"admin\.php\?page=(fahrgemeinschaften[a-z\-]*)'[^>]*>([^<]*)<\", block)))")
-if [ "$order" = "Arbeitsdienste > Fahrgemeinschaften > Statistik" ]; then
-	ok "submenu shows the three screens in the intended order"
+if [ "$order" = "Arbeitsdienste > Fahrgemeinschaften > Einstellungen > Statistik" ]; then
+	ok "submenu shows the screens in the intended order"
 else
-	bad "submenu shows the three screens in the intended order" "found: ${order:-<no menu block>}"
+	bad "submenu shows the screens in the intended order" "found: ${order:-<no menu block>}"
 fi
 has "shows the retention note" "$stats" "nach 90 Tagen entfernt"
 has "shows the three periods" "$stats" "Letzte 30 Tage"
@@ -92,11 +92,12 @@ has "shows counter labels" "$stats" "Vorgemerkte Einträge"
 hasnt "statistics show no address" "$stats" "@example"
 has "work duty screen is linked" "$stats" "page=fahrgemeinschaften-events"
 has "ride screen is linked" "$stats" "page=fahrgemeinschaften-rides"
+has "settings screen is linked" "$stats" "page=fahrgemeinschaften-settings"
 clean "$stats" "statistics screen"
 
 # The same order has to be visible from every screen of the plugin, and the
 # entry of the screen that is open has to be the marked one.
-for pair in "fahrgemeinschaften-events:Arbeitsdienste" "fahrgemeinschaften-rides:Fahrgemeinschaften"; do
+for pair in "fahrgemeinschaften-events:Arbeitsdienste" "fahrgemeinschaften-rides:Fahrgemeinschaften" "fahrgemeinschaften-settings:Einstellungen"; do
 	page="${pair%%:*}"
 	label="${pair##*:}"
 	body=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=$page")
@@ -123,7 +124,7 @@ else:
 	else
 		bad "on $label that entry is marked as current" "found: ${here:-none}"
 	fi
-	if [ "$there" = "Arbeitsdienste > Fahrgemeinschaften > Statistik" ]; then
+	if [ "$there" = "Arbeitsdienste > Fahrgemeinschaften > Einstellungen > Statistik" ]; then
 		ok "order holds on the $label screen"
 	else
 		bad "order holds on the $label screen" "found: ${there:-<no menu block>}"
@@ -317,6 +318,97 @@ has "delete notice mentions the cascade" "$out" "zugehörige"
 clean "$out" "cascade deletion"
 if [ "$(s count-event-rides "$CASCADE")" = "0" ]; then ok "rides of the deleted work duty are gone"; else bad "rides of the deleted work duty are gone" "$(s count-event-rides "$CASCADE")"; fi
 if [ "$(s exists-event "$CASCADE")" = "0" ]; then ok "work duty is gone"; else bad "work duty is gone" "still there"; fi
+
+# --- settings of the e-mails
+echo "[8] settings screen"
+# The suite stores a footer of its own and gives the previous one back at the
+# end, so a footer that was configured by hand is not lost.
+SETTINGS_BEFORE=$(s settings-json)
+screen=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-settings")
+has "screen renders" "$screen" "<h1>Einstellungen</h1>"
+has "logo field present" "$screen" 'name="fg_logo_attachment_id"'
+has "media picker script present" "$screen" "wp.media"
+has "sender field present" "$screen" 'name="fg_footer_organisation"'
+has "contact field present" "$screen" 'name="fg_footer_contact"'
+has "legal field present" "$screen" 'name="fg_footer_legal"'
+has "the three fields are marked as mandatory" "$screen" 'id="fg-footer-legal" name="fg_footer_legal" rows="4" class="large-text" required'
+hasnt "no field offers a path to a file" "$screen" "logo_path"
+hasnt "no field offers a url for the logo" "$screen" "logo_url"
+has "preview link present" "$screen" "action=fg_mail_preview"
+has "preview link carries a nonce" "$screen" "action=fg_mail_preview&#038;_wpnonce="
+clean "$screen" "settings screen"
+
+echo "[8b] the mandatory fields refuse an incomplete footer"
+SNONCE=$(val /dev/stdin fg_settings_nonce <<< "$screen")
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/settings-bad.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_settings" \
+	--data-urlencode "fg_settings_nonce=$SNONCE" \
+	--data-urlencode "fg_logo_attachment_id=0" \
+	--data-urlencode "fg_footer_organisation=Musterverein e.V." \
+	--data-urlencode "fg_footer_contact=" \
+	--data-urlencode "fg_footer_legal=Angaben gemäß § 5 TMG")
+refused=$(cat "$DIR/settings-bad.html")
+has "the missing field is named" "$refused" "Kontakt"
+has "it says that nothing was saved" "$refused" "Es wurde nichts gespeichert"
+has "it returns to the settings screen" "$out" "page=fahrgemeinschaften-settings"
+if [ "$(s settings footer_contact)" = "" ]; then ok "nothing was stored"; else bad "nothing was stored" "$(s settings footer_contact)"; fi
+clean "$refused" "settings save with an incomplete footer"
+
+echo "[8c] a complete footer is stored"
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/settings-saved.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_settings" \
+	--data-urlencode "fg_settings_nonce=$SNONCE" \
+	--data-urlencode "fg_logo_attachment_id=0" \
+	--data-urlencode "fg_footer_organisation=Musterverein e.V.
+Musterstraße 1" \
+	--data-urlencode "fg_footer_contact=info@angeln.example.org" \
+	--data-urlencode "fg_footer_legal=Angaben gemäß § 5 TMG: Musterverein e.V.")
+stored=$(cat "$DIR/settings-saved.html")
+has "save confirms" "$stored" "Die Einstellungen wurden gespeichert."
+if [ "$(s settings footer_organisation | tr '\n' ',')" = "Musterverein e.V.,Musterstraße 1," ]; then
+	ok "sender stored with its line break"
+else
+	bad "sender stored with its line break" "$(s settings footer_organisation | tr '\n' ',')"
+fi
+if [ "$(s settings footer_contact)" = "info@angeln.example.org" ]; then ok "contact stored"; else bad "contact stored" "$(s settings footer_contact)"; fi
+if [ "$(s settings logo_attachment_id)" = "0" ]; then ok "no logo stored"; else bad "no logo stored" "$(s settings logo_attachment_id)"; fi
+clean "$stored" "settings save"
+
+echo "[8d] a wrong nonce changes nothing"
+out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_settings" \
+	--data-urlencode "fg_settings_nonce=manipuliert" \
+	--data-urlencode "fg_footer_organisation=Ohne Erlaubnis" \
+	--data-urlencode "fg_footer_contact=info@angeln.example.org" \
+	--data-urlencode "fg_footer_legal=Angaben gemäß § 5 TMG")
+if [ "$out" = "403" ]; then ok "a wrong nonce is refused ($out)"; else bad "a wrong nonce is refused" "$out"; fi
+if [ "$(s settings footer_organisation)" != "Ohne Erlaubnis" ]; then ok "the stored footer is unchanged"; else bad "the stored footer is unchanged" "overwritten"; fi
+
+echo "[8e] the preview shows the stored footer"
+preview_url=$(printf '%s' "$screen" | python3 -c "
+import re, sys
+html = sys.stdin.read()
+m = re.search(r'href=\"([^\"]*action=fg_mail_preview[^\"]*)\"', html)
+print(m.group(1).replace('&#038;', '&').replace('&amp;', '&') if m else '')")
+if [ -n "$preview_url" ]; then ok "preview link extracted"; else bad "preview link extracted" "no link"; fi
+preview=$(curl -sk -b "$JAR" "$preview_url")
+has "preview is a full html document" "$preview" "<!DOCTYPE html>"
+has "preview carries the layout" "$preview" 'class="body-wrap"'
+has "preview carries the stored sender" "$preview" "Musterverein e.V."
+has "preview carries the stored contact" "$preview" "info@angeln.example.org"
+has "preview carries the stored legal notice" "$preview" "§ 5 TMG"
+has "preview escapes a visitor value" "$preview" "Müller &amp; Söhne"
+hasnt "preview keeps the raw ampersand" "$preview" "Müller & Söhne"
+hasnt "preview loads no foreign address" "$preview" 'src="http'
+hasnt "preview has no unresolved token" "$preview" "{{"
+clean "$preview" "mail preview"
+
+echo "[8f] the preview needs a nonce"
+out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' "$BASE/wp-admin/admin-post.php?action=fg_mail_preview")
+if [ "$out" = "403" ]; then ok "the preview is refused without a nonce ($out)"; else bad "the preview is refused without a nonce" "$out"; fi
+
+s settings-restore "$SETTINGS_BEFORE" > /dev/null
+if [ "$(s settings-json)" = "$SETTINGS_BEFORE" ]; then ok "the settings of before the run are back"; else bad "the settings of before the run are back" "$(s settings-json)"; fi
 
 echo
 echo "== $pass passed, $fail failed =="

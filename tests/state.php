@@ -211,6 +211,29 @@ switch ( $command ) {
 		fg_state_out( $removed );
 		break;
 
+	case 'settings':
+		$settings = FG_Mail_Templates::get_settings();
+		$name     = isset( $args[0] ) ? (string) $args[0] : '';
+		fg_state_out( array_key_exists( $name, $settings ) ? $settings[ $name ] : 'unknown-field' );
+		break;
+
+	// The settings suite stores values of its own. It reads the option before
+	// it starts and hands the result back afterwards, so a footer that was
+	// configured by hand survives the run.
+	case 'settings-json':
+		fg_state_out( wp_json_encode( get_option( FG_SETTINGS_OPTION, null ) ) );
+		break;
+
+	case 'settings-restore':
+		$stored = json_decode( isset( $args[0] ) ? (string) $args[0] : 'null', true );
+		if ( null === $stored ) {
+			delete_option( FG_SETTINGS_OPTION );
+		} else {
+			update_option( FG_SETTINGS_OPTION, $stored, false );
+		}
+		fg_state_out( 'restored' );
+		break;
+
 	case 'tables':
 		fg_state_out( FG_Schema::tables_exist() ? 'present' : 'missing' );
 		break;

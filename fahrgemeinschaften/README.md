@@ -22,6 +22,7 @@ Minimales WordPress-Plugin zur Koordination von Fahrgemeinschaften für Vereinsa
 
 - **Arbeitsdienste:** anlegen, ändern, dauerhaft löschen und Teilnehmer-E-Mails pflegen. Die UUID ist nur lesbar.
 - **Fahrgemeinschaften:** vorgemerkte und veröffentlichte Einträge einsehen und dauerhaft löschen. Es gibt bewusst kein Bearbeitungsformular: was jemand anderes veröffentlicht hat, wird nicht nachträglich umgeschrieben.
+- **Einstellungen:** Logo und Fußzeile der E-Mails, dazu eine Vorschau des HTML-Teils.
 - **Statistik:** aggregierte Formular- und Bot-Signale ohne personenbezogene Einzelangaben.
 
 ## Datenspeicherung
@@ -32,21 +33,24 @@ Bestätigungs- und Löschtoken werden als zufällige Werte erzeugt und nur als S
 
 Das Plugin bringt keine eigene Berechtigung mit und verändert keine Rolle. Für das Ansehen und Bearbeiten genügt `edit_posts`, für das endgültige Löschen `delete_posts`. Damit sehen Autoren und Redakteure im Verzeichnis der Fahrgemeinschaften auch alle Kontaktadressen.
 
+Neben den Tabellen speichert das Plugin eine Option `fg_settings` ohne Autoload: die ID des Logo-Anhangs sowie die drei Fußzeilen der E-Mail. Sie wird beim Deinstallieren mitgelöscht. Die Fußzeilen sind Vereinsangaben und keine personenbezogenen Daten einzelner Mitglieder; die Logo-ID verweist auf einen Anhang der Mediathek.
+
 **Achtung beim Deinstallieren:** Das Deinstallieren des Plugins löscht beide Tabellen samt aller Arbeitsdienste, Fahrgemeinschaften und Teilnehmerlisten endgültig. Vor einer Deinstallation die Daten aus dem Adminbereich exportieren.
 
 ## Technische Voraussetzungen
 
 - WordPress 6.4 oder neuer und PHP 7.4 oder neuer.
+- WordPress 6.9 oder neuer für das Logo in der E-Mail. `wp_mail()` kann erst ab dieser Version ein eingebettetes Bild übernehmen (`$embeds`, seit 6.9.0). Mit einem älteren WordPress wird das Argument stillschweigend ignoriert, die E-Mail geht als `multipart/alternative` raus, das Logo fehlt aber als leeres Bild. Für den Rest des Mailbetriebs genügt WordPress 6.4.
 - Eine erreichbare HTTPS-Installation. Ist die Website-Adresse mit `https://` konfiguriert, wird die öffentliche Shortcode-Seite und jede Bestätigungs-/Löschseite bei HTTP auf HTTPS umgeleitet, das Formular wird über HTTP nicht ausgegeben und eine Formular-Mutation über HTTP abgewiesen.
 - Ohne TLS im Betrieb (etwa in einer lokalen Entwicklungsinstallation) gibt es keine sichere Seitenvariante, auf die verwiesen werden könnte. Das Plugin leitet dann nicht um, zeigt das Formular und verarbeitet die Anfrage, wie sie ankommt, und weist im Adminbereich auf den fehlenden HTTPS-Betrieb hin.
-- Ein SMTP-Plugin muss die Zustellung über `wp_mail()` sicherstellen. Das Plugin setzt für alle eigenen Nachrichten den Inhaltstyp `text/plain` und verwendet die Website-Administratoradresse als kontrollierten Absender.
+- Ein SMTP-Plugin muss die Zustellung über `wp_mail()` sicherstellen. Das Plugin setzt für alle eigenen Nachrichten einen kontrollierten Absender (die Website-Administratoradresse) und übergibt den Text als `text/plain`. Den Inhaltstyp der fertigen Nachricht bestimmt PHPMailer: Weil ein HTML-Teil dazukommt, wird aus jeder Nachricht ein `multipart/alternative`, in dem der Text als erste Alternative steht. Das Plugin setzt deshalb selbst keinen Inhaltstyp.
 - Das Plugin bringt kein eigenes Mail-Plugin mit und registriert keinen eigenen `pre_wp_mail`-Filter. Es ist mit jedem Transport kompatibel, der `wp_mail()` abfängt. Ein SMTP-Plugin darf den Absender nicht hart überschreiben: Der Filter `wp_mail_from` liefert die Administratoradresse, damit SPF und DMARC der eigenen Domain greifen. Erzwingt das Mail-Plugin einen eigenen Absender, muss dieser beim Mailanbieter freigegeben sein.
 - Die WordPress-Zeitzone wird für Datum, optionale Uhrzeit, Ablauf und Statistik verwendet. Ohne Uhrzeit bleibt ein Arbeitsdienst bis 23:59 Uhr des angegebenen Tages aktiv.
 
 ## Bedienung und Datenfluss
 
-Das Plugin-Menü **Fahrgemeinschaften** enthält drei Unterseiten in dieser Reihenfolge:
-**Arbeitsdienste**, **Fahrgemeinschaften**, **Statistik**. Ein Klick auf den Namen
+Das Plugin-Menü **Fahrgemeinschaften** enthält vier Unterseiten in dieser Reihenfolge:
+**Arbeitsdienste**, **Fahrgemeinschaften**, **Einstellungen**, **Statistik**. Ein Klick auf den Namen
 "Fahrgemeinschaften" führt zur ersten Unterseite, WordPress verlinkt den
 Obermenüpunkt immer auf den ersten Eintrag der Liste.
 
@@ -55,6 +59,7 @@ Obermenüpunkt immer auf den ersten Eintrag der Liste.
 3. Eine öffentliche Eintragung wird mit Status `pending` gespeichert. Die Bestätigungs-E-Mail enthält eine Vorschau sowie getrennte Links zum Bestätigen und Verwerfen. Erst die POST-Bestätigung schaltet den Eintrag auf `published`.
 4. Nach der Veröffentlichung wird ein neuer Löschlink per E-Mail versendet. Der Link ist bis mindestens 30 Tage nach dem Ende des Arbeitsdienstes gültig. Vormerkungen und ihre Token werden nach 48 Stunden automatisch entfernt.
 5. Kontaktanfragen werden nur bei einer für genau diesen Arbeitsdienst hinterlegten Adresse weitergeleitet. Die öffentliche Antwort bleibt bei gültiger und ungültiger Adresse gleich.
+6. Im Plugin-Menü **Fahrgemeinschaften → Einstellungen** das Logo aus der Mediathek wählen und Absender, Kontakt und rechtlichen Hinweis eintragen. Die drei Textfelder sind Pflicht: Ist eines leer, wird nichts gespeichert. Über **E-Mail ansehen** lässt sich der HTML-Teil mit Beispieltext ansehen, ohne eine echte Mail zu verschicken.
 
 Öffentliche Formulare enthalten keine freienbeschreibenden Felder und keine Platzanzahl. Die öffentliche Bezeichnung und der Abfahrtsbereich werden als Textfelder mit Längenbegrenzung geprüft. Die E-Mail-Adresse bleibt ausschließlich im geschützten Admin-/E-Mail-Verkehr.
 
@@ -74,7 +79,8 @@ Vor einer Installation sollten in einer Staging-Installation mindestens diese F�
 - Bestätigungs- und Löschlinks funktionieren einmalig und laufen nach Ablauf ab,
 - ein abgelaufener Arbeitsdienst verschwindet aus der öffentlichen Liste,
 - das endgültige Löschen eines Arbeitsdienstes löscht alle zugehörigen Einträge,
-- die öffentliche HTML-Ausgabe enthält keine E-Mail-Adresse, UUID oder interne Datensatz-ID.
+- die öffentliche HTML-Ausgabe enthält keine E-Mail-Adresse, UUID oder interne Datensatz-ID,
+- die E-Mail ist im Spam-Ordner angekommen: Eine HTML-Nachricht von einer kleinen Vereinsdomain ohne eigenes SPF/DKIM wird häufiger als reine Textmail aussortiert. Der Plain-Text-Teil senkt das Risiko, beseitigt es aber nicht. Der erste echte Versand sollte deshalb mit einem Blick in den Spam-Ordner beginnen.
 
 ## Verhalten bei Fehlern und Grenzfällen
 
@@ -100,5 +106,10 @@ Vor einer Installation sollten in einer Staging-Installation mindestens diese F�
 - **Serverseitige Verträge.** `confirmed_at` kennzeichnet bestätigt veröffentlichte Fahrgemeinschaften. Die öffentliche Liste verlangt diesen Zeitstempel zusätzlich zu Status `published`, gültigem Modus, Abfahrtsbereich, Kontaktadresse und öffentlicher Referenz.
 - **HTTPS-Erzwingung nur bei vorhandenem HTTPS.** Eine Weiterleitung ist nur sinnvoll, wenn die Zieladresse existiert. Ist die Website-Adresse nicht mit `https://` konfiguriert, bleibt die Anfrage unverändert bearbeitbar und der fehlende TLS-Betrieb wird im Adminbereich auf den Plugin-Seiten gemeldet, statt die öffentliche Seite durch eine nicht beantwortbare Adresse unbrauchbar zu machen.
 - **Keine Migration.** Aus einer älteren, auf eigenen Beitragstypen basierenden Fassung wird nichts übernommen. Die alten Datensätze sind vor dem Umstieg zu löschen, die alten Rollenberechtigungen (`manage_fahrgemeinschaften`, `edit_fahrgemeinschaften` und Verwandte) bleiben zurück, weil das Plugin sie nicht kennt und nicht entfernt; sie lassen sich in der Rollenverwaltung oder über `WP_Role::remove_cap()` zurückziehen.
+- **Das E-Mail-Layout liegt im Plugin, nicht im Adminbereich.** Das Markup, die Formatvorlagen und die Outlook-Abfragen stehen in `includes/class-fg-mail-templates.php`; einstellbar sind nur Logo und Fußzeile. Ein Feld für eigenes HTML wäre die einzige Stelle, an der beliebiges Markup in jede ausgehende Nachricht der Website gelangt, und der Nutzen — die Optik zu ändern — ist gering gegenüber diesem Risiko. Wer das Layout ändern will, ändert die Datei; das ist eine bewusste Entscheidung und keine vergessene Funktion.
+- **Der Text einer Nachricht steht genau einmal.** Der Wortlaut wird als Plain Text geschrieben und vom Layout in HTML übersetzt; beide Varianten können nicht auseinanderlaufen. Die Übersetzung ist bewusst schlicht: Leerzeilen trennen Absätze, ein einfacher Zeilenumbruch wird zu einem `<br>`. URLs im Text werden nicht automatisch zu Links gemacht — der Klartext bleibt der Text, und ein Client, der nur Text anzeigt, verliert nichts.
+- **Das Logo wird eingebettet, nicht nachgeladen.** Es kommt aus der Mediathek und wird als Datei an die Nachricht gehängt (`cid:logo`). Damit sieht die E-Mail auch dann vollständig aus, wenn der Empfänger fremde Bilder sperrt, und die IP-Adresse des Empfängers wird nicht an einen fremden Server weitergegeben. Der Preis: Das Logo muss einmal in die Mediathek hochgeladen werden, und WordPress ab 6.9 wird dafür vorausgesetzt.
+- **Die Fußzeile ist Pflicht.** Absender, Kontakt und rechtlicher Hinweis müssen ausgefüllt sein, sonst wird nichts gespeichert. Eine E-Mail ohne Absenderangabe und ohne Pflichtinhalt ist der einzige Fehler, der sich später nicht mehr korrigieren lässt, weil sie beim Empfänger liegt.
+- **`wp_mail()` bekommt den Text, der HTML-Teil kommt über `phpmailer_init`.** `wp_mail()` hat kein Argument für die zweite Alternative einer `multipart/alternative`-Nachricht. Deshalb wird der Text als Nachricht übergeben und im `phpmailer_init`-Aktion auf `AltBody` und `Body` verteilt. Das Plugin setzt deshalb keinen Inhaltstyp mehr: PHPMailer erkennt am zweiten Teil selbst, dass er aus zwei Alternativen besteht.
 - **Statistik ohne Sperre.** Die Tageszähler werden gelesen, erhöht und zurückgeschrieben, ohne Sperre. Bei sehr gleichzeitigen Abläufen kann dadurch ein einzelner Zählerstand verloren gehen. Betroffen sind ausschließlich aggregierte Tageswerte ohne Personenbezug; für die Minimalversion wurde darauf bewusst verzichtet.
 - **Offener Nebenläufigkeitsfall.** Klickt jemand „bestätigen“ und „verwerfen“ gleichzeitig, kann ein Token-Paar einen einzelnen Aufruf überleben. Der Bestätigungspfad ist der sicherere, weil er den Veröffentlichungszustand prüft, während der Verwerfpfad den Eintrag vollständig entfernt.

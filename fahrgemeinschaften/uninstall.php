@@ -26,3 +26,4 @@ if ( class_exists( 'FG_Schema' ) ) {
 
 delete_option( defined( 'FG_STATS_OPTION' ) ? FG_STATS_OPTION : 'fg_daily_statistics' );
 delete_option( defined( 'FG_CLEANUP_OPTION' ) ? FG_CLEANUP_OPTION : 'fg_last_cleanup' );
+delete_option( defined( 'FG_SETTINGS_OPTION' ) ? FG_SETTINGS_OPTION : 'fg_settings' );

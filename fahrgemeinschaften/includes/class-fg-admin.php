@@ -52,6 +52,13 @@ final class FG_Admin {
 	private $rides;
 
 	/**
+	 * Settings screen.
+	 *
+	 * @var FG_Admin_Settings
+	 */
+	private $settings;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param FG_Repository|null $repository Optional repository.
@@ -62,6 +69,7 @@ final class FG_Admin {
 		$this->stats      = $stats ? $stats : new FG_Stats();
 		$this->events     = new FG_Admin_Events( $this->repository );
 		$this->rides      = new FG_Admin_Rides( $this->repository );
+		$this->settings   = new FG_Admin_Settings();
 
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_post_fg_delete_record', array( $this, 'delete_record' ) );
@@ -96,9 +104,10 @@ final class FG_Admin {
 		// add_submenu_page() call whose slug differs from the parent, and
 		// labels it like the parent. Registering the statistics screen first,
 		// under the parent slug, suppresses that entry: the guard in
-		// add_submenu_page() skips it when the slugs are equal. The two object
-		// screens are then placed in front of it, which yields the order
-		// Arbeitsdienste, Fahrgemeinschaften, Statistik.
+		// add_submenu_page() skips it when the slugs are equal. The three
+		// screens that carry their own slug are then placed in front of it, which
+		// yields the order Arbeitsdienste, Fahrgemeinschaften, Einstellungen,
+		// Statistik.
 		add_submenu_page(
 			FG_ADMIN_MENU_SLUG,
 			__( 'Statistik', 'fahrgemeinschaften' ),
@@ -126,6 +135,16 @@ final class FG_Admin {
 			FG_RIDES_PAGE_SLUG,
 			array( $this->rides, 'render' ),
 			1
+		);
+
+		add_submenu_page(
+			FG_ADMIN_MENU_SLUG,
+			__( 'Einstellungen', 'fahrgemeinschaften' ),
+			__( 'Einstellungen', 'fahrgemeinschaften' ),
+			'edit_posts',
+			FG_SETTINGS_PAGE_SLUG,
+			array( $this->settings, 'render' ),
+			2
 		);
 	}
 
@@ -373,6 +392,7 @@ final class FG_Admin {
 				'toplevel_page_' . FG_ADMIN_MENU_SLUG,
 				FG_ADMIN_MENU_SLUG . '_page_' . FG_EVENTS_PAGE_SLUG,
 				FG_ADMIN_MENU_SLUG . '_page_' . FG_RIDES_PAGE_SLUG,
+				FG_ADMIN_MENU_SLUG . '_page_' . FG_SETTINGS_PAGE_SLUG,
 			),
 			true
 		);

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Mail layer checks: the messages really handed to wp_mail() by a browser
-# request, with the dictated wording and as plain text.
+# request, with the dictated wording and as plain text, plus the MIME structure
+# of the finished message (mail-mime.php).
 set -u
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE="https://localhost:8443"
@@ -78,10 +79,10 @@ if [ "$MAIL_TO" = "anton@angeln.example.org" ]; then ok "mail goes to the entere
 has "subject names the work duty" "$MAIL_SUBJECT" "Fahrgemeinschaft bestätigen – Arbeitsdienst Laber"
 has "body announces the pre-registration" "$MAIL_BODY" "noch nicht veröffentlicht"
 has "body warns about private data" "$MAIL_BODY" "Bitte prüfe die Angaben sorgfältig"
-if [ "$MAIL_TYPE" = "text/plain" ]; then ok "mail is plain text ($MAIL_TYPE)"; else bad "mail is plain text" "$MAIL_TYPE"; fi
-hasnt "plugin asks for no html content type" "$MAIL_HEADERS" "text/html"
-hasnt "mail has no html" "$MAIL_BODY" "<html"
-hasnt "mail has no html links" "$MAIL_BODY" "<a href"
+if [ "$MAIL_TYPE" = "text/plain" ]; then ok "plugin forces no content type ($MAIL_TYPE)"; else bad "plugin forces no content type" "$MAIL_TYPE"; fi
+hasnt "headers carry no content type" "$MAIL_HEADERS" "Content-Type"
+hasnt "plain text alternative has no html" "$MAIL_BODY" "<html"
+hasnt "plain text alternative has no html links" "$MAIL_BODY" "<a href"
 has "confirm link uses the https site" "$MAIL_BODY" "$BASE/?fg_ride_action=view&ride_ref="
 hasnt "confirm link carries no post id" "$MAIL_BODY" "fg_fahrgemeinschaft="
 hasnt "confirm link has no uuid" "$MAIL_BODY" "$(python3 -c "import json;print(json.load(open('$F'))['event_uuid'])")"
@@ -272,6 +273,18 @@ curl -sk -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "token_nonce=$token_nonce"
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
 hasnt "cleanup removed the test entry" "$body" "Mailtest Ruecknahme"
+
+# --- 6. the structure of the finished message
+# The recorder above only sees what the plugin hands to wp_mail(), and that is
+# the plain text: wp_mail() has no parameter for the second part of a
+# multipart/alternative message. The finished MIME structure, the order of both
+# parts and the embedded logo are therefore checked in their own suite, which
+# builds the message the way wp_mail() does.
+echo "[6] mime structure of the message"
+mime=$(docker exec wpdev-wordpress-1 php /tmp/fgtests/mail-mime.php 2>&1)
+printf '%s\n' "$mime"
+pass=$((pass + $(printf '%s\n' "$mime" | grep -c '^  ok   ')))
+fail=$((fail + $(printf '%s\n' "$mime" | grep -c '^  FAIL ')))
 
 echo
 echo "== $pass passed, $fail failed =="
