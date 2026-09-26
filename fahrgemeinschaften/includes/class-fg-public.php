@@ -131,6 +131,8 @@ final class FG_Public {
 							<div class="fg-field">
 								<label for="fg-origin"><?php esc_html_e( 'Abfahrtsbereich', 'fahrgemeinschaften' ); ?></label>
 								<input type="text" id="fg-origin" name="fg_origin" maxlength="100" required>
+								<?php // The three examples are the ones the server also accepts. Each of them was checked against the personal data filter; see the note in PRUEFUMGEBUNG.md about values that end in a street word. ?>
+								<span class="fg-hint"><?php esc_html_e( 'Abfahrtsort, Stadtteil, z. B. Langwasser, Nürnberg Nord, S-Bahnstation Ostring.', 'fahrgemeinschaften' ); ?></span>
 							</div>
 
 							<div class="fg-field fg-field-full">

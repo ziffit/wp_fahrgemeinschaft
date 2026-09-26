@@ -64,7 +64,7 @@ Anzeige:
 - Art: „Ich biete“ oder „Ich suche“
 - Vorname oder Spitzname
 - Arbeitsdienst und Datum
-- grober Abfahrtsbereich
+- Abfahrtsbereich als Ort oder Stadtteil, im Formular mit drei Beispielen
 - Schaltfläche „Kontaktieren“; das darunterliegende Kontaktformular erscheint erst auf Wunsch und wird über „Absenden“ gesendet
 
 Nicht öffentlich:

@@ -338,6 +338,7 @@ has "the consent names the name as public" "$body" "Dazu gehören mein Vorname o
 hasnt "the ambiguous wording in the consent is gone" "$body" "persönlichen Kontaktdaten"
 hasnt "the hint no longer asks for an unidentifying text" "$body" "nicht identifizierende"
 has "the hint names what the server refuses" "$body" "Telefonnummern und E-Mail-Adressen werden von der Serverseite zurückgewiesen"
+has "the area field carries its examples" "$body" "Abfahrtsort, Stadtteil, z. B. Langwasser, Nürnberg Nord, S-Bahnstation Ostring."
 
 event_ref=$(printf '%s' "$body" | grep -o '<option value="[0-9a-f]\{32\}"' | head -1 | sed 's/.*value="//;s/"//')
 offer_nonce=$(printf '%s' "$body" | grep -o 'name="fg_submit_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
@@ -351,23 +352,37 @@ probe() {
 		--data-urlencode "fg_mode=offer" \
 		--data-urlencode "fg_event_ref=$event_ref" \
 		--data-urlencode "fg_alias=$1" \
-		--data-urlencode "fg_origin=Suedstadt" \
+		--data-urlencode "fg_origin=$2" \
 		--data-urlencode "fg_contact_email=fremd@example.com" \
 		--data-urlencode "fg_consent=1" \
 		--data-urlencode "fg_website=" \
 		--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 		--data-urlencode "fg_submit_nonce=$offer_nonce"
 }
+# Reads the counter before and after a list of probes and prints "start end".
+# Every argument is one "alias::origin" pair, so that a value can be put into
+# either field. One call can therefore assert on several values at once.
+count_around() {
+	mark=$(s stat publish_personal_data)
+	for pair in "$@"; do
+		probe "${pair%%::*}" "${pair#*::}"
+	done
+	end=$(s stat publish_personal_data)
+	printf '%s %s' "$mark" "$end"
+}
 if [ -n "$event_ref" ] && [ -n "$offer_nonce" ]; then
-	before=$(s stat publish_personal_data)
-	probe "Peter"
-	probe "Käse"
-	probe "Amsel-Gruppe"
-	after=$(s stat publish_personal_data)
+	# A first name and a nickname are not contact details. The area stays a
+	# fixed harmless value so that only the alias can move the counter.
+	read -r before after <<< "$(count_around 'Peter::Suedstadt' 'Käse::Suedstadt' 'Amsel-Gruppe::Suedstadt')"
 	if [ "$before" = "$after" ]; then ok "a first name and a nickname are not contact details ($after)"; else bad "a first name and a nickname are not contact details" "$before -> $after"; fi
-	probe "0176 12345678"
-	last=$(s stat publish_personal_data)
-	if [ "$last" -gt "$after" ]; then ok "a phone number is still refused ($after -> $last)"; else bad "a phone number is still refused" "$after -> $last"; fi
+	probe "0176 12345678" "Suedstadt"
+	after_phone=$(s stat publish_personal_data)
+	if [ "$after_phone" -gt "$after" ]; then ok "a phone number is still refused ($after -> $after_phone)"; else bad "a phone number is still refused" "$after -> $after_phone"; fi
+	# The three examples under the area field must survive the same filter. A
+	# hint that offers values the server refuses is worse than no hint: the
+	# entry is dropped with the same neutral message as a wrong address.
+	read -r before after <<< "$(count_around 'Peter::Langwasser' 'Peter::Nürnberg Nord' 'Peter::S-Bahnstation Ostring')"
+	if [ "$before" = "$after" ]; then ok "the three examples of the area hint are accepted ($after)"; else bad "the three examples of the area hint are accepted" "$before -> $after"; fi
 else
 	bad "the form offers a work duty to submit against" "no event reference on the page"
 fi

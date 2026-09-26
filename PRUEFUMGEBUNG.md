@@ -146,6 +146,35 @@ den Stand von `HEAD` geprüft: Aus dem alten Plugin ausgeliefert schlagen alle s
 unter anderem die wegen der Dativform „persönliche**n** Kontaktdaten“ — mit der Endung `n`
 im Suchbegriff wäre sie auch an der alten Fassung vorbeigelaufen und hätte nichts geprüft.
 
+Der Hinweis unter dem Abfahrtsbereich nennt drei Beispiele, und die Suite prüft, dass der
+Server alle drei annimmt. Das ist keine Formsache: Ein Hinweis, der Werte anbietet, die der
+Server zurückweist, ist schlechter als keiner, weil der Eintrag mit derselben neutralen
+Meldung verschwindet wie bei einer falschen Adresse. Stand 26. September 2026 sind das
+`Langwasser`, `Nürnberg Nord` und `S-Bahnstation Ostring`; jede der drei Beispiele wird
+tatsächlich zugelassen. Die Gegenprobe mit `Marktplatz 3` lässt die Prüfung schlagen, sie
+prüft also den Zähler und nicht ihr eigenes Gerüst.
+
+Dieselbe Prüfung hat eine Grenze sichtbar gemacht, die bleibt. Das Muster für „Straße +
+Hausnummer“ sucht die Straßennamen als Teilzeichenfolge, nicht als ganze Wörter, und
+`Ostring` enthält `ring`. Deshalb wird jeder Wert abgewiesen, in dem auf ein solches Wort
+innerhalb von zwölf Zeichen eine Ziffer folgt:
+
+| eingegeben | Ergebnis |
+| --- | --- |
+| `S-Bahnstation Ostring` | angenommen |
+| `S-Bahnstation Ostring Gleis 2` | zurückgewiesen, Grund `publish_personal_data` |
+| `S-Bahnstation Ostring, 2. Stock` | zurückgewiesen, Grund `publish_personal_data` |
+| `Ostringring 12` | zurückgewiesen, Grund `publish_personal_data` |
+
+Die erste Zeile ist der Fall, den die Suite prüft; `Ostringring 12` ist eine echte Straße
+in Nürnberg und wird zu Recht abgewiesen. Eine Grenze links im Muster (`\b` vor der Gruppe)
+würde die beiden mittleren Zeilen freigeben, ließe aber `Ostringring 12` durch. Ein kürzerer
+Abstand zwischen Straßennamen und Hausnummer (`\D{0,12}` zu `\D{0,2}`) würde
+`Ostring Gleis 2` freigeben, dafür aber `Straße des 17. Juni 112` — ebenfalls ein realer
+Straßenname. Jede Verschärfung dieser Art tauscht also eine echte Adresse gegen eine zu enge
+Ablehnung, und die Wahl ist eine Abwägung des Vereins, keine technische. Stand heute wird
+nichts geändert, und der Hinweis nennt bewusst nur Ort und Stadtteil.
+
 Der Rückkehrweg nach dem Absenden wird über die echte Weiterleitung geprüft, nicht über
 den Quelltext: Die Adresse, auf die der Kontaktversand und ein abgelaufenes Formular
 umleiten, muss ein Sprungziel als Endung tragen, und die Seite, die daraus entsteht, muss
