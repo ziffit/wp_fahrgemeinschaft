@@ -89,7 +89,7 @@ final class FG_Public {
 			<section class="fg-section" aria-labelledby="<?php echo esc_attr( self::ANCHOR_OFFER ); ?>">
 				<h2 id="<?php echo esc_attr( self::ANCHOR_OFFER ); ?>" class="fg-jump"><?php esc_html_e( 'Fahrgemeinschaft anbieten oder suchen', 'fahrgemeinschaften' ); ?></h2>
 				<?php if ( empty( $events ) ) : ?>
-					<p class="fg-empty"><?php esc_html_e( 'Aktuell sind keine Arbeitsdienste für Fahrgemeinschaften verfügbar.', 'fahrgemeinschaften' ); ?></p>
+					<p class="fg-empty"><?php esc_html_e( 'Aktuell steht kein Arbeitsdienst an, deshalb kannst du dich noch nicht eintragen. Sobald die nächsten Termine feststehen, kannst du hier wieder eine Fahrgemeinschaft anbieten oder suchen.', 'fahrgemeinschaften' ); ?></p>
 				<?php else : ?>
 					<p class="fg-hint"><?php esc_html_e( 'Andere private Angaben gehören nicht in die öffentliche Anzeige: genaue Adressen, Telefonnummern und E-Mail-Adressen werden von der Serverseite zurückgewiesen.', 'fahrgemeinschaften' ); ?></p>
 					<form action="<?php echo esc_url( $admin_url ); ?>" method="post">
@@ -176,6 +176,13 @@ final class FG_Public {
 	 * @return void
 	 */
 	private function render_ride_list( $events, $admin_url, $source ) {
+		// A list needs something to list. With no active work duty there is
+		// nothing to group by, and the form section below says why in one
+		// sentence. A second message about missing entries would not only repeat
+		// that, it would also name work duties that do not exist.
+		if ( empty( $events ) ) {
+			return;
+		}
 		$has_rides   = false;
 		$privacy_url = get_privacy_policy_url();
 		?>
@@ -208,7 +215,7 @@ final class FG_Public {
 				</div>
 			<?php endforeach; ?>
 			<?php if ( ! $has_rides ) : ?>
-				<p class="fg-empty"><?php esc_html_e( 'Für die aktuellen Arbeitsdienste sind noch keine Fahrgemeinschaften veröffentlicht.', 'fahrgemeinschaften' ); ?></p>
+				<p class="fg-empty"><?php esc_html_e( 'Aktuell hat sich für die anstehenden Arbeitsdienste niemand eingetragen. Du kannst unten eine Mitfahrgelegenheit anbieten oder selbst eine suchen.', 'fahrgemeinschaften' ); ?></p>
 			<?php else : ?>
 				<?php // The note says the same thing for every entry, so it is stated once for the whole list. ?>
 				<p class="fg-hint fg-list-hint">

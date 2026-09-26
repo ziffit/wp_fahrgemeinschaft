@@ -78,7 +78,7 @@ Fahrgemeinschaften sowie die Statistik-Option, es gibt also keinen Zustand vom V
 
 | Suite | Datei | Vorgehen |
 | --- | --- | --- |
-| CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–16: Tabellen, Aktivitätsgrenze, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene |
+| CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–16: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinierung, Datenschutz, HTTPS, Markup-Hygiene |
 | Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data` sowie das Verhalten der Schaltflächen im Stylesheet |
 | Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo` |
 | Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der vier Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau |
@@ -213,7 +213,36 @@ bleibt.
 Reihenfolge und Sprunglink der Seite werden an der ausgelieferten Seite geprüft: Der
 Sprunglink steht vor der Liste, die Liste vor dem Formular, und das `href` des Sprunglinks
 findet eine `id` auf derselben Seite. Ein Verweis ohne Ziel wäre die stillste Stelle im
-ganzen Dokument.
+ganzen Dokument. Die Reihenfolge wird nur verlangt, wenn die Liste etwas zu zeigen hat; steht
+kein Arbeitsdienst an, gehören Listenabschnitt und Formular beide zu ihm und entfallen beide,
+und die Prüfung verlangt dann ihr Fehlen. Gegenproben: Liste entfernt, Formular stehen
+gelassen, und Formular entfernt, Liste mit Einträgen stehen gelassen — beide schlagen an.
+
+Die beiden Leermeldungen der öffentlichen Seite erreicht die CLI-Suite in Abschnitt 3b, und
+zwar ohne einen einzigen Datensatz anzufassen. Eine Meldung, die nur erscheint, wenn eine
+Tabelle leer ist, lässt sich nicht erzeugen, indem man die Tabelle leert: Der Lauf müsste die
+Arbeitsdienste der Nutzerin offline nehmen und wieder hinstellen, und ein Lauf, der auf halbem
+Weg abbricht, hinterlässt kaputte Daten. Stattdessen beantwortet die Suite die eine `SELECT`,
+die den Zustand füllt, mit null Zeilen. Dazu hängt sie sich an den Filter `query` von WordPress
+und setzt die Bedingung vor das `WHERE`: `WHERE 1=0 AND …`. Vor das `WHERE` und nicht ans Ende,
+weil eine Abfrage an einem `LIMIT` enden kann, wo ein angehängtes `AND` nicht mehr übersetzt
+wird. Geschrieben wird nichts, und der Filter wird sofort wieder entfernt.
+
+Geprüft wird nicht der Wortlaut allein, sondern die Zahl der Meldungen. Eine Prüfung, die nach
+einer Formulierung sucht, beweist nur, dass diese Formulierung fehlt; die alte Fassung trug
+zwei Meldungen nebeneinander, und die zweite wäre an jeder Textprüfung vorbeigelaufen. Der
+Zähler `class="fg-empty"` muss in beiden Zuständen genau eins sein — das ist die Eigenschaft,
+um die es geht. Zustand ohne Arbeitsdienst: eine Meldung, kein Listenabschnitt, kein Formular,
+der Sprunglink bleibt. Zustand mit Arbeitsdienst ohne Einträge: eine Meldung, Liste und
+Formular stehen. Am Ende steht eine Kontrolle, die ohne Filter rendert und prüft, dass die
+Dienste und alle Einträge wieder da sind; die beiden Seiten werden dabei nicht als Ganzes
+verglichen, denn das Formular trägt ein Nonce und die Sekunde seines Starts, zwei Aufrufe eine
+Sekunde auseinander unterscheiden sich also von selbst. Verglichen wird die Zahl der
+Einträge, weil die sich nicht ändern darf.
+
+Gegen den Stand von `HEAD` schlagen vier der dreizehn Prüfungen an: die neue Formulierung in
+beiden Zuständen, das Fehlen des Listenabschnitts und der Zähler, der die doppelte Meldung
+findet.
 
 Die Wirkung des Stylesheets ist mit `curl` nicht prüfbar. Zweispaltigkeit, Zeilenhöhe
 und Schriftgrade der Einwilligung sind von Hand im Browser anzusehen.

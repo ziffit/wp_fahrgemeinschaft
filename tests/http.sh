@@ -384,11 +384,19 @@ def at(pattern):
     m = re.search(pattern, h)
     return m.start() if m else -1
 link = at(r'class=\"fg-toplink\"')
+if link == -1:
+    sys.exit(1)                                    # the link is always there
 listed = at(r'id=\"fg-list-heading\"')
 # the offer form is the one that submits a new entry, not a contact request
 offer = at(r'value=\"fg_submit_ride\"')
-sys.exit(0 if -1 not in (link, listed, offer) and link < listed < offer else 1)
-" "the link, the list and the form are not in that order, or one of them is missing"
+if re.findall(r'<article class=\"fg-ride\">', h):
+    # a list with entries: link, then list, then form, all three present
+    sys.exit(0 if -1 not in (listed, offer) and link < listed < offer else 1)
+# An empty list means no work duty is coming up. The list belongs to the work
+# duties and the form asks for one, so both are left out together. The messages
+# that stand in their place are covered in smoke.php [3b].
+sys.exit(0 if listed == -1 and offer == -1 else 1)
+" "the link, the list and the form are not in that order, or one of them is missing where it belongs"
 struct "$body" "the link at the top leads to the form" "
 import re, sys
 h = sys.stdin.read()

@@ -450,6 +450,80 @@ fg_not_contains( 'page_id=', $without_source, 'no page id outside the source url
 fg_not_contains( '_fg_', $html, 'no internal meta keys in markup' );
 fg_not_contains( 'token', $html, 'no token in markup' );
 
+/* ---------------------------------------------------------------- 3b */
+/* Both empty states of the public page, without touching the data.
+ *
+ * A message that only appears when a table is empty cannot be reached by
+ * writing to the tables: the run would have to take the work duties of
+ * whoever is using the installation offline and put them back, and a run that
+ * dies half way through leaves the data broken. So the one SELECT that fills a
+ * state is answered with no rows instead. Nothing is written, and the filter is
+ * removed again right away, which the control at the end proves.
+ */
+echo "[3b] Both empty states of the public page\n";
+
+/**
+ * Returns a query filter that makes one table of the plugin look empty.
+ *
+ * The condition goes in front of the WHERE clause rather than at the end,
+ * because a query may end in a LIMIT, where an appended AND would not parse.
+ *
+ * @param string $table Table name without prefix.
+ * @return callable Filter for the `query` action.
+ */
+function fg_leeren_filter( $table ) {
+	return function ( $sql ) use ( $table ) {
+		if ( false !== strpos( $sql, $table ) && preg_match( '/\bWHERE\b/i', $sql ) ) {
+			return preg_replace( '/\bWHERE\b/i', 'WHERE 1=0 AND', $sql, 1 );
+		}
+		return $sql;
+	};
+}
+
+/**
+ * Renders the shortcode while one table of the plugin looks empty.
+ *
+ * @param string $table Table name without prefix.
+ * @return string Rendered page.
+ */
+function fg_render_with_empty( $table ) {
+	$filter = fg_leeren_filter( $table );
+	add_filter( 'query', $filter );
+	$html = ( new FG_Public( new FG_Repository() ) )->render_shortcode();
+	remove_filter( 'query', $filter );
+	return $html;
+}
+
+$ohne_dienste = fg_render_with_empty( FG_Schema::events_table() );
+fg_contains( 'steht kein Arbeitsdienst an', $ohne_dienste, 'without a work duty the page says so' );
+fg_not_contains( 'fg-list-heading', $ohne_dienste, 'without a work duty there is no empty list' );
+fg_not_contains( 'fg_submit_ride', $ohne_dienste, 'without a work duty there is no form' );
+fg_contains( 'Eintrag anlegen', $ohne_dienste, 'the link to the form stays in place' );
+// Counted and not read out: a check that looks for a wording only proves that
+// this wording is absent. The old state carried a second message in the list
+// that named work duties which did not exist, and the number of messages is
+// what actually has to be one.
+fg_ok( 1 === substr_count( $ohne_dienste, 'class="fg-empty"' ), 'exactly one message without a work duty', substr_count( $ohne_dienste, 'class="fg-empty"' ) . ' messages' );
+
+$ohne_fahrten = fg_render_with_empty( FG_Schema::rides_table() );
+fg_contains( 'hat sich für die anstehenden', $ohne_fahrten, 'with a work duty but no entry the page says so' );
+fg_contains( 'fg-list-heading', $ohne_fahrten, 'with a work duty the list is still there' );
+fg_not_contains( 'steht kein Arbeitsdienst an', $ohne_fahrten, 'the message about missing work duties stays away' );
+fg_contains( 'fg_submit_ride', $ohne_fahrten, 'with a work duty the form is still there' );
+fg_contains( $event_ref, $ohne_fahrten, 'the work duty is still selectable' );
+fg_ok( 1 === substr_count( $ohne_fahrten, 'class="fg-empty"' ), 'exactly one message without an entry', substr_count( $ohne_fahrten, 'class="fg-empty"' ) . ' messages' );
+
+$wieder = $fg_public->render_shortcode();
+fg_contains( $event_record->title, $wieder, 'the work duties are back once the filter is gone' );
+// The pages cannot be compared as a whole: the form carries a nonce and the
+// second it was started, so two renders a second apart differ by design. The
+// number of entries is the part that must not move.
+fg_ok(
+	substr_count( $html, '<article class="fg-ride">' ) === substr_count( $wieder, '<article class="fg-ride">' ),
+	'every entry is still there after both renders',
+	substr_count( $html, '<article class="fg-ride">' ) . ' -> ' . substr_count( $wieder, '<article class="fg-ride">' )
+);
+
 /* ------------------------------------------------------------------ 4 */
 echo "[4] Submission with a valid participant address\n";
 fg_mail_reset();
