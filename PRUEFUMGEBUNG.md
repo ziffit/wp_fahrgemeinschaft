@@ -108,6 +108,19 @@ und gesendet wird über eine eigene Schaltfläche „Absenden“. Sichtbarkeit l
 selbst wird zusätzlich über HTTP geprüft: die Antwort ist `contact_received`, und zwar
 bei einer hinterlegten wie bei einer nicht hinterlegten Adresse.
 
+Beide Beschriftungen stehen stets im Dokument, versteckt wird die unpassende allein durch
+das Stylesheet. Deshalb liest die Suite die Dateien über genau die Adresse, die die Seite
+verlinkt, und prüft die Kaskade: Für den geschlossenen Zustand muss eine Regel ohne
+`[open]` das offene Label auf `display: none` setzen, für den geöffneten eine Regel mit
+`[open]` es wieder sichtbar machen, und die zweite Regel muss stärker sein als die erste.
+Damit wird der Fehler gefangen, der sich im Browser nicht im HTML zeigt: Erscheinen beide
+Beschriftungen nebeneinander, liest die Schaltfläche „KontaktierenSchließen“. Gegen den
+Stand vor dem Umbau schlägt die Prüfung fehl. Eine Grenze bleibt: Sie kann nur das
+eigene Stylesheet beurteilen. Ob ein Theme des Zielauftritts die Regeln überstimmt, ist
+in dieser Installation nicht nachprüfbar, weil hier gar kein Theme-Stylesheet geladen
+wird — die Selektoren tragen deshalb den ganzen Pfad (`details` > `summary` > Label),
+damit eine lockere Theme-Regel für `summary` oder `span` sie nicht überstimmen kann.
+
 Die Wirkung des Stylesheets ist mit `curl` nicht prüfbar. Zweispaltigkeit, Zeilenhöhe
 und Schriftgrade der Einwilligung sind von Hand im Browser anzusehen.
 

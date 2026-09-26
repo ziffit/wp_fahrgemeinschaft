@@ -26,8 +26,8 @@ ok()   { printf '  ok   %s\n' "$1"; pass=$((pass+1)); }
 bad()  { printf '  FAIL %s :: %s\n' "$1" "$2"; fail=$((fail+1)); }
 has()  { if printf '%s' "$2" | grep -qF -- "$3"; then ok "$1"; else bad "$1" "missing: $3"; fi; }
 hasnt(){ if printf '%s' "$2" | grep -qF -- "$3"; then bad "$1" "found: $3"; else ok "$1"; fi; }
-# A structural check: the page is handed to python on stdin, the snippet decides.
-struct() { if python3 -c "$2" <<< "$body"; then ok "$1"; else bad "$1" "$3"; fi; }
+# A structural check: the given text is handed to python on stdin, the snippet decides.
+struct() { if python3 -c "$3" <<< "$1"; then ok "$2"; else bad "$2" "$4"; fi; }
 
 echo "== HTTP level tests =="
 
@@ -152,14 +152,14 @@ body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
 # appears once the visitor asks for it. A form that is written into the page
 # every time is the version before the change.
 hasnt "the contact form is not open on arrival" "$body" "<details class=\"fg-contact\" open"
-struct "every entry opens its contact form behind a toggle" "
+struct "$body" "every entry opens its contact form behind a toggle" "
 import re, sys
 h = sys.stdin.read()
 blocks = re.findall(r'<details class=\"fg-contact\">.*?</details>', h, re.S)
 ok = blocks and all('<summary' in b and 'fg-contact-form' in b for b in blocks)
 sys.exit(0 if ok else 1)
 " "an entry has no toggle or no form behind it"
-struct "the toggle carries both labels" "
+struct "$body" "the toggle carries both labels" "
 import re, sys
 h = sys.stdin.read()
 toggles = re.findall(r'<summary class=\"fg-button fg-contact-toggle\">.*?</summary>', h, re.S)
@@ -170,17 +170,59 @@ has "the closed toggle offers contact" "$body" '<span class="fg-label-closed">Ko
 has "the open toggle offers to close again" "$body" '<span class="fg-label-open">Schließen</span>'
 has "the form is sent with a button of its own" "$body" '<button class="fg-button" type="submit">Absenden</button>'
 hasnt "the old wording is gone" "$body" "Kontakt aufnehmen"
+# Both labels are always in the document, so the one that must stay away is
+# hidden by a rule in the stylesheet. If the stylesheet is older than the
+# markup, both appear and the control reads "KontaktierenSchließen". That is
+# not visible in the HTML and only shows up in the browser, so the file is
+# read at the address the page itself links to.
+css_url=$(printf '%s' "$body" | grep -o "href='[^']*fahrgemeinschaften\.css?ver=[^']*'" | head -1 | sed "s/^href='//;s/'$//")
+if [ -n "$css_url" ]; then
+	has "the stylesheet is requested with a version" "$css_url" "?ver="
+	style=$(curl -sk "$css_url")
+	struct "$style" "the stylesheet switches the label, and the open rule wins" "
+import re, sys
+css = sys.stdin.read()
+# comments are stripped first: a comment sits in front of a selector and would
+# be counted as part of it
+css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+rules = re.findall(r'([^{}]+)\{([^}]*)\}', css)
+mine = [(s.strip(), b) for s, b in rules
+        if 'summary.fg-contact-toggle' in s and '.fg-label-open' in s]
+def weight(sel):
+    # only these shapes occur here: element names, classes, [open]
+    s = re.sub(r'::?[a-z-]+(\([^)]*\))?', ' ', sel)
+    s = re.sub(r'#[a-z-]+', ' ', s)
+    return (len(re.findall(r'\.', s)) + len(re.findall(r'\[', s)),
+            len(re.findall(r'(^|[\s>+~])[a-z][a-z0-9]*', s)))
+def is_open(sel):
+    return re.search(r'\[\s*open\s*\]', sel) is not None
+closed = [(weight(s), b) for s, b in mine if not is_open(s)]
+opened = [(weight(s), b) for s, b in mine if is_open(s)]
+if not closed or not opened:
+    sys.exit(1)                                   # a state has no rule
+if not all('display: none' in b for _, b in closed):
+    sys.exit(1)                                   # closed state shows both labels
+if not all('display: inline' in b for _, b in opened):
+    sys.exit(1)                                   # open state shows neither
+# the rule for the open state has to outrank the one for the closed state,
+# otherwise the hidden label stays hidden and the button still reads
+# "Kontaktieren" while the form is open
+sys.exit(0 if max(w for w, _ in opened) > max(w for w, _ in closed) else 1)
+" "one state shows both labels, the other shows none, or the wrong rule wins"
+else
+	bad "the stylesheet is linked" "no stylesheet with a version on the page"
+fi
 # The work duty and its date are one heading. A date in a paragraph of its own
 # is the version before the change and would put them on two lines again.
 hasnt "the date is no line of its own" "$body" '<p class="fg-date">'
-struct "the date stands inside the work duty heading" "
+struct "$body" "the date stands inside the work duty heading" "
 import re, sys
 h = sys.stdin.read()
 dates = re.findall(r'class=\"fg-date\"', h)
 headings = [b for b in re.findall(r'<h3[^>]*>.*?</h3>', h, re.S) if 'fg-date' in b]
 sys.exit(0 if dates and len(dates) == len(headings) else 1)
 " "a date is outside the heading or the heading is missing"
-struct "every entry carries mode, origin and name in one heading" "
+struct "$body" "every entry carries mode, origin and name in one heading" "
 import re, sys
 h = sys.stdin.read()
 titles = re.findall(r'<h4 class=\"fg-ride-title\">.*?</h4>', h, re.S)
@@ -191,7 +233,7 @@ def complete(t):
     return len(parts) == 3 and all(parts)
 sys.exit(0 if titles and all(complete(t) for t in titles) else 1)
 " "a heading is missing mode, origin or name"
-struct "field and button share one row" "
+struct "$body" "field and button share one row" "
 import re, sys
 h = sys.stdin.read()
 idx = [m.start() for m in re.finditer(r'<div class=\"fg-contact-row\">', h)]
@@ -202,7 +244,7 @@ sys.exit(0 if ok else 1)
 # The note is the same for every entry and is therefore stated once. The count
 # only says something with more than one entry, so both belong in one check: a
 # separate one would pass on a page that happens to have a single entry.
-struct "the note about the address is stated once for the whole list" "
+struct "$body" "the note about the address is stated once for the whole list" "
 import re, sys
 h = sys.stdin.read()
 entries = len(re.findall(r'<article class=\"fg-ride\">', h))
