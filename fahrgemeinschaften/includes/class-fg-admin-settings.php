@@ -66,8 +66,8 @@ final class FG_Admin_Settings {
 									<img src="<?php echo esc_url( $logo_url ); ?>" alt="" style="max-height:64px;height:auto">
 								<?php endif; ?>
 							</p>
-							<button type="button" class="button" id="fg-logo-pick"><?php esc_html_e( 'Logo auswählen', 'fahrgemeinschaften' ); ?></button>
-							<button type="button" class="button" id="fg-logo-clear"<?php echo $logo_id ? '' : ' hidden'; ?>><?php esc_html_e( 'Logo entfernen', 'fahrgemeinschaften' ); ?></button>
+							<button type="button" class="button" id="fg-logo-pick" disabled><?php esc_html_e( 'Logo auswählen', 'fahrgemeinschaften' ); ?></button>
+							<button type="button" class="button" id="fg-logo-clear" disabled<?php echo $logo_id ? '' : ' hidden'; ?>><?php esc_html_e( 'Logo entfernen', 'fahrgemeinschaften' ); ?></button>
 							<p class="description"><?php esc_html_e( 'Bild aus der Mediathek. Es wird in die E-Mail eingebettet und nicht von einer fremden Adresse nachgeladen. Ohne Logo wird die E-Mail ohne Bild versendet.', 'fahrgemeinschaften' ); ?></p>
 						</td>
 					</tr>
@@ -223,7 +223,14 @@ final class FG_Admin_Settings {
 	}
 
 	/**
-	 * Add the media library to the settings screen.
+	 * Add the media library and the picker to the settings screen.
+	 *
+	 * The script is attached to the media library with
+	 * wp_add_inline_script() instead of being printed here. Printing it during
+	 * admin_enqueue_scripts would put it into the head of the document, where
+	 * neither wp.media nor the buttons exist yet, and the buttons would then do
+	 * nothing without reporting an error. Attached to media-views it is printed
+	 * behind that script, in the footer, where both are there.
 	 *
 	 * @return void
 	 */
@@ -237,12 +244,23 @@ final class FG_Admin_Settings {
 		$strings = array(
 			'frameTitle'  => __( 'Logo auswählen', 'fahrgemeinschaften' ),
 			'frameButton' => __( 'Dieses Bild verwenden', 'fahrgemeinschaften' ),
-			/* translators: %s: site name, used as alternative text of the logo. */
-			'altTemplate' => __( 'Logo von %s', 'fahrgemeinschaften' ),
 		);
 
-		?>
-<script>
+		wp_add_inline_script( 'media-views', $this->picker_script( $strings ) );
+	}
+
+	/**
+	 * Build the script that drives the two logo buttons.
+	 *
+	 * Both buttons are rendered disabled and are only enabled here. If the
+	 * script does not run, the screen shows that instead of two buttons that
+	 * silently do nothing.
+	 *
+	 * @param array $strings Texts for the media frame.
+	 * @return string
+	 */
+	private function picker_script( $strings ) {
+		$script = <<<'JS'
 ( function () {
 	var pick = document.getElementById( 'fg-logo-pick' );
 	var clear = document.getElementById( 'fg-logo-clear' );
@@ -252,7 +270,7 @@ final class FG_Admin_Settings {
 		return;
 	}
 
-	var strings = <?php echo wp_json_encode( $strings ); ?>;
+	var strings = __FG_PICKER_STRINGS__;
 
 	var frame = window.wp.media( {
 		title: strings.frameTitle,
@@ -266,6 +284,7 @@ final class FG_Admin_Settings {
 			? '<img src="' + url + '" alt="" style="max-height:64px;height:auto">'
 			: '';
 		clear.hidden = field.value === '';
+		clear.disabled = field.value === '';
 	}
 
 	pick.addEventListener( 'click', function ( event ) {
@@ -285,9 +304,18 @@ final class FG_Admin_Settings {
 		field.value = item.id;
 		show( url );
 	} );
+
+	pick.disabled = false;
+
+	// The stored logo is shown by the server. Its address is only needed to
+	// decide whether the remove button applies, so a missing preview image must
+	// not stop the picker.
+	var current = box.querySelector( 'img' );
+	show( '' === field.value || ! current ? '' : current.src );
 } )();
-</script>
-		<?php
+JS;
+
+		return str_replace( '__FG_PICKER_STRINGS__', wp_json_encode( $strings ), $script );
 	}
 
 	/**

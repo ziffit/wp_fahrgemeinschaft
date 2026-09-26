@@ -328,6 +328,24 @@ screen=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-se
 has "screen renders" "$screen" "<h1>Einstellungen</h1>"
 has "logo field present" "$screen" 'name="fg_logo_attachment_id"'
 has "media picker script present" "$screen" "wp.media"
+# The picker has to run behind the media library and behind its own buttons.
+# Printed during admin_enqueue_scripts it would land in the head, where
+# wp.media does not exist yet and the buttons would do nothing in silence.
+has "media library is loaded" "$screen" 'id="media-views-js"'
+has "picker script is attached to the media library" "$screen" 'id="media-views-js-after"'
+if python3 -c "
+import sys
+h = sys.stdin.read()
+lib = h.find('id=\"media-views-js\"')
+after = h.find('id=\"media-views-js-after\"')
+body = h.find('id=\"fg-logo-pick\"')
+sys.exit(0 if -1 not in (lib, after, body) and body < after and lib < after else 1)
+" <<< "$screen"; then
+	ok "picker runs after the media library and after the buttons"
+else
+	bad "picker runs after the media library and after the buttons" "wrong order in the document"
+fi
+has "the pick button waits for the script" "$screen" 'id="fg-logo-pick" disabled'
 has "sender field present" "$screen" 'name="fg_footer_organisation"'
 has "contact field present" "$screen" 'name="fg_footer_contact"'
 has "legal field present" "$screen" 'name="fg_footer_legal"'
@@ -351,7 +369,9 @@ refused=$(cat "$DIR/settings-bad.html")
 has "the missing field is named" "$refused" "Kontakt"
 has "it says that nothing was saved" "$refused" "Es wurde nichts gespeichert"
 has "it returns to the settings screen" "$out" "page=fahrgemeinschaften-settings"
-if [ "$(s settings footer_contact)" = "" ]; then ok "nothing was stored"; else bad "nothing was stored" "$(s settings footer_contact)"; fi
+# Compared with the state of before the run and not with "empty": a footer that
+# was configured by hand has to stay untouched as well.
+if [ "$(s settings-json)" = "$SETTINGS_BEFORE" ]; then ok "nothing was stored"; else bad "nothing was stored" "$(s settings-json)"; fi
 clean "$refused" "settings save with an incomplete footer"
 
 echo "[8c] a complete footer is stored"
@@ -372,6 +392,7 @@ else
 fi
 if [ "$(s settings footer_contact)" = "info@angeln.example.org" ]; then ok "contact stored"; else bad "contact stored" "$(s settings footer_contact)"; fi
 if [ "$(s settings logo_attachment_id)" = "0" ]; then ok "no logo stored"; else bad "no logo stored" "$(s settings logo_attachment_id)"; fi
+AFTER_SAVE=$(s settings-json)
 clean "$stored" "settings save"
 
 echo "[8d] a wrong nonce changes nothing"
@@ -382,7 +403,9 @@ out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/wp-admin/
 	--data-urlencode "fg_footer_contact=info@angeln.example.org" \
 	--data-urlencode "fg_footer_legal=Angaben gemäß § 5 TMG")
 if [ "$out" = "403" ]; then ok "a wrong nonce is refused ($out)"; else bad "a wrong nonce is refused" "$out"; fi
-if [ "$(s settings footer_organisation)" != "Ohne Erlaubnis" ]; then ok "the stored footer is unchanged"; else bad "the stored footer is unchanged" "overwritten"; fi
+# Compared with the values of the save before and not with the values of the
+# run before it, which the site may have had configured by hand.
+if [ "$(s settings-json)" = "$AFTER_SAVE" ]; then ok "the stored settings are unchanged"; else bad "the stored settings are unchanged" "$(s settings-json)"; fi
 
 echo "[8e] the preview shows the stored footer"
 preview_url=$(printf '%s' "$screen" | python3 -c "

@@ -81,7 +81,15 @@ Fahrgemeinschaften sowie die Statistik-Option, es gibt also keinen Zustand vom V
 | CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–16: Tabellen, Aktivitätsgrenze, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene |
 | Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML |
 | Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo` |
-| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der vier Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung und Vorschau |
+| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der vier Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau |
+
+Die Mediathek-Auswahl des Logos wird nicht angeklickt, sondern über ihre Stellung im
+Dokument geprüft: Das Script hängt mit `wp_add_inline_script()` an `media-views` und wird
+deshalb hinter der Mediathek und hinter den beiden Buttons ausgegeben, die es sucht. Ein
+Vergleich der Positionen fängt genau den Fehler, dass beide Buttons vorhanden sind und
+doch stumm bleiben. Zusätzlich wird geprüft, dass die Buttons zunächst deaktiviert
+ausgeliefert werden: Läuft das Script nicht, sieht man das an der Oberfläche, statt es
+an einem Klick zu bemerken.
 
 `run-all.sh` endet mit Schritt `5/5 handover`, der den Mail-Recorder wieder abschaltet. Ohne
 diesen Schritt stünde die Instanz anschließend nicht für die Handprüfung mit SureMails zur
@@ -94,7 +102,9 @@ damit die Skripte den Zustand der Installation prüfen können, ohne WordPress-B
 kennen. Feldzugriffe laufen über eine Whitelist; jeder Befehl gibt genau einen Wert aus.
 Dazu kommen `settings`, `settings-json` und `settings-restore` für die Option `fg_settings`:
 Die Admin-Suite liest die Option vor dem eigenen Lauf und stellt sie danach wieder her, damit
-eine von Hand gepflegte Fußzeile den Testlauf übersteht.
+eine von Hand gepflegte Fußzeile den Testlauf übersteht. Weil die Option dabei nicht leer
+sein muss, vergleichen die Prüfungen des Speicherns jeweils den Zustand davor und danach, statt
+auf ein leeres Feld zu prüfen.
 
 ## Umstieg von den eigenen Beitragstypen
 
