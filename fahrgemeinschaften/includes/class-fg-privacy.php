@@ -48,7 +48,7 @@ final class FG_Privacy {
 			return;
 		}
 
-		$text  = '<p>' . esc_html__( 'Fahrgemeinschaften für Arbeitsdienste: Die Website speichert eine von der angemeldeten Person gewählte öffentliche Bezeichnung, die Art des Angebots, den ungefähren Abfahrtsbereich sowie den zugehörigen Arbeitsdienst. Die private E-Mail-Adresse wird nicht öffentlich ausgegeben. Eine Eintragung wird erst nach Bestätigung per E-Mail veröffentlicht.', 'fahrgemeinschaften' ) . '</p>';
+		$text  = '<p>' . esc_html__( 'Fahrgemeinschaften für Arbeitsdienste: Die Website speichert den von der angemeldeten Person angegebenen Vornamen oder Spitznamen, die Art des Angebots, den ungefähren Abfahrtsbereich sowie den zugehörigen Arbeitsdienst. Vorname oder Spitzname, Angebotsart, Abfahrtsbereich und Arbeitsdienst werden in der öffentlichen Liste angezeigt; wer nicht mit Namen auftreten möchte, gibt einen Spitznamen an. Die private E-Mail-Adresse wird nicht öffentlich ausgegeben. Eine Eintragung wird erst nach Bestätigung per E-Mail veröffentlicht.', 'fahrgemeinschaften' ) . '</p>';
 		$text .= '<p>' . esc_html__( 'Für die Kontaktvermittlung kann eine Person ihre E-Mail-Adresse an den Ersteller einer veröffentlichten Fahrgemeinschaft senden. Die Anfrage wird nur zur Weiterleitung dieser Kontaktaufnahme verwendet; es werden keine Kontaktverläufe gespeichert. Die öffentliche Antwort ist unabhängig von der Gültigkeit einer Adresse gleich.', 'fahrgemeinschaften' ) . '</p>';
 		$text .= '<p>' . esc_html__( 'Bestätigungs- und Löschlinks enthalten zufällige Tokens. Diese werden nur als Hash gespeichert und laufen nach 48 Stunden beziehungsweise nach dem Ablauf des Arbeitsdienstes plus 30 Tagen ab. Die tägliche Missbrauchsstatistik enthält nur aggregierte Zähler ohne E-Mail-Adressen, Namen, IP-Adressen oder Rohformulare und wird nach 90 Tagen gelöscht.', 'fahrgemeinschaften' ) . '</p>';
 
@@ -115,7 +115,7 @@ final class FG_Privacy {
 				'data'        => array(
 					array( 'name' => __( 'Status', 'fahrgemeinschaften' ), 'value' => $ride->status ),
 					array( 'name' => __( 'Art', 'fahrgemeinschaften' ), 'value' => $ride_data['mode'] ),
-					array( 'name' => __( 'Bezeichnung', 'fahrgemeinschaften' ), 'value' => $ride->alias ),
+					array( 'name' => __( 'Vorname oder Spitzname', 'fahrgemeinschaften' ), 'value' => $ride->alias ),
 					array( 'name' => __( 'Arbeitsdienst', 'fahrgemeinschaften' ), 'value' => $ride_data['event_label'] ),
 					array( 'name' => __( 'Datum', 'fahrgemeinschaften' ), 'value' => $ride_data['event_date'] ),
 					array( 'name' => __( 'Abfahrtsbereich', 'fahrgemeinschaften' ), 'value' => $ride_data['origin'] ),

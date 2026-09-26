@@ -430,6 +430,17 @@ echo "[8f] the preview needs a nonce"
 out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' "$BASE/wp-admin/admin-post.php?action=fg_mail_preview")
 if [ "$out" = "403" ]; then ok "the preview is refused without a nonce ($out)"; else bad "the preview is refused without a nonce" "$out"; fi
 
+# The work duty from [5] is an active record dated 2027 and would sit in the
+# offer form of a manual test afterwards. Removing it keeps the suite from
+# leaving a row behind on every run; the cascade count of [6c] stays untouched
+# because that section deletes its own record.
+if [ -n "$NEW_ID" ] && [ "$NEW_ID" -gt 0 ]; then
+	s delete-event "$NEW_ID" > /dev/null
+	if [ "$(s exists-event "$NEW_ID")" = "0" ]; then ok "the work duty of this run is gone again"; else bad "the work duty of this run is gone again" "id $NEW_ID still there"; fi
+else
+	bad "the work duty of this run is gone again" "no id to remove"
+fi
+
 s settings-restore "$SETTINGS_BEFORE" > /dev/null
 if [ "$(s settings-json)" = "$SETTINGS_BEFORE" ]; then ok "the settings of before the run are back"; else bad "the settings of before the run are back" "$(s settings-json)"; fi
 

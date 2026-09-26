@@ -297,7 +297,7 @@ final class FG_Actions {
 		$body .= '<div class="warning"><p>' . esc_html( $warning ) . '</p></div>';
 		$body .= '<dl>';
 		$body .= '<dt>' . esc_html__( 'Art', 'fahrgemeinschaften' ) . '</dt><dd>' . esc_html( $mode ) . '</dd>';
-		$body .= '<dt>' . esc_html__( 'Bezeichnung', 'fahrgemeinschaften' ) . '</dt><dd>' . esc_html( $ride->alias ) . '</dd>';
+		$body .= '<dt>' . esc_html__( 'Vorname oder Spitzname', 'fahrgemeinschaften' ) . '</dt><dd>' . esc_html( $ride->alias ) . '</dd>';
 		$body .= '<dt>' . esc_html__( 'Arbeitsdienst', 'fahrgemeinschaften' ) . '</dt><dd>' . esc_html( $data['event_label'] . ( $data['event_date'] ? ' (' . $data['event_date'] . ')' : '' ) ) . '</dd>';
 		$body .= '<dt>' . esc_html__( 'Abfahrtsbereich', 'fahrgemeinschaften' ) . '</dt><dd>' . esc_html( $data['origin'] ) . '</dd>';
 		$body .= '</dl>';
@@ -748,11 +748,15 @@ final class FG_Actions {
 	/**
 	 * Detect contact details in a value that is published verbatim.
 	 *
-	 * Public fields must stay coarse. E-mail addresses, phone numbers and
-	 * house numbers together with a street name are rejected server side, so
-	 * the hint text and the confirmation preview are not the only guard.
-	 * Plain personal names are not detected reliably and stay a matter of the
-	 * confirmation preview.
+	 * A first name or a nickname is expected in the public list and is not
+	 * touched here. What is rejected are the details that do not belong in a
+	 * list anyone can read: e-mail addresses, phone numbers, and house numbers
+	 * together with a street name. The server therefore does not rely on the
+	 * hint text and the confirmation preview alone.
+	 *
+	 * A full name is not detected, because that cannot be done reliably. It
+	 * stays a matter of the confirmation preview, where the person reads back
+	 * exactly what becomes public before confirming.
 	 *
 	 * @param string $value Submitted value.
 	 * @return bool

@@ -193,7 +193,7 @@ final class FG_Admin_Settings {
 			? (string) wp_get_attachment_image_url( $settings['logo_attachment_id'], 'full' )
 			: '';
 
-		// The example text carries an ampersand on purpose: the group name is
+		// The example text carries an ampersand on purpose: the name is
 		// typed by a visitor, and this is the place where it becomes visible
 		// that such a value is escaped rather than carried over as markup.
 		$text = implode(

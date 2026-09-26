@@ -91,7 +91,7 @@ final class FG_Public {
 				<?php if ( empty( $events ) ) : ?>
 					<p class="fg-empty"><?php esc_html_e( 'Aktuell sind keine Arbeitsdienste für Fahrgemeinschaften verfügbar.', 'fahrgemeinschaften' ); ?></p>
 				<?php else : ?>
-					<p class="fg-hint"><?php esc_html_e( 'Bitte verwende eine frei gewählte, nicht identifizierende Bezeichnung. Vollständige Namen, genaue Adressen, Telefonnummern und andere private Angaben gehören nicht in die öffentliche Anzeige.', 'fahrgemeinschaften' ); ?></p>
+					<p class="fg-hint"><?php esc_html_e( 'Andere private Angaben gehören nicht in die öffentliche Anzeige: genaue Adressen, Telefonnummern und E-Mail-Adressen werden von der Serverseite zurückgewiesen.', 'fahrgemeinschaften' ); ?></p>
 					<form action="<?php echo esc_url( $admin_url ); ?>" method="post">
 						<input type="hidden" name="action" value="fg_submit_ride">
 						<input type="hidden" name="source_url" value="<?php echo esc_url( $source ); ?>">
@@ -122,8 +122,10 @@ final class FG_Public {
 							</div>
 
 							<div class="fg-field">
-								<label for="fg-alias"><?php esc_html_e( 'Öffentliche Bezeichnung', 'fahrgemeinschaften' ); ?></label>
+								<label for="fg-alias"><?php esc_html_e( 'Vorname oder Spitzname', 'fahrgemeinschaften' ); ?></label>
 								<input type="text" id="fg-alias" name="fg_alias" maxlength="80" required>
+								<?php // The name is the one thing that is meant to be read by people who know the member. ?>
+								<span class="fg-hint"><?php esc_html_e( 'Steht in der Liste öffentlich. Wer nicht mit Namen auftreten möchte, tritt unter einem Spitznamen auf.', 'fahrgemeinschaften' ); ?></span>
 							</div>
 
 							<div class="fg-field">
@@ -141,7 +143,8 @@ final class FG_Public {
 								<label class="fg-consent" for="fg-consent">
 									<input id="fg-consent" type="checkbox" name="fg_consent" value="1" required>
 									<span>
-										<?php esc_html_e( 'Ich möchte die oben gemachten Angaben zur Organisation der Fahrgemeinschaft öffentlich anzeigen lassen. Die E-Mail-Adresse und meine persönlichen Kontaktdaten werden dabei nicht öffentlich angezeigt.', 'fahrgemeinschaften' ); ?>
+										<?php // The consent names what becomes public. "Meine persönlichen Kontaktdaten" was ambiguous: it could be read as covering a name, and a name is expected in the public list. ?>
+										<?php esc_html_e( 'Ich möchte die oben gemachten Angaben zur Organisation der Fahrgemeinschaft öffentlich anzeigen lassen. Dazu gehören mein Vorname oder Spitzname, die Art des Angebots, der Abfahrtsbereich und der Arbeitsdienst. Meine E-Mail-Adresse und meine Telefonnummer werden dabei nicht öffentlich angezeigt.', 'fahrgemeinschaften' ); ?>
 										<?php if ( $privacy ) : ?>
 											<a href="<?php echo esc_url( $privacy ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'fahrgemeinschaften' ); ?></a>
 										<?php endif; ?>

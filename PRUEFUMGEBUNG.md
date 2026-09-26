@@ -79,7 +79,7 @@ Fahrgemeinschaften sowie die Statistik-Option, es gibt also keinen Zustand vom V
 | Suite | Datei | Vorgehen |
 | --- | --- | --- |
 | CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–16: Tabellen, Aktivitätsgrenze, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene |
-| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste |
+| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel sowie Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data` |
 | Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo` |
 | Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der vier Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau |
 
@@ -91,9 +91,18 @@ doch stumm bleiben. Zusätzlich wird geprüft, dass die Buttons zunächst deakti
 ausgeliefert werden: Läuft das Script nicht, sieht man das an der Oberfläche, statt es
 an einem Klick zu bemerken.
 
+Die Admin-Suite legt einen Arbeitsdienst an, ändert ihn und verwirft eine Speicherung.
+Stand am 26. September 2026 blieb dieser Datensatz liegen: Nach jedem Lauf erschien ein
+weiterer aktiver Dienst auf 2027 im Auswahlfeld des öffentlichen Formulars, weil die
+Suite die Einstellungen zurücknahm, den eigenen Datensatz aber nicht. Der Lauf räumt ihn
+jetzt selbst ab und prüft das am Ende über `exists-event`, das `0` für einen gelöschten
+und `1` für einen vorhandenen Dienst liefert. Ohne diese Prüfung wäre die Beseitigung eine
+Behauptung in der Beschreibung, und genau daran ist es gescheitert: 139 Prüfungen waren
+grün, während der Datensatz liegen blieb.
+
 Der Aufbau der öffentlichen Liste wird über die ausgelieferte Seite geprüft, nicht über
 den Quelltext: Arbeitsdienst und Datum stehen in einer gemeinsamen Überschrift, jeder
-Eintrag trägt Angebotsart, Abfahrtsbereich und Bezeichnung in einer Zeile, Feld und
+Eintrag trägt Angebotsart, Abfahrtsbereich und Vorname oder Spitzname in einer Zeile, Feld und
 Schaltfläche liegen in derselben Zeile, und der Hinweis zur E-Mail-Adresse steht einmal
 für die ganze Liste statt einmal je Eintrag. Der letzte Punkt prüft Anzahl der Einträge
 und Anzahl der Hinweise in einer Bedingung, weil ein Vergleich auf einer Seite mit nur
@@ -124,6 +133,18 @@ damit eine lockere Theme-Regel für `summary` oder `span` sie nicht überstimmen
 Dass das Label **E-Mail** nicht umbricht, wird im selben Stylesheet geprüft: Es braucht
 eine Regel für das Label in der Kontaktzeile mit `white-space: nowrap`. Ohne sie setzt der
 Browser am Bindestrich um, und aus einer Zeile werden zwei.
+
+Dass das Namensfeld einen Vornamen oder Spitzname erwartet und keine Kontaktdaten, lässt
+sich nicht an der Meldung ablesen: Ein abgewiesener Eintrag und ein Eintrag, der später
+an einer nicht hinterlegten Adresse scheitert, antworten beide mit `not_created`. Der
+Unterschied steht nur im Zähler `publish_personal_data`, den der Server selbst führt. Die
+Prüfung liest ihn vor dem Absenden und danach und verlangt, dass er bei „Peter“, „Käse“
+und „Amsel-Gruppe“ stehen bleibt, bei einer Telefonnummer aber steigt. Dafür nimmt sie
+bewusst eine Adresse, die auf keinem Dienst hinterlegt ist: Dann entsteht kein Eintrag,
+und die Probe hinterlässt nichts. Die sieben Textprüfungen desselben Abschnitts sind gegen
+den Stand von `HEAD` geprüft: Aus dem alten Plugin ausgeliefert schlagen alle sieben fehl,
+unter anderem die wegen der Dativform „persönliche**n** Kontaktdaten“ — mit der Endung `n`
+im Suchbegriff wäre sie auch an der alten Fassung vorbeigelaufen und hätte nichts geprüft.
 
 Der Rückkehrweg nach dem Absenden wird über die echte Weiterleitung geprüft, nicht über
 den Quelltext: Die Adresse, auf die der Kontaktversand und ein abgelaufenes Formular

@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Fahrgemeinschaften
  * Description:       Öffentliche Fahrgemeinschaften für Vereinsarbeitsdienste mit sicherer E-Mail-Bestätigung.
- * Version:           1.2.0
+ * Version:           1.3.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            Verein
@@ -19,8 +19,12 @@ defined( 'ABSPATH' ) || exit;
  * Diese Zahl steht auch als Parameter an der Adresse des Stylesheets. Sie muss
  * mit jeder Änderung an der Datei mitwachsen, sonst hält der Browser die alte
  * Fassung im Cache und die Seite zeigt den neuen Text zur alten Optik.
+ *
+ * Sie wächst auch dann, wenn sich nur Text ändert, zum Beispiel an Formular,
+ * Mails oder Datenschutzerklärung: sie kennzeichnet die ausgelieferte Fassung,
+ * und wer ein Archiv entpackt, soll an der Zahl erkennen, was darin ist.
  */
-define( 'FG_VERSION', '1.2.0' );
+define( 'FG_VERSION', '1.3.0' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
 /**
  * Name of the element that carries a message after a form was sent.
@@ -40,7 +44,14 @@ define( 'FG_CLEANUP_OPTION', 'fg_last_cleanup' );
 define( 'FG_PENDING_TOKEN_TTL', 48 * HOUR_IN_SECONDS );
 define( 'FG_PUBLISHED_DELETE_TOKEN_TTL', 30 * DAY_IN_SECONDS );
 define( 'FG_STATISTICS_RETENTION_DAYS', 90 );
-define( 'FG_CONSENT_VERSION', '1.0' );
+/**
+ * Version of the consent text.
+ *
+ * Raised to 1.1 when the consent began to name what becomes public. A first
+ * name or nickname is expected in the list, and the sentence no longer leaves
+ * open whether a name counts as a contact detail.
+ */
+define( 'FG_CONSENT_VERSION', '1.1' );
 define( 'FG_RIDE_STATUS_PENDING', 'pending' );
 define( 'FG_RIDE_STATUS_PUBLISHED', 'published' );
 define( 'FG_RIDE_MODE_OFFER', 'offer' );

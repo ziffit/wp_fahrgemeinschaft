@@ -325,6 +325,53 @@ if ('id=\"%s\"' % target) not in h:
 sys.exit(0 if label else 1)
 " "the link has no text, or it points at something that is not on the page"
 
+# --- 5e. the name is meant to be a name, contact details are still refused
+# The server counts what it treats as a contact detail. That counter is the
+# only place where the distinction shows: a rejected entry and an entry that
+# fails later look the same to the caller, both answer not_created.
+echo "[5e] a first name is a name"
+body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
+has "the form asks for a first name" "$body" ">Vorname oder Spitzname</label>"
+hasnt "the old field name is gone" "$body" "Öffentliche Bezeichnung"
+has "the name is announced as public" "$body" "Steht in der Liste öffentlich"
+has "the consent names the name as public" "$body" "Dazu gehören mein Vorname oder Spitzname"
+hasnt "the ambiguous wording in the consent is gone" "$body" "persönlichen Kontaktdaten"
+hasnt "the hint no longer asks for an unidentifying text" "$body" "nicht identifizierende"
+has "the hint names what the server refuses" "$body" "Telefonnummern und E-Mail-Adressen werden von der Serverseite zurückgewiesen"
+
+event_ref=$(printf '%s' "$body" | grep -o '<option value="[0-9a-f]\{32\}"' | head -1 | sed 's/.*value="//;s/"//')
+offer_nonce=$(printf '%s' "$body" | grep -o 'name="fg_submit_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+# An address that is on no event, so the probe is refused for that reason and
+# leaves nothing behind. The fixture only registers the three @angeln.example.org
+# addresses as participants; adding this one there would turn the probe into a
+# real entry and the check would quietly start writing rides.
+probe() {
+	curl -sk -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
+		--data-urlencode "action=fg_submit_ride" \
+		--data-urlencode "fg_mode=offer" \
+		--data-urlencode "fg_event_ref=$event_ref" \
+		--data-urlencode "fg_alias=$1" \
+		--data-urlencode "fg_origin=Suedstadt" \
+		--data-urlencode "fg_contact_email=fremd@example.com" \
+		--data-urlencode "fg_consent=1" \
+		--data-urlencode "fg_website=" \
+		--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
+		--data-urlencode "fg_submit_nonce=$offer_nonce"
+}
+if [ -n "$event_ref" ] && [ -n "$offer_nonce" ]; then
+	before=$(s stat publish_personal_data)
+	probe "Peter"
+	probe "Käse"
+	probe "Amsel-Gruppe"
+	after=$(s stat publish_personal_data)
+	if [ "$before" = "$after" ]; then ok "a first name and a nickname are not contact details ($after)"; else bad "a first name and a nickname are not contact details" "$before -> $after"; fi
+	probe "0176 12345678"
+	last=$(s stat publish_personal_data)
+	if [ "$last" -gt "$after" ]; then ok "a phone number is still refused ($after -> $last)"; else bad "a phone number is still refused" "$after -> $last"; fi
+else
+	bad "the form offers a work duty to submit against" "no event reference on the page"
+fi
+
 # --- 6. deletion over POST
 echo "[6] self service deletion"
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \

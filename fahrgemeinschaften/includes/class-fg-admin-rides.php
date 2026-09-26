@@ -91,7 +91,7 @@ final class FG_Admin_Rides {
 			<table class="widefat striped">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'Bezeichnung', 'fahrgemeinschaften' ); ?></th>
+						<th><?php esc_html_e( 'Vorname oder Spitzname', 'fahrgemeinschaften' ); ?></th>
 						<th><?php esc_html_e( 'Art', 'fahrgemeinschaften' ); ?></th>
 						<th><?php esc_html_e( 'Arbeitsdienst', 'fahrgemeinschaften' ); ?></th>
 						<th><?php esc_html_e( 'Abfahrtsbereich', 'fahrgemeinschaften' ); ?></th>
@@ -137,7 +137,7 @@ final class FG_Admin_Rides {
 		$rows = array(
 			array( __( 'Status', 'fahrgemeinschaften' ), $this->status_label( $ride->status ) ),
 			array( __( 'Art', 'fahrgemeinschaften' ), $this->mode_label( $ride->mode ) ),
-			array( __( 'Bezeichnung', 'fahrgemeinschaften' ), $ride->alias ),
+			array( __( 'Vorname oder Spitzname', 'fahrgemeinschaften' ), $ride->alias ),
 			array( __( 'Arbeitsdienst', 'fahrgemeinschaften' ), $data['event_label'] ),
 			array( __( 'Datum', 'fahrgemeinschaften' ), $data['event_date'] ),
 			array( __( 'Abfahrtsbereich', 'fahrgemeinschaften' ), $ride->origin ),

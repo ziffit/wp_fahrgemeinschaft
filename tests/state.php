@@ -52,6 +52,23 @@ switch ( $command ) {
 		fg_state_out( $repo->count_rides( array( 'status' => isset( $args[0] ) ? $args[0] : '' ) ) );
 		break;
 
+	// Sum of a daily counter over all days. The counters are what the server
+	// counts on its own, so they are the only place to see whether a submitted
+	// value was treated as a contact detail or as a name.
+	case 'stat':
+		$key    = isset( $args[0] ) ? (string) $args[0] : '';
+		$stats  = get_option( FG_STATS_OPTION, array() );
+		$sum    = 0;
+		if ( is_array( $stats ) ) {
+			foreach ( $stats as $day ) {
+				if ( is_array( $day ) && isset( $day[ $key ] ) ) {
+					$sum += (int) $day[ $key ];
+				}
+			}
+		}
+		fg_state_out( $sum );
+		break;
+
 	case 'count-pending-token':
 		$found = 0;
 		foreach ( $repo->get_rides_page( array(), 0, 0 ) as $ride ) {

@@ -48,7 +48,7 @@ Für die einfache Umsetzung werden zwei nicht öffentliche Custom Post Types ver
    - übergeordneter Arbeitsdienst
    - Status `pending` bis zur Bestätigung, danach `publish`
    - Angebot/Suche
-   - öffentliche Bezeichnung
+   - Vorname oder Spitzname
    - Abfahrtsbereich
    - kontakt-E-Mail des Erstellers
    - Revisionen und REST-API-Veröffentlichung deaktiviert
@@ -62,7 +62,7 @@ Die öffentliche Seite zeigt ausschließlich veröffentlichte Fahrgemeinschaften
 Anzeige:
 
 - Art: „Ich biete“ oder „Ich suche“
-- öffentliche Bezeichnung
+- Vorname oder Spitzname
 - Arbeitsdienst und Datum
 - grober Abfahrtsbereich
 - Schaltfläche „Kontaktieren“; das darunterliegende Kontaktformular erscheint erst auf Wunsch und wird über „Absenden“ gesendet
@@ -211,7 +211,7 @@ Die Umsetzung folgt dem Plan, ergänzt ihn aber an den folgenden Stellen. Die au
 
 ### Öffentliche Seite und Formulare
 
-- Das Formular enthält kein Freitextfeld für eine Beschreibung und keine Platzanzahl, sondern nur Art, Arbeitsdienst, Bezeichnung, Abfahrtsbereich, E-Mail-Adresse und Einwilligung.
+- Das Formular enthält kein Freitextfeld für eine Beschreibung und keine Platzanzahl, sondern nur Art, Arbeitsdienst, Vorname oder Spitzname, Abfahrtsbereich, E-Mail-Adresse und Einwilligung.
 - Die Serverseite weist zusätzlich personenbezogene Angaben in den öffentlich sichtbaren Feldern ab: E-Mail-Adressen, Telefonnummern und „Straße + Hausnummer“. Solche Versuche landen in der neutralen Antwort `not_created` und im Zähler `publish_personal_data`.
 - Öffentliche Formulare nutzen WordPress-Nonces. Die langlebigen Token-Seiten nutzen stattdessen eine eigene Formularprüfung, die per HMAC mit `wp_salt()` aus Token und Aktion abgeleitet wird. Damit hängt die Prüfung am geheimen Token und nicht an einer Sitzung.
 
