@@ -65,7 +65,7 @@ Anzeige:
 - öffentliche Bezeichnung
 - Arbeitsdienst und Datum
 - grober Abfahrtsbereich
-- Kontaktformular
+- Schaltfläche „Kontaktieren“; das darunterliegende Kontaktformular erscheint erst auf Wunsch und wird über „Absenden“ gesendet
 
 Nicht öffentlich:
 

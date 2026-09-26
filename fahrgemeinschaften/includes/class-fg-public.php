@@ -205,8 +205,11 @@ final class FG_Public {
 	/**
 	 * Render a single published ride and contact form.
 	 *
-	 * The whole entry is meant to be read in two lines: one heading with mode,
-	 * origin and name, and one row with the address field and the button.
+	 * An entry is meant to be read in two lines: one heading with mode, origin
+	 * and name, and the button that opens the contact form. The form itself only
+	 * appears when it is asked for, so a list with many entries stays short. The
+	 * reveal is a native details element and needs no script; a form that only a
+	 * script could open would be unreachable without it.
 	 *
 	 * @param FG_Ride $ride      Ride record.
 	 * @param string  $admin_url Form endpoint.
@@ -219,25 +222,29 @@ final class FG_Public {
 		?>
 		<article class="fg-ride">
 			<h4 class="fg-ride-title"><span class="fg-badge"><?php echo esc_html( $mode_label ); ?></span> · <span class="fg-origin"><?php echo esc_html( $data['origin'] ); ?></span> · <?php echo esc_html( $ride->alias ); ?></h4>
-			<form class="fg-contact-form" action="<?php echo esc_url( $admin_url ); ?>" method="post">
-				<input type="hidden" name="action" value="fg_contact_ride">
-				<input type="hidden" name="ride_ref" value="<?php echo esc_attr( $data['public_ref'] ); ?>">
-				<input type="hidden" name="source_url" value="<?php echo esc_url( $source ); ?>">
-				<input type="hidden" name="form_started_at" value="<?php echo esc_attr( time() ); ?>">
-				<?php wp_nonce_field( 'fg_contact_ride', 'fg_contact_nonce', false ); ?>
-				<div class="fg-honeypot" aria-hidden="true">
-					<label for="fg-contact-website-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'Bitte dieses Feld leer lassen', 'fahrgemeinschaften' ); ?></label>
-					<input type="text" id="fg-contact-website-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_website" value="" tabindex="-1" autocomplete="off">
-				</div>
-				<?php // Label, field and button in one row. The label keeps its for, only its wording is short. ?>
-				<div class="fg-contact-row">
-					<div class="fg-field">
-						<label for="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'E-Mail', 'fahrgemeinschaften' ); ?></label>
-						<input type="email" id="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_contact_email" maxlength="254" autocomplete="email" required>
+			<details class="fg-contact">
+				<?php // One control with two labels: the stylesheet shows the one that fits the state. A label that is not shown is not read out either. ?>
+				<summary class="fg-button fg-contact-toggle"><span class="fg-label-closed"><?php esc_html_e( 'Kontaktieren', 'fahrgemeinschaften' ); ?></span><span class="fg-label-open"><?php esc_html_e( 'Schließen', 'fahrgemeinschaften' ); ?></span></summary>
+				<form class="fg-contact-form" action="<?php echo esc_url( $admin_url ); ?>" method="post">
+					<input type="hidden" name="action" value="fg_contact_ride">
+					<input type="hidden" name="ride_ref" value="<?php echo esc_attr( $data['public_ref'] ); ?>">
+					<input type="hidden" name="source_url" value="<?php echo esc_url( $source ); ?>">
+					<input type="hidden" name="form_started_at" value="<?php echo esc_attr( time() ); ?>">
+					<?php wp_nonce_field( 'fg_contact_ride', 'fg_contact_nonce', false ); ?>
+					<div class="fg-honeypot" aria-hidden="true">
+						<label for="fg-contact-website-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'Bitte dieses Feld leer lassen', 'fahrgemeinschaften' ); ?></label>
+						<input type="text" id="fg-contact-website-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_website" value="" tabindex="-1" autocomplete="off">
 					</div>
-					<button class="fg-button" type="submit"><?php esc_html_e( 'Kontakt aufnehmen', 'fahrgemeinschaften' ); ?></button>
-				</div>
-			</form>
+					<?php // Label, field and button in one row. The label keeps its for, only its wording is short. ?>
+					<div class="fg-contact-row">
+						<div class="fg-field">
+							<label for="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'E-Mail', 'fahrgemeinschaften' ); ?></label>
+							<input type="email" id="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_contact_email" maxlength="254" autocomplete="email" required>
+						</div>
+						<button class="fg-button" type="submit"><?php esc_html_e( 'Absenden', 'fahrgemeinschaften' ); ?></button>
+					</div>
+				</form>
+			</details>
 		</article>
 		<?php
 	}

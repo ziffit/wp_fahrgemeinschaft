@@ -142,12 +142,34 @@ if printf '%s' "$loc" | grep -q "fg_notice=contact_received"; then ok "foreign a
 
 echo "[5b] contact form on the page"
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-has "contact dialog is present" "$body" "Kontakt"
+has "contact form is present" "$body" 'class="fg-contact-form"'
 hasnt "contact form has no free text" "$body" "textarea"
 
 # --- 5c. compact list: one line per entry, one note for the whole list
 echo "[5c] compact listing"
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
+# The contact form sits in a details element that is not open, so it only
+# appears once the visitor asks for it. A form that is written into the page
+# every time is the version before the change.
+hasnt "the contact form is not open on arrival" "$body" "<details class=\"fg-contact\" open"
+struct "every entry opens its contact form behind a toggle" "
+import re, sys
+h = sys.stdin.read()
+blocks = re.findall(r'<details class=\"fg-contact\">.*?</details>', h, re.S)
+ok = blocks and all('<summary' in b and 'fg-contact-form' in b for b in blocks)
+sys.exit(0 if ok else 1)
+" "an entry has no toggle or no form behind it"
+struct "the toggle carries both labels" "
+import re, sys
+h = sys.stdin.read()
+toggles = re.findall(r'<summary class=\"fg-button fg-contact-toggle\">.*?</summary>', h, re.S)
+ok = toggles and all('fg-label-closed' in t and 'fg-label-open' in t for t in toggles)
+sys.exit(0 if ok else 1)
+" "a toggle is missing one of the two labels"
+has "the closed toggle offers contact" "$body" '<span class="fg-label-closed">Kontaktieren</span>'
+has "the open toggle offers to close again" "$body" '<span class="fg-label-open">Schließen</span>'
+has "the form is sent with a button of its own" "$body" '<button class="fg-button" type="submit">Absenden</button>'
+hasnt "the old wording is gone" "$body" "Kontakt aufnehmen"
 # The work duty and its date are one heading. A date in a paragraph of its own
 # is the version before the change and would put them on two lines again.
 hasnt "the date is no line of its own" "$body" '<p class="fg-date">'

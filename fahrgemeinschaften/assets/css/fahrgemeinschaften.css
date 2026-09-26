@@ -142,12 +142,6 @@
 	color: #fff;
 }
 
-.fg-contact-form {
-	margin-top: 1rem;
-	padding-top: 1rem;
-	border-top: 1px solid var(--fg-border);
-}
-
 /* --- the list of rides, denser and in two columns on a wide page --- */
 
 .fg-rides {
@@ -177,9 +171,34 @@
 	font-weight: 400;
 }
 
-.fg-rides .fg-contact-form {
+/* --- the contact form of an entry, closed until it is asked for --- */
+
+.fg-contact-form {
 	margin-top: 0.6rem;
-	padding-top: 0.6rem;
+}
+
+/* The summary is the button. The marker of the native element would sit in
+   front of the label and is not wanted on a control that looks like a button. */
+.fg-contact > summary {
+	list-style: none;
+}
+
+.fg-contact > summary::-webkit-details-marker {
+	display: none;
+}
+
+/* One control, two labels. The one that is not shown takes no space and is not
+   read out, so the control is named after the state it is in. */
+.fg-label-open {
+	display: none;
+}
+
+.fg-contact[open] > .fg-contact-toggle .fg-label-closed {
+	display: none;
+}
+
+.fg-contact[open] > .fg-contact-toggle .fg-label-open {
+	display: inline;
 }
 
 /* Label, field and button side by side; on a narrow column the row wraps. */

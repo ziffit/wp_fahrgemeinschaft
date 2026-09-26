@@ -100,6 +100,14 @@ und Anzahl der Hinweise in einer Bedingung, weil ein Vergleich auf einer Seite m
 einem Eintrag nichts beweist. Gegen den Stand vor dem Umbau schlagen alle fünf Prüfungen
 fehl; das wurde beim Einbau so geprüft.
 
+Dass das Kontaktformular erst auf Wunsch erscheint, prüft dieselbe Suite an der
+ausgelieferten Seite über den Aufbau: Das Formular liegt in einem `details`-Element, das
+nicht mit `open` ausgeliefert wird, die Schaltfläche darüber trägt beide Beschriftungen,
+und gesendet wird über eine eigene Schaltfläche „Absenden“. Sichtbarkeit lässt sich mit
+`curl` nicht messen; dafür steht das native Verhalten des Elements. Der Absendeweg
+selbst wird zusätzlich über HTTP geprüft: die Antwort ist `contact_received`, und zwar
+bei einer hinterlegten wie bei einer nicht hinterlegten Adresse.
+
 Die Wirkung des Stylesheets ist mit `curl` nicht prüfbar. Zweispaltigkeit, Zeilenhöhe
 und Schriftgrade der Einwilligung sind von Hand im Browser anzusehen.
 
