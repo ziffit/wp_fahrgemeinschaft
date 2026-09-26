@@ -26,6 +26,8 @@ ok()   { printf '  ok   %s\n' "$1"; pass=$((pass+1)); }
 bad()  { printf '  FAIL %s :: %s\n' "$1" "$2"; fail=$((fail+1)); }
 has()  { if printf '%s' "$2" | grep -qF -- "$3"; then ok "$1"; else bad "$1" "missing: $3"; fi; }
 hasnt(){ if printf '%s' "$2" | grep -qF -- "$3"; then bad "$1" "found: $3"; else ok "$1"; fi; }
+# A structural check: the page is handed to python on stdin, the snippet decides.
+struct() { if python3 -c "$2" <<< "$body"; then ok "$1"; else bad "$1" "$3"; fi; }
 
 echo "== HTTP level tests =="
 
@@ -142,6 +144,49 @@ echo "[5b] contact form on the page"
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
 has "contact dialog is present" "$body" "Kontakt"
 hasnt "contact form has no free text" "$body" "textarea"
+
+# --- 5c. compact list: one line per entry, one note for the whole list
+echo "[5c] compact listing"
+body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
+# The work duty and its date are one heading. A date in a paragraph of its own
+# is the version before the change and would put them on two lines again.
+hasnt "the date is no line of its own" "$body" '<p class="fg-date">'
+struct "the date stands inside the work duty heading" "
+import re, sys
+h = sys.stdin.read()
+dates = re.findall(r'class=\"fg-date\"', h)
+headings = [b for b in re.findall(r'<h3[^>]*>.*?</h3>', h, re.S) if 'fg-date' in b]
+sys.exit(0 if dates and len(dates) == len(headings) else 1)
+" "a date is outside the heading or the heading is missing"
+struct "every entry carries mode, origin and name in one heading" "
+import re, sys
+h = sys.stdin.read()
+titles = re.findall(r'<h4 class=\"fg-ride-title\">.*?</h4>', h, re.S)
+def complete(t):
+    if 'fg-badge' not in t or 'fg-origin' not in t:
+        return False
+    parts = [p.strip() for p in re.sub(r'<[^>]+>', '\n', t).split('\u00b7')]
+    return len(parts) == 3 and all(parts)
+sys.exit(0 if titles and all(complete(t) for t in titles) else 1)
+" "a heading is missing mode, origin or name"
+struct "field and button share one row" "
+import re, sys
+h = sys.stdin.read()
+idx = [m.start() for m in re.finditer(r'<div class=\"fg-contact-row\">', h)]
+rows = [h[i:h.find('</form>', i)] for i in idx]
+ok = rows and all('type=\"email\"' in r and '<button' in r and 'type=\"submit\"' in r for r in rows)
+sys.exit(0 if ok else 1)
+" "a row is missing the field or the button"
+# The note is the same for every entry and is therefore stated once. The count
+# only says something with more than one entry, so both belong in one check: a
+# separate one would pass on a page that happens to have a single entry.
+struct "the note about the address is stated once for the whole list" "
+import re, sys
+h = sys.stdin.read()
+entries = len(re.findall(r'<article class=\"fg-ride\">', h))
+notes = h.count('wird nur an den Ersteller der Fahrgemeinschaft gesendet')
+sys.exit(0 if entries > 1 and notes == 1 else 1)
+" "not more than one entry, or the note is not stated exactly once"
 
 # --- 6. deletion over POST
 echo "[6] self service deletion"

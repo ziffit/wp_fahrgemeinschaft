@@ -40,9 +40,16 @@
 }
 
 .fg-date,
-.fg-meta,
 .fg-hint {
 	color: var(--fg-muted);
+}
+
+/* The date stands in the work duty heading and is only a note next to it. It
+   may break across lines: a verbose date format on a narrow screen would
+   otherwise push the page sideways. */
+.fg-date {
+	font-size: 0.9em;
+	font-weight: 400;
 }
 
 .fg-hint {
@@ -91,11 +98,16 @@
 	align-items: center;
 }
 
+/* The consent is a sentence, not a field label. It keeps the emphasis of the
+   other labels off and is set one step smaller, so it does not outweigh the
+   three fields above it. */
 .fg-consent {
 	display: flex;
 	gap: 0.6rem;
 	align-items: flex-start;
-	line-height: 1.45;
+	font-size: 0.92rem;
+	font-weight: 400;
+	line-height: 1.4;
 }
 
 .fg-consent input {
@@ -109,8 +121,7 @@
 	margin-top: 1.25rem;
 }
 
-.fg-button,
-.fg-button-secondary {
+.fg-button {
 	display: inline-block;
 	padding: 0.65rem 1rem;
 	border: 1px solid var(--fg-accent);
@@ -131,29 +142,69 @@
 	color: #fff;
 }
 
-.fg-button-secondary {
-	background: #fff;
-	color: var(--fg-accent-dark);
-}
-
-.fg-button-secondary:hover,
-.fg-button-secondary:focus {
-	background: #eef8f2;
-	color: var(--fg-accent-dark);
-}
-
-.fg-ride + .fg-ride {
-	margin-top: 1rem;
-}
-
 .fg-contact-form {
 	margin-top: 1rem;
 	padding-top: 1rem;
 	border-top: 1px solid var(--fg-border);
 }
 
-.fg-contact-form .fg-field {
-	max-width: 520px;
+/* --- the list of rides, denser and in two columns on a wide page --- */
+
+.fg-rides {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+	gap: 0.75rem;
+}
+
+.fg-rides .fg-ride {
+	margin: 0;
+	padding: 0.8rem 0.9rem;
+}
+
+/* Mode, origin and name in one heading. The name keeps the emphasis, the two
+   attributes in front of it are notes. */
+.fg-ride-title {
+	margin: 0 0 0.15rem;
+	font-size: 1.05rem;
+}
+
+.fg-badge {
+	white-space: nowrap;
+}
+
+.fg-origin {
+	color: var(--fg-muted);
+	font-weight: 400;
+}
+
+.fg-rides .fg-contact-form {
+	margin-top: 0.6rem;
+	padding-top: 0.6rem;
+}
+
+/* Label, field and button side by side; on a narrow column the row wraps. */
+.fg-contact-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.fg-contact-row .fg-field {
+	flex: 1 1 12rem;
+	min-width: 0;
+	flex-direction: row;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.fg-contact-row .fg-button {
+	flex: 0 0 auto;
+	padding: 0.55rem 0.85rem;
+}
+
+.fg-list-hint {
+	margin-top: 0.5rem;
 }
 
 .fg-empty {
@@ -170,25 +221,6 @@
 	overflow: hidden !important;
 }
 
-.fg-stats-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-	gap: 1rem;
-}
-
-.fg-stat-card {
-	padding: 1rem;
-	border: 1px solid #c7ced6;
-	border-radius: 5px;
-	background: #fff;
-}
-
-.fg-stat-card strong {
-	display: block;
-	margin-top: 0.35rem;
-	font-size: 1.6rem;
-}
-
 @media (max-width: 640px) {
 	.fg-form-grid {
 		grid-template-columns: 1fr;
@@ -201,5 +233,9 @@
 	.fg-section,
 	.fg-ride {
 		padding: 1rem;
+	}
+
+	.fg-rides .fg-ride {
+		padding: 0.7rem 0.8rem;
 	}
 }

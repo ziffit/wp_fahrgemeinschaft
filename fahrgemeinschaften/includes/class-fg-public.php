@@ -156,7 +156,8 @@ final class FG_Public {
 	 * @return void
 	 */
 	private function render_ride_list( $events, $admin_url, $source ) {
-		$has_rides = false;
+		$has_rides   = false;
+		$privacy_url = get_privacy_policy_url();
 		?>
 		<section aria-labelledby="fg-list-heading">
 			<h2 id="fg-list-heading"><?php esc_html_e( 'Aktuelle Fahrgemeinschaften', 'fahrgemeinschaften' ); ?></h2>
@@ -174,15 +175,28 @@ final class FG_Public {
 				$has_rides = true;
 				?>
 				<div class="fg-section">
-					<h3><?php echo esc_html( $event->title ); ?></h3>
-					<p class="fg-date"><?php echo esc_html( $this->repository->format_event_date( $event ) ); ?></p>
-					<?php foreach ( $rides as $ride ) : ?>
-						<?php $this->render_ride( $ride, $admin_url, $source ); ?>
-					<?php endforeach; ?>
+					<?php // Title and date share one heading. The date stays inside it so that it is still read out. ?>
+					<h3>
+						<?php echo esc_html( $event->title ); ?>
+						<span class="fg-date">· <?php echo esc_html( $this->repository->format_event_date( $event ) ); ?></span>
+					</h3>
+					<div class="fg-rides">
+						<?php foreach ( $rides as $ride ) : ?>
+							<?php $this->render_ride( $ride, $admin_url, $source ); ?>
+						<?php endforeach; ?>
+					</div>
 				</div>
 			<?php endforeach; ?>
 			<?php if ( ! $has_rides ) : ?>
 				<p class="fg-empty"><?php esc_html_e( 'Für die aktuellen Arbeitsdienste sind noch keine Fahrgemeinschaften veröffentlicht.', 'fahrgemeinschaften' ); ?></p>
+			<?php else : ?>
+				<?php // The note says the same thing for every entry, so it is stated once for the whole list. ?>
+				<p class="fg-hint fg-list-hint">
+					<?php esc_html_e( 'Deine E-Mail-Adresse wird nur an den Ersteller der Fahrgemeinschaft gesendet, sofern sie für den Arbeitsdienst dieses Eintrags hinterlegt ist.', 'fahrgemeinschaften' ); ?>
+					<?php if ( $privacy_url ) : ?>
+						<a href="<?php echo esc_url( $privacy_url ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'fahrgemeinschaften' ); ?></a>
+					<?php endif; ?>
+				</p>
 			<?php endif; ?>
 		</section>
 		<?php
@@ -191,19 +205,20 @@ final class FG_Public {
 	/**
 	 * Render a single published ride and contact form.
 	 *
+	 * The whole entry is meant to be read in two lines: one heading with mode,
+	 * origin and name, and one row with the address field and the button.
+	 *
 	 * @param FG_Ride $ride      Ride record.
 	 * @param string  $admin_url Form endpoint.
 	 * @param string  $source    Source URL.
 	 * @return void
 	 */
 	private function render_ride( FG_Ride $ride, $admin_url, $source ) {
-		$data        = $this->repository->get_ride_display_data( $ride );
-		$mode_label  = FG_RIDE_MODE_SEARCH === $data['mode'] ? __( 'Ich suche', 'fahrgemeinschaften' ) : __( 'Ich biete', 'fahrgemeinschaften' );
-		$privacy_url = get_privacy_policy_url();
+		$data       = $this->repository->get_ride_display_data( $ride );
+		$mode_label = FG_RIDE_MODE_SEARCH === $data['mode'] ? __( 'Ich suche', 'fahrgemeinschaften' ) : __( 'Ich biete', 'fahrgemeinschaften' );
 		?>
 		<article class="fg-ride">
-			<h4><?php echo esc_html( $ride->alias ); ?></h4>
-			<p class="fg-meta"><strong><?php echo esc_html( $mode_label ); ?></strong> · <?php esc_html_e( 'Abfahrtsbereich:', 'fahrgemeinschaften' ); ?> <?php echo esc_html( $data['origin'] ); ?></p>
+			<h4 class="fg-ride-title"><span class="fg-badge"><?php echo esc_html( $mode_label ); ?></span> · <span class="fg-origin"><?php echo esc_html( $data['origin'] ); ?></span> · <?php echo esc_html( $ride->alias ); ?></h4>
 			<form class="fg-contact-form" action="<?php echo esc_url( $admin_url ); ?>" method="post">
 				<input type="hidden" name="action" value="fg_contact_ride">
 				<input type="hidden" name="ride_ref" value="<?php echo esc_attr( $data['public_ref'] ); ?>">
@@ -214,17 +229,12 @@ final class FG_Public {
 					<label for="fg-contact-website-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'Bitte dieses Feld leer lassen', 'fahrgemeinschaften' ); ?></label>
 					<input type="text" id="fg-contact-website-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_website" value="" tabindex="-1" autocomplete="off">
 				</div>
-				<div class="fg-field">
-					<label for="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'Deine E-Mail-Adresse', 'fahrgemeinschaften' ); ?></label>
-					<input type="email" id="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_contact_email" maxlength="254" autocomplete="email" required>
-					<span class="fg-hint">
-						<?php esc_html_e( 'Deine E-Mail-Adresse wird nur an den Ersteller der Fahrgemeinschaft gesendet, sofern sie für diesen Arbeitsdienst hinterlegt ist.', 'fahrgemeinschaften' ); ?>
-						<?php if ( $privacy_url ) : ?>
-							<a href="<?php echo esc_url( $privacy_url ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'fahrgemeinschaften' ); ?></a>
-						<?php endif; ?>
-					</span>
-				</div>
-				<div class="fg-actions">
+				<?php // Label, field and button in one row. The label keeps its for, only its wording is short. ?>
+				<div class="fg-contact-row">
+					<div class="fg-field">
+						<label for="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'E-Mail', 'fahrgemeinschaften' ); ?></label>
+						<input type="email" id="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_contact_email" maxlength="254" autocomplete="email" required>
+					</div>
 					<button class="fg-button" type="submit"><?php esc_html_e( 'Kontakt aufnehmen', 'fahrgemeinschaften' ); ?></button>
 				</div>
 			</form>

@@ -79,7 +79,7 @@ Fahrgemeinschaften sowie die Statistik-Option, es gibt also keinen Zustand vom V
 | Suite | Datei | Vorgehen |
 | --- | --- | --- |
 | CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–16: Tabellen, Aktivitätsgrenze, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene |
-| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML |
+| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste |
 | Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo` |
 | Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der vier Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau |
 
@@ -90,6 +90,18 @@ Vergleich der Positionen fängt genau den Fehler, dass beide Buttons vorhanden s
 doch stumm bleiben. Zusätzlich wird geprüft, dass die Buttons zunächst deaktiviert
 ausgeliefert werden: Läuft das Script nicht, sieht man das an der Oberfläche, statt es
 an einem Klick zu bemerken.
+
+Der Aufbau der öffentlichen Liste wird über die ausgelieferte Seite geprüft, nicht über
+den Quelltext: Arbeitsdienst und Datum stehen in einer gemeinsamen Überschrift, jeder
+Eintrag trägt Angebotsart, Abfahrtsbereich und Bezeichnung in einer Zeile, Feld und
+Schaltfläche liegen in derselben Zeile, und der Hinweis zur E-Mail-Adresse steht einmal
+für die ganze Liste statt einmal je Eintrag. Der letzte Punkt prüft Anzahl der Einträge
+und Anzahl der Hinweise in einer Bedingung, weil ein Vergleich auf einer Seite mit nur
+einem Eintrag nichts beweist. Gegen den Stand vor dem Umbau schlagen alle fünf Prüfungen
+fehl; das wurde beim Einbau so geprüft.
+
+Die Wirkung des Stylesheets ist mit `curl` nicht prüfbar. Zweispaltigkeit, Zeilenhöhe
+und Schriftgrade der Einwilligung sind von Hand im Browser anzusehen.
 
 `run-all.sh` endet mit Schritt `5/5 handover`, der den Mail-Recorder wieder abschaltet. Ohne
 diesen Schritt stünde die Instanz anschließend nicht für die Handprüfung mit SureMails zur
