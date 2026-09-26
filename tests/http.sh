@@ -140,7 +140,36 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "fg_contact_nonce=$contact_nonce")
 if printf '%s' "$loc" | grep -q "fg_notice=contact_received"; then ok "foreign address answered identically"; else bad "foreign address answered identically" "$loc"; fi
 
-echo "[5b] contact form on the page"
+# --- 5a. after sending, the message is brought into view
+# The form stands at the bottom of the page. Without a fragment in the redirect
+# the visitor stays where they pressed the button and the message sits above
+# the window, so the answer to "did it work?" is not to be seen. The fragment
+# and the id on the page have to be the same name; if only one of the two
+# changes, the jump goes nowhere and this check is the one that notices.
+echo "[5a] the return after sending"
+anchor=$(printf '%s' "$loc" | sed -n 's/.*#\([A-Za-z0-9_-]*\)$/\1/p')
+if [ -n "$anchor" ]; then ok "the redirect names a place to jump to (#$anchor)"; else bad "the redirect names a place to jump to" "$loc"; fi
+notice_page=$(curl -sk "$BASE/?page_id=$PAGE_ID&fg_notice=contact_received")
+if [ -n "$anchor" ]; then has "that place exists on the page" "$notice_page" "id=\"$anchor\""; fi
+# the same for the error case, which is the one a visitor reads twice
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_contact_ride" \
+	--data-urlencode "ride_ref=$PUBLISHED_REF" \
+	--data-urlencode "fg_contact_email=cem@angeln.example.org" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
+	--data-urlencode "fg_contact_nonce=abgelaufen")
+if printf '%s' "$loc" | grep -q "fg_notice=form_expired#"; then ok "an expired form jumps to the message as well"; else bad "an expired form jumps to the message as well" "$loc"; fi
+if [ -n "$anchor" ]; then has "the message for the error case carries the same place" "$(curl -sk "$BASE/?page_id=$PAGE_ID&fg_notice=form_expired")" "id=\"$anchor\""; fi
+# a jump that ends under a header which stays in place is no jump
+struct "$notice_page" "the place to jump to leaves room above itself" "
+import re, sys
+h = sys.stdin.read()
+m = re.search(r'<div id=\"([a-z0-9-]+)\" class=\"([^\"]*)\"', h)
+sys.exit(0 if m and 'fg-jump' in m.group(2) else 1)
+" "the message is not marked as a place to jump to"
+
+# --- 5b. contact form on the page
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
 has "contact form is present" "$body" 'class="fg-contact-form"'
 hasnt "contact form has no free text" "$body" "textarea"
@@ -209,6 +238,24 @@ if not all('display: inline' in b for _, b in opened):
 # "Kontaktieren" while the form is open
 sys.exit(0 if max(w for w, _ in opened) > max(w for w, _ in closed) else 1)
 " "one state shows both labels, the other shows none, or the wrong rule wins"
+	struct "$style" "the label of the contact field is kept on one line" "
+import re, sys
+css = re.sub(r'/\*.*?\*/', '', sys.stdin.read(), flags=re.S)
+rules = re.findall(r'([^{}]+)\{([^}]*)\}', css)
+ok = False
+for sel, body in rules:
+    s = sel.strip()
+    if 'fg-contact-row' in s and s.endswith('label') and 'white-space: nowrap' in body:
+        ok = True
+sys.exit(0 if ok else 1)
+" "nothing keeps the label of the contact field from wrapping"
+	struct "$style" "a jump leaves room above itself" "
+import re, sys
+css = re.sub(r'/\*.*?\*/', '', sys.stdin.read(), flags=re.S)
+rules = re.findall(r'([^{}]+)\{([^}]*)\}', css)
+ok = any(s.strip() == '.fg-jump' and 'scroll-margin-top' in b for s, b in rules)
+sys.exit(0 if ok else 1)
+" "a jump would end under a header that stays in place"
 else
 	bad "the stylesheet is linked" "no stylesheet with a version on the page"
 fi
@@ -251,6 +298,32 @@ entries = len(re.findall(r'<article class=\"fg-ride\">', h))
 notes = h.count('wird nur an den Ersteller der Fahrgemeinschaft gesendet')
 sys.exit(0 if entries > 1 and notes == 1 else 1)
 " "not more than one entry, or the note is not stated exactly once"
+
+# --- 5d. the list comes first, the form below, a link leads down to it
+echo "[5d] list before form"
+struct "$body" "the link, the list and the form stand in that order" "
+import re, sys
+h = sys.stdin.read()
+def at(pattern):
+    m = re.search(pattern, h)
+    return m.start() if m else -1
+link = at(r'class=\"fg-toplink\"')
+listed = at(r'id=\"fg-list-heading\"')
+# the offer form is the one that submits a new entry, not a contact request
+offer = at(r'value=\"fg_submit_ride\"')
+sys.exit(0 if -1 not in (link, listed, offer) and link < listed < offer else 1)
+" "the link, the list and the form are not in that order, or one of them is missing"
+struct "$body" "the link at the top leads to the form" "
+import re, sys
+h = sys.stdin.read()
+m = re.search(r'class=\"fg-toplink\">\s*<a href=\"#([a-z0-9-]+)\">\s*([^<]+?)\s*</a>', h)
+if not m:
+    sys.exit(1)
+target, label = m.group(1), m.group(2)
+if ('id=\"%s\"' % target) not in h:
+    sys.exit(1)                                    # the link would go nowhere
+sys.exit(0 if label else 1)
+" "the link has no text, or it points at something that is not on the page"
 
 # --- 6. deletion over POST
 echo "[6] self service deletion"

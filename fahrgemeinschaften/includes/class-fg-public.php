@@ -12,6 +12,16 @@ defined( 'ABSPATH' ) || exit;
  */
 final class FG_Public {
 	/**
+	 * Anchor of the offer form, target of the link at the top of the page.
+	 *
+	 * The same name is written into the id of the heading and into the href of
+	 * the link, so a typo cannot silently produce a link that goes nowhere.
+	 *
+	 * @var string
+	 */
+	const ANCHOR_OFFER = 'fg-angebot';
+
+	/**
 	 * Repository.
 	 *
 	 * @var FG_Repository
@@ -69,8 +79,15 @@ final class FG_Public {
 		<div class="fg-wrapper">
 			<?php $this->render_notice(); ?>
 
-			<section class="fg-section" aria-labelledby="fg-offer-heading">
-				<h2 id="fg-offer-heading"><?php esc_html_e( 'Fahrgemeinschaft anbieten oder suchen', 'fahrgemeinschaften' ); ?></h2>
+			<?php // The list is what most visitors come for, so it comes first. The link is the way back down to the form for everyone else. ?>
+			<p class="fg-toplink">
+				<a href="#<?php echo esc_attr( self::ANCHOR_OFFER ); ?>"><?php esc_html_e( 'Eintrag anlegen', 'fahrgemeinschaften' ); ?></a>
+			</p>
+
+			<?php $this->render_ride_list( $events, $admin_url, $source ); ?>
+
+			<section class="fg-section" aria-labelledby="<?php echo esc_attr( self::ANCHOR_OFFER ); ?>">
+				<h2 id="<?php echo esc_attr( self::ANCHOR_OFFER ); ?>" class="fg-jump"><?php esc_html_e( 'Fahrgemeinschaft anbieten oder suchen', 'fahrgemeinschaften' ); ?></h2>
 				<?php if ( empty( $events ) ) : ?>
 					<p class="fg-empty"><?php esc_html_e( 'Aktuell sind keine Arbeitsdienste für Fahrgemeinschaften verfügbar.', 'fahrgemeinschaften' ); ?></p>
 				<?php else : ?>
@@ -139,8 +156,6 @@ final class FG_Public {
 					</form>
 				<?php endif; ?>
 			</section>
-
-			<?php $this->render_ride_list( $events, $admin_url, $source ); ?>
 		</div>
 		<?php
 
@@ -275,8 +290,12 @@ final class FG_Public {
 			return;
 		}
 
+		// The id is what the redirect after a submission points at. fg-jump leaves
+		// room above, so a theme with a header that stays in place does not push
+		// the message under it.
 		printf(
-			'<div class="fg-notice%s" role="status">%s</div>',
+			'<div id="%s" class="fg-notice fg-jump%s" role="status">%s</div>',
+			esc_attr( FG_NOTICE_ANCHOR ),
 			$notices[ $notice_key ][1] ? ' fg-notice-error' : '',
 			esc_html( $notices[ $notice_key ][0] )
 		);

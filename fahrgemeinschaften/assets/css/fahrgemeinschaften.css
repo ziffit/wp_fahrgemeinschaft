@@ -12,6 +12,13 @@
 	box-sizing: border-box;
 }
 
+/* A target of a jump is only fully visible if nothing that stays in place
+   covers it. The height of the WordPress admin bar is known, the height of a
+   theme header is not, so the room left above is generous. */
+.fg-jump {
+	scroll-margin-top: 6rem;
+}
+
 .fg-notice {
 	margin: 0 0 1.25rem;
 	padding: 0.9rem 1rem;
@@ -22,6 +29,23 @@
 .fg-notice-error {
 	border-left-color: #a52828;
 	background: #fff1f1;
+}
+
+/* The way down to the form, for visitors who came to read the list. It sits
+   above the list on purpose: it is the answer to the first thing a visitor
+   wants and needs no scrolling to be found. The arrow is decoration and comes
+   from the stylesheet, so the text of the link stays a plain text. */
+.fg-toplink {
+	margin: 0 0 1.25rem;
+	text-align: right;
+}
+
+.fg-toplink a {
+	font-weight: 600;
+}
+
+.fg-toplink a::after {
+	content: " \2193";
 }
 
 .fg-section,
@@ -222,6 +246,13 @@ details.fg-contact[open] > summary.fg-contact-toggle > .fg-label-open {
 	flex-direction: row;
 	align-items: center;
 	gap: 0.5rem;
+}
+
+/* The label stands in the same row as the field and is not allowed to break.
+   "E-Mail" has a hyphen in it, and that is a place where a browser may wrap
+   without being asked to, which would put "E-" over "Mail". */
+.fg-contact-row .fg-field label {
+	white-space: nowrap;
 }
 
 .fg-contact-row .fg-button {

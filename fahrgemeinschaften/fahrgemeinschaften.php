@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Fahrgemeinschaften
  * Description:       Öffentliche Fahrgemeinschaften für Vereinsarbeitsdienste mit sicherer E-Mail-Bestätigung.
- * Version:           1.1.0
+ * Version:           1.2.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            Verein
@@ -20,8 +20,17 @@ defined( 'ABSPATH' ) || exit;
  * mit jeder Änderung an der Datei mitwachsen, sonst hält der Browser die alte
  * Fassung im Cache und die Seite zeigt den neuen Text zur alten Optik.
  */
-define( 'FG_VERSION', '1.1.0' );
+define( 'FG_VERSION', '1.2.0' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
+/**
+ * Name of the element that carries a message after a form was sent.
+ *
+ * The redirect after a submission carries this name as a fragment, so the
+ * browser puts the message at the top of the window instead of leaving the
+ * visitor where they pressed the button. The form stands at the bottom of the
+ * page, so without the fragment the message would sit above the fold.
+ */
+define( 'FG_NOTICE_ANCHOR', 'fg-hinweis' );
 define( 'FG_EVENTS_PAGE_SLUG', 'fahrgemeinschaften-events' );
 define( 'FG_RIDES_PAGE_SLUG', 'fahrgemeinschaften-rides' );
 define( 'FG_SETTINGS_PAGE_SLUG', 'fahrgemeinschaften-settings' );

@@ -522,7 +522,9 @@ final class FG_Actions {
 
 		$source = FG_Security::safe_source_url( $this->post_value( 'source_url' ) );
 		$target = set_url_scheme( $source, 'https' );
-		$target = add_query_arg( 'fg_notice', sanitize_key( $notice ), remove_query_arg( array( 'fg_notice', 'fg_message' ), $target ) );
+		$target = remove_query_arg( array( 'fg_notice', 'fg_message' ), $target );
+		$target = add_query_arg( 'fg_notice', sanitize_key( $notice ), explode( '#', $target )[0] );
+		$target .= '#' . FG_NOTICE_ANCHOR;
 		wp_safe_redirect( $target, 301 );
 		exit;
 	}

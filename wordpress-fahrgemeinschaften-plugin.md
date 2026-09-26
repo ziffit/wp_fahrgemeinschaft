@@ -57,7 +57,7 @@ Beim Löschen eines Arbeitsdienstes werden automatisch alle zugehörigen Fahrgem
 
 ### 2. Öffentliche Seite
 
-Die öffentliche Seite zeigt ausschließlich veröffentlichte Fahrgemeinschaften zu Arbeitsdiensten, die noch nicht beendet sind.
+Die öffentliche Seite zeigt ausschließlich veröffentlichte Fahrgemeinschaften zu Arbeitsdiensten, die noch nicht beendet sind. Oben steht die Liste, darunter das Formular, darüber ein Sprunglink „Eintrag anlegen“. Nach dem Absenden eines Formulars führt die Rückkehr zur Meldung, damit Erfolg oder Fehler ohne Suchen lesbar sind.
 
 Anzeige:
 

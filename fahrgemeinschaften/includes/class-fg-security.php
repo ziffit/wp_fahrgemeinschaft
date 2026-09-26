@@ -90,6 +90,11 @@ final class FG_Security {
 	/**
 	 * Redirect to a safe local URL and add a public notice code.
 	 *
+	 * The target carries the notice anchor as a fragment, so the browser brings
+	 * the message into view instead of leaving the visitor at the spot where
+	 * they pressed the button. The form stands at the bottom of the page, so
+	 * without the fragment the message would be somewhere above the window.
+	 *
 	 * @param string $notice Notice key.
 	 * @param string $source_url Optional source URL.
 	 * @return void
@@ -101,7 +106,10 @@ final class FG_Security {
 
 		$source_url = self::safe_source_url( $source_url );
 		$target     = remove_query_arg( array( 'fg_notice', 'fg_message' ), $source_url );
-		$target     = add_query_arg( 'fg_notice', sanitize_key( $notice ), $target );
+		// Any fragment of the source is taken off, so the one added here is the
+		// only one and cannot end up behind a second '#'.
+		$target     = add_query_arg( 'fg_notice', sanitize_key( $notice ), explode( '#', $target )[0] );
+		$target    .= '#' . FG_NOTICE_ANCHOR;
 
 		wp_safe_redirect( $target, 303 );
 		exit;

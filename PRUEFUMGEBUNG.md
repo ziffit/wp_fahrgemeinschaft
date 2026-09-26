@@ -121,9 +121,27 @@ in dieser Installation nicht nachprüfbar, weil hier gar kein Theme-Stylesheet g
 wird — die Selektoren tragen deshalb den ganzen Pfad (`details` > `summary` > Label),
 damit eine lockere Theme-Regel für `summary` oder `span` sie nicht überstimmen kann.
 
+Dass das Label **E-Mail** nicht umbricht, wird im selben Stylesheet geprüft: Es braucht
+eine Regel für das Label in der Kontaktzeile mit `white-space: nowrap`. Ohne sie setzt der
+Browser am Bindestrich um, und aus einer Zeile werden zwei.
+
+Der Rückkehrweg nach dem Absenden wird über die echte Weiterleitung geprüft, nicht über
+den Quelltext: Die Adresse, auf die der Kontaktversand und ein abgelaufenes Formular
+umleiten, muss ein Sprungziel als Endung tragen, und die Seite, die daraus entsteht, muss
+eine `id` mit genau diesem Namen führen. Die Prüfung liest den Namen aus der Weiterleitung
+und sucht ihn auf der Seite — ändert sich nur eine der beiden Stellen, springt der Browser
+ins Leere, und die Prüfung ist die, die es merkt. Für den Fehlerfall gilt dasselbe, denn
+das ist die Meldung, die zweimal gelesen wird. Zusätzlich muss die Meldung als Sprungziel
+markiert sein (`scroll-margin-top`), sonst landet sie unter einer Kopfzeile, die stehen
+bleibt.
+
+Reihenfolge und Sprunglink der Seite werden an der ausgelieferten Seite geprüft: Der
+Sprunglink steht vor der Liste, die Liste vor dem Formular, und das `href` des Sprunglinks
+findet eine `id` auf derselben Seite. Ein Verweis ohne Ziel wäre die stillste Stelle im
+ganzen Dokument.
+
 Die Wirkung des Stylesheets ist mit `curl` nicht prüfbar. Zweispaltigkeit, Zeilenhöhe
 und Schriftgrade der Einwilligung sind von Hand im Browser anzusehen.
-
 `run-all.sh` endet mit Schritt `5/5 handover`, der den Mail-Recorder wieder abschaltet. Ohne
 diesen Schritt stünde die Instanz anschließend nicht für die Handprüfung mit SureMails zur
 Verfügung (siehe unten).
