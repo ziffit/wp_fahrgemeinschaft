@@ -224,21 +224,30 @@ details.fg-contact > summary.fg-contact-toggle::-webkit-details-marker {
 	display: none;
 }
 
-/* One control, two labels. The one that is not shown takes no space and is not
-   read out, so the control is named after the state it is in. Both labels are
-   in the document at all times, and this is the only thing that keeps one of
-   them away: the selectors carry the whole path on purpose, so a theme that
-   styles spans or summaries loosely cannot let both appear. */
-details.fg-contact > summary.fg-contact-toggle > .fg-label-open {
+/* One control, one label, and nothing to undo it with. While the form is shut
+   the control stands there; while it is open the control is gone and a plain
+   line of text reads the same word. A summary cannot be made inert with CSS, so
+   the element that carries the word has to be swapped rather than restyled.
+
+   The latch is a span and not a summary: text is not focusable and not
+   clickable, so once the form is open nothing on the page can fold it again —
+   with the mouse and with the keyboard alike. It is drawn without a frame
+   because a frame is what makes a thing look pressable, and this one is not.
+
+   The selectors carry the whole path on purpose, so a theme that styles spans
+   or summaries loosely cannot let the control and the latch appear together. */
+details.fg-contact > .fg-contact-latch {
 	display: none;
 }
 
-details.fg-contact[open] > summary.fg-contact-toggle > .fg-label-closed {
+details.fg-contact[open] > summary.fg-contact-toggle {
 	display: none;
 }
 
-details.fg-contact[open] > summary.fg-contact-toggle > .fg-label-open {
-	display: inline;
+details.fg-contact[open] > .fg-contact-latch {
+	display: block;
+	font-weight: 600;
+	color: var(--fg-button);
 }
 
 /* Label, field and button side by side; on a narrow column the row wraps. */
@@ -364,19 +373,21 @@ details.fg-signup > summary.fg-signup-toggle::-webkit-details-marker {
 	display: none;
 }
 
-/* One control, two labels, exactly as on the contact form of a ride: the one
-   that is not shown takes no space and is not read out, so the control is named
-   after the state it is in. */
-details.fg-signup > summary.fg-signup-toggle > .fg-label-open {
+/* One control, one label, exactly as on the contact form of a ride, and for the
+   same reason: a form that has been opened stays open, and several of them may
+   stand open at once. See the latch next to .fg-contact-latch above. */
+details.fg-signup > .fg-signup-latch {
 	display: none;
 }
 
-details.fg-signup[open] > summary.fg-signup-toggle > .fg-label-closed {
+details.fg-signup[open] > summary.fg-signup-toggle {
 	display: none;
 }
 
-details.fg-signup[open] > summary.fg-signup-toggle > .fg-label-open {
-	display: inline;
+details.fg-signup[open] > .fg-signup-latch {
+	display: block;
+	font-weight: 600;
+	color: var(--fg-button);
 }
 
 .fg-signup-form {

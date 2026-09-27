@@ -547,6 +547,43 @@ beide Male ist es erst beim Auswerten aufgefallen:
   `gegenproben-lauf.log`, und beim Nachtragen einer Runde hätte er die alte gezeigt und
   die neue als „nicht gefahren“ ausgelegt.
 
+### Die vierte Reihe (13 Vergleiche, 4 Proben)
+
+Sie ging die vierte Änderung an, den Wegfall der Schaltfläche **Schließen**, und fand
+eine Prüfung, die genau gegen den gesuchten Fehler blind war.
+
+Die Änderung selbst brauchte einen Umweg, der im Markup steht und nicht in einer
+Eigenschaft: Ein `summary` **ist** der Schalter seines `details`, und mit CSS lässt sich
+keiner ausschalten. Bliebe er sichtbar, klappte er das Formular auf Enter genauso wieder
+zu, und die zweite Schaltfläche wäre zurück. Die Schaltfläche verschwindet deshalb, sobald
+ihr Formular offen ist, und eine gewöhnliche Textzeile (`fg-contact-latch`,
+`fg-signup-latch`) tritt an ihre Stelle — Text ist nicht fokussierbar und nicht
+anklickbar, also kann nichts mehr zuklappen.
+
+| Fundstelle | Was die Prüfung behauptete | Warum sie immer grün war |
+| --- | --- | --- |
+| `not all(re.search(r'display:\s*(?!none)', b) for b in her)` in der Prüfung des Kontakt-Umschalters | Ist das Formular offen, wird die Textzeile gezeigt | `re.search` probiert **alle** Längen von `\s*` durch. Bei `display: none` nimmt es auch null Zeichen, der Blick nach vorn steht dann auf dem Leerzeichen **vor** `none`, und `none` beginnt dort nicht — der Blick gelingt. Die Prüfung fand also in jeder Regel, die ein `display` überhaupt nennt, einen Treffer, und die Gegenprobe „Textzeile im offenen Zustand ausgeblendet“ blieb grün. |
+
+Umgestellt ist sie auf einen Meldungsleser (`eigenschaft()`), der die Meldungen einer
+Regel einzeln durchgeht und die letzte zählen lässt, wie ein Browser es macht. Ein Muster
+mit Blick nach vorn und einer Variable davor ist für „irgendwo steht das nicht“ nicht zu
+gebrauchen: Nicht der Anker ist das Problem, sondern die Rückwärtsverkürzung dahinter.
+
+Drei Dinge sind dabei mitgefallen:
+
+- Die Prüfung las nur das **Kontakt**formular. Beide Formulare sind dieselbe
+  Entscheidung, und eine Regel, die nur die eine nennt, ließe die andere mit einer
+  zweiten Schaltfläche stehen, ohne dass etwas auffällt. Die Schleife läuft jetzt über
+  beide Pfade.
+- Der Direktvergleich des Prüfkörpers gegen die echte Datei und **zwölf** Fehlerbilder
+  (je vier an beiden Formularen, dazu gelöschte Regeln, eine umbenannte Klasse und
+  eine leere Datei) wurde vor dem Lauf auf der Seite gemacht. Das kostet Sekunden statt
+  Minuten und hat zwei weitere Fehler in meinem eigenen Prüfrahmen aufgedeckt, nicht im
+  Plugin: `sys.exit(0)` am Ende einer Prüfung ist kein Fehlschlag, und der Rumpf liest
+  die Datei von `sys.stdin`.
+- `display: none` gefolgt von `display: block` bleibt grün. Das ist richtig und bleibt
+  es: der Browser nimmt die letzte Meldung, das Formular ist zu.
+
 ## Umstieg von den eigenen Beitragstypen
 
 Die Testinstanz lief ursprünglich mit einer Fassung, die eigene WordPress-Beitragstypen

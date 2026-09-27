@@ -256,8 +256,11 @@ final class FG_Public {
 		<article class="fg-ride">
 			<h4 class="fg-ride-title"><span class="fg-badge"><?php echo esc_html( $mode_label ); ?></span> · <span class="fg-origin"><?php echo esc_html( $data['origin'] ); ?></span> · <?php echo esc_html( $ride->alias ); ?></h4>
 			<details class="fg-contact">
-				<?php // One control with two labels: the stylesheet shows the one that fits the state. A label that is not shown is not read out either. ?>
-				<summary class="fg-button fg-contact-toggle"><span class="fg-label-closed"><?php esc_html_e( 'Kontaktieren', 'arbeitsdienste' ); ?></span><span class="fg-label-open"><?php esc_html_e( 'Schließen', 'arbeitsdienste' ); ?></span></summary>
+				<?php // As on the signup form: one label, no closing button, and a plain
+				// line of text stands in for the control once the form stands open. A
+				// summary cannot be made inert with CSS, so the element has to change. ?>
+				<summary class="fg-button fg-contact-toggle"><?php esc_html_e( 'Kontaktieren', 'arbeitsdienste' ); ?></summary>
+				<span class="fg-contact-latch"><?php esc_html_e( 'Kontaktieren', 'arbeitsdienste' ); ?></span>
 				<form class="fg-contact-form" action="<?php echo esc_url( $admin_url ); ?>" method="post">
 					<input type="hidden" name="action" value="fg_contact_ride">
 					<input type="hidden" name="ride_ref" value="<?php echo esc_attr( $data['public_ref'] ); ?>">

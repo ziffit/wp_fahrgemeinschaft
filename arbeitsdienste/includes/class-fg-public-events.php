@@ -223,8 +223,22 @@ final class FG_Public_Events {
 			$privacy   = get_privacy_policy_url();
 			?>
 			<details class="fg-signup">
-				<?php // One control with two labels: the stylesheet shows the one that fits the state. A label that is not shown is not read out either. ?>
-				<summary class="fg-button fg-signup-toggle"><span class="fg-label-closed"><?php esc_html_e( 'Eintragen', 'arbeitsdienste' ); ?></span><span class="fg-label-open"><?php esc_html_e( 'Schließen', 'arbeitsdienste' ); ?></span></summary>
+				<?php /*
+				 * One label, and no way back: a form that has been opened stays open,
+				 * and several of them may stand open at the same time. That is why there
+				 * is no "Schließen" beside "Eintragen" — a second button on one control
+				 * for something nobody asked for.
+				 *
+				 * The closing affordance cannot be taken off the summary itself. A summary
+				 * is the switch of a details element, and CSS cannot make one inert: the
+				 * element would still be in the tab order and would still fold the form on
+				 * Enter. So the control leaves the page once it has done its work, and a
+				 * plain line of text stands in its place. Text is not focusable and not
+				 * clickable, so nothing is left that could fold the form again — with the
+				 * mouse or with the keyboard.
+				 */ ?>
+				<summary class="fg-button fg-signup-toggle"><?php esc_html_e( 'Eintragen', 'arbeitsdienste' ); ?></summary>
+				<span class="fg-signup-latch"><?php esc_html_e( 'Eintragen', 'arbeitsdienste' ); ?></span>
 				<form class="fg-signup-form" action="<?php echo esc_url( $admin_url ); ?>" method="post">
 					<input type="hidden" name="action" value="fg_register_member">
 					<?php // The duty travels by its public reference, never by its row ID, the same way the offer form names a duty. ?>

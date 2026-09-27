@@ -273,56 +273,87 @@ blocks = re.findall(r'<details class=\"fg-contact\">.*?</details>', h, re.S)
 ok = blocks and all('<summary' in b and 'fg-contact-form' in b for b in blocks)
 sys.exit(0 if ok else 1)
 " "an entry has no toggle or no form behind it"
-struct "$body" "the toggle carries both labels" "
+struct "$body" "every toggle carries one label and a line of text behind it" "
 import re, sys
 h = sys.stdin.read()
-toggles = re.findall(r'<summary class=\"fg-button fg-contact-toggle\">.*?</summary>', h, re.S)
-ok = toggles and all('fg-label-closed' in t and 'fg-label-open' in t for t in toggles)
+toggles = re.findall(r'<details class=\"fg-contact\">\s*<summary class=\"fg-button fg-contact-toggle\">(.*?)</summary>\s*<span class=\"fg-contact-latch\">(.*?)</span>', h, re.S)
+ok = toggles and all(t.strip() == 'Kontaktieren' and l.strip() == 'Kontaktieren' for t, l in toggles)
 sys.exit(0 if ok else 1)
-" "a toggle is missing one of the two labels"
-has "the closed toggle offers contact" "$body" '<span class="fg-label-closed">Kontaktieren</span>'
-has "the open toggle offers to close again" "$body" '<span class="fg-label-open">Schließen</span>'
+" "a toggle has no latch, or the two do not carry the same word"
+# The word that closes the form is gone, and the button that offered it is gone
+# with it. What stays is a summary with one word, and a span that is not a
+# control: nothing on the page folds the form again, neither with the mouse nor
+# with the keyboard.
+hasnt "no toggle offers to close the form again" "$body" "Schließen"
+has "the control that opened the form is the only one" "$body" '<summary class="fg-button fg-contact-toggle">Kontaktieren</summary>'
+has "and the line that stands in for it is plain text" "$body" '<span class="fg-contact-latch">Kontaktieren</span>'
 has "the form is sent with a button of its own" "$body" '<button class="fg-button" type="submit">Absenden</button>'
 hasnt "the old wording is gone" "$body" "Kontakt aufnehmen"
-# Both labels are always in the document, so the one that must stay away is
-# hidden by a rule in the stylesheet. If the stylesheet is older than the
-# markup, both appear and the control reads "KontaktierenSchließen". That is
-# not visible in the HTML and only shows up in the browser, so the file is
-# read at the address the page itself links to.
+# The control and the line of text are both in the document at all times, and
+# this is the only thing that keeps the one away that does not belong to the
+# state. If the stylesheet is older than the markup, both are drawn and the word
+# stands there twice; that is not visible in the HTML and only shows up in the
+# browser, so the file is read at the address the page itself links to.
 css_url=$(printf '%s' "$body" | grep -o "href='[^']*arbeitsdienste\.css?ver=[^']*'" | head -1 | sed "s/^href='//;s/'$//")
 if [ -n "$css_url" ]; then
 	has "the stylesheet is requested with a version" "$css_url" "?ver="
 	style=$(curl -sk "$css_url")
-	struct "$style" "the stylesheet switches the label, and the open rule wins" "
+	struct "$style" "both forms swap the control for the line of text" "
 import re, sys
 css = sys.stdin.read()
 # comments are stripped first: a comment sits in front of a selector and would
 # be counted as part of it
 css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
 rules = re.findall(r'([^{}]+)\{([^}]*)\}', css)
-mine = [(s.strip(), b) for s, b in rules
-        if 'summary.fg-contact-toggle' in s and '.fg-label-open' in s]
-def weight(sel):
+def eigenschaft(body, name):
+    # declarations are read one by one and the last one counts, as in a
+    # browser. A pattern like r'display:\s*(?!none)' does not do: \s* can take
+    # no characters at all, then the lookahead looks at the space before the
+    # word and succeeds, so every rule holding a display would pass.
+    gefunden = None
+    for teil in body.split(';'):
+        if ':' not in teil:
+            continue
+        k, _, w = teil.partition(':')
+        if k.strip() == name:
+            gefunden = w.strip()
+    return gefunden
+def staerke(sel):
     # only these shapes occur here: element names, classes, [open]
     s = re.sub(r'::?[a-z-]+(\([^)]*\))?', ' ', sel)
     s = re.sub(r'#[a-z-]+', ' ', s)
-    return (len(re.findall(r'\.', s)) + len(re.findall(r'\[', s)),
-            len(re.findall(r'(^|[\s>+~])[a-z][a-z0-9]*', s)))
-def is_open(sel):
-    return re.search(r'\[\s*open\s*\]', sel) is not None
-closed = [(weight(s), b) for s, b in mine if not is_open(s)]
-opened = [(weight(s), b) for s, b in mine if is_open(s)]
-if not closed or not opened:
-    sys.exit(1)                                   # a state has no rule
-if not all('display: none' in b for _, b in closed):
-    sys.exit(1)                                   # closed state shows both labels
-if not all('display: inline' in b for _, b in opened):
-    sys.exit(1)                                   # open state shows neither
-# the rule for the open state has to outrank the one for the closed state,
-# otherwise the hidden label stays hidden and the button still reads
-# "Kontaktieren" while the form is open
-sys.exit(0 if max(w for w, _ in opened) > max(w for w, _ in closed) else 1)
-" "one state shows both labels, the other shows none, or the wrong rule wins"
+    return len(re.findall(r'\.', s)) + len(re.findall(r'\[', s))
+def regeln(pfad, offen):
+    return [(s, b) for s, b in rules
+            if pfad in s and ('[open]' in s) == offen]
+# Both forms are the same decision, so both are checked: a rule that only ever
+# named one of them would leave the other with a second button and nothing would
+# say so.
+for name in ('fg-contact', 'fg-signup'):
+    schalter, zeile = 'summary.%s-toggle' % name, '.%s-latch' % name
+    # The open state is the one that matters. If the summary is not put away
+    # there, the form can be folded again by a click, and the second button the
+    # decision was about is back on the page.
+    weg = regeln(schalter, True)
+    if not weg or not all(eigenschaft(b, 'display') == 'none' for _, b in weg):
+        sys.exit(1)
+    # and the line of text has to come out, or the word stands there twice
+    her = regeln(zeile, True)
+    if not her or not all(eigenschaft(b, 'display') not in (None, 'none')
+                          for _, b in her):
+        sys.exit(1)
+    # the shut state must put the line away, or it stands next to the control
+    zu = regeln(zeile, False)
+    if not zu or not all(eigenschaft(b, 'display') == 'none' for _, b in zu):
+        sys.exit(1)
+    # Both rules for the line of text name the same path, and the open one
+    # carries the attribute selector. That is what makes it win: a theme that
+    # moves its own rules around cannot outrank it, and the order inside the
+    # file does not matter.
+    if max(staerke(s) for s, _ in her) <= max(staerke(s) for s, _ in zu):
+        sys.exit(1)
+sys.exit(0)
+" "one of the two forms keeps a clickable control while it is open, or leaves its line of text standing beside it"
 	struct "$style" "the label of the contact field is kept on one line" "
 import re, sys
 css = re.sub(r'/\*.*?\*/', '', sys.stdin.read(), flags=re.S)
@@ -841,7 +872,9 @@ has "and for the address" "$list" 'name="fg_member_email"'
 hasnt "no address field of the list invites more than the column holds" "$list" 'maxlength="254"'
 has "the address of the signup stops at the width of the column" "$list" 'name="fg_member_email" maxlength="190"'
 has "the button carries the promised wording" "$list" "verbindlich anmelden"
-has "the closed label says Eintragen" "$list" ">Eintragen<"
+has "the control that opens the form says Eintragen" "$list" '<summary class="fg-button fg-signup-toggle">Eintragen</summary>'
+has "and the line that stands in for it is plain text" "$list" '<span class="fg-signup-latch">Eintragen</span>'
+hasnt "and no toggle offers to close the form again" "$list" "Schließen"
 # The theme and WordPress bring scripts of their own onto every page, so only
 # what the plugin puts into the page is looked at: nothing inside its own block,
 # and no file of the plugin loaded from anywhere.
@@ -912,12 +945,14 @@ if not hat('.fg-event-data', 'width'):
     sys.exit(1)
 if not hat('details.fg-signup', 'cursor'):
     sys.exit(1)
+if not hat('.fg-signup-latch', 'display'):
+    sys.exit(1)
 if not hat('.fg-signup-closed', 'color'):
     sys.exit(1)
 if not hat('.fg-places-none', 'color'):
     sys.exit(1)
 sys.exit(0)
-" "the card, the table, the signup block or the free places note has no rule"
+" "the card, the table, the signup block, its latch or the free places note has no rule"
 else
 	bad "the list page brings the stylesheet with it" "no stylesheet with a version on the page"
 fi
@@ -1147,7 +1182,7 @@ fi
 # from the tables, so a card that printed a number of its own making cannot
 # pass this.
 list=$(curl -sk "$BASE$LIST_PATH")
-has "the card offers the place again" "$list" ">Eintragen<"
+has "the card offers the place again" "$list" '<summary class="fg-button fg-signup-toggle">Eintragen</summary>'
 if [ "$(s free-places "$DIENST")" = "$PLATZE_VORHER" ]; then
 	ok "and the tables say the same number again"
 else
