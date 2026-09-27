@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Fahrgemeinschaften
  * Description:       Öffentliche Fahrgemeinschaften für Vereinsarbeitsdienste mit sicherer E-Mail-Bestätigung.
- * Version:           1.6.0
+ * Version:           1.7.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            Verein
@@ -24,7 +24,7 @@ defined( 'ABSPATH' ) || exit;
  * Mails oder Datenschutzerklärung: sie kennzeichnet die ausgelieferte Fassung,
  * und wer ein Archiv entpackt, soll an der Zahl erkennen, was darin ist.
  */
-define( 'FG_VERSION', '1.6.0' );
+define( 'FG_VERSION', '1.7.0' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
 /**
  * Name of the element that carries a message after a form was sent.
@@ -66,6 +66,7 @@ require_once __DIR__ . '/includes/class-fg-stats.php';
 require_once __DIR__ . '/includes/class-fg-mail-templates.php';
 require_once __DIR__ . '/includes/class-fg-mailer.php';
 require_once __DIR__ . '/includes/class-fg-public.php';
+require_once __DIR__ . '/includes/class-fg-public-events.php';
 require_once __DIR__ . '/includes/class-fg-actions.php';
 require_once __DIR__ . '/includes/class-fg-admin.php';
 require_once __DIR__ . '/includes/class-fg-admin-events.php';
@@ -91,6 +92,7 @@ final class FG_Plugin {
 	 */
 	public function register() {
 		$this->services['public']  = new FG_Public();
+		$this->services['public_events'] = new FG_Public_Events();
 		$this->services['actions'] = new FG_Actions();
 		$this->services['admin']   = new FG_Admin();
 		$this->services['privacy'] = new FG_Privacy();

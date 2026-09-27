@@ -10,9 +10,11 @@ defined( 'ABSPATH' ) || exit;
 /**
  * List and form screen for work-service events.
  *
- * A work service is a small record: a title, a date, an optional cut-off time,
- * the pre-registered participant addresses and a visibility flag. There is no
- * draft state: an event either may be offered publicly or it may not.
+ * A work service is a small record: a title, a date, an optional start time,
+ * the pre-registered participant addresses, a visibility flag, and four optional
+ * details for the public list of work services: group, number of people needed,
+ * length in hours and a description. There is no draft state: an event either
+ * may be offered publicly or it may not.
  */
 final class FG_Admin_Events {
 	/**
@@ -87,6 +89,8 @@ final class FG_Admin_Events {
 					<tr>
 						<th><?php esc_html_e( 'Titel', 'fahrgemeinschaften' ); ?></th>
 						<th><?php esc_html_e( 'Datum', 'fahrgemeinschaften' ); ?></th>
+						<th><?php esc_html_e( 'Gruppe', 'fahrgemeinschaften' ); ?></th>
+						<th><?php esc_html_e( 'Bedarf', 'fahrgemeinschaften' ); ?></th>
 						<th><?php esc_html_e( 'Öffentlich sichtbar', 'fahrgemeinschaften' ); ?></th>
 						<th><?php esc_html_e( 'Teilnehmer', 'fahrgemeinschaften' ); ?></th>
 						<th><?php esc_html_e( 'Fahrgemeinschaften', 'fahrgemeinschaften' ); ?></th>
@@ -95,7 +99,7 @@ final class FG_Admin_Events {
 				<tbody>
 					<?php if ( empty( $events ) ) : ?>
 						<tr>
-							<td colspan="5"><?php esc_html_e( 'Es wurde noch kein Arbeitsdienst angelegt.', 'fahrgemeinschaften' ); ?></td>
+							<td colspan="7"><?php esc_html_e( 'Es wurde noch kein Arbeitsdienst angelegt.', 'fahrgemeinschaften' ); ?></td>
 						</tr>
 					<?php endif; ?>
 					<?php foreach ( $events as $event ) : ?>
@@ -104,6 +108,8 @@ final class FG_Admin_Events {
 								<strong><a href="<?php echo esc_url( $this->edit_url( $event->id ) ); ?>"><?php echo esc_html( $event->title ); ?></a></strong>
 							</td>
 							<td><?php echo esc_html( $this->repository->format_event_date( $event ) ); ?></td>
+							<td><?php echo esc_html( $event->group_name ); ?></td>
+							<td><?php echo esc_html( $event->demand > 0 ? (string) $event->demand : '—' ); ?></td>
 							<td>
 								<?php
 								echo $event->is_active
@@ -136,6 +142,10 @@ final class FG_Admin_Events {
 		$active   = $is_new ? true : $event->is_active;
 		$uuid     = $is_new ? '' : $event->event_uuid;
 		$attendees = $is_new ? '' : implode( "\n", $event->participants );
+		$group    = $is_new ? '' : $event->group_name;
+		$demand   = $is_new ? '' : (string) $event->demand;
+		$duration = $is_new ? '' : (string) $event->duration_hours;
+		$text     = $is_new ? '' : $event->description;
 		$ride_count = $is_new ? 0 : $this->repository->count_event_rides( $event->id );
 		?>
 		<div class="wrap">
@@ -162,10 +172,37 @@ final class FG_Admin_Events {
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-time"><?php esc_html_e( 'Öffentlich sichtbar bis (Uhrzeit, optional)', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-time"><?php esc_html_e( 'Beginn (Uhrzeit, optional)', 'fahrgemeinschaften' ); ?></label></th>
 						<td>
 							<input type="time" id="fg-time" name="fg_event_time" value="<?php echo esc_attr( $time ); ?>">
-							<span class="description"><?php esc_html_e( 'Ohne Uhrzeit bleibt der Eintrag den ganzen Tag sichtbar.', 'fahrgemeinschaften' ); ?></span>
+							<span class="description"><?php esc_html_e( 'Ohne Uhrzeit gilt der ganze Tag. Mit Uhrzeit endet die Anmeldung zu Fahrgemeinschaften mit diesem Zeitpunkt, weil der Dienst dann beginnt.', 'fahrgemeinschaften' ); ?></span>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="fg-group"><?php esc_html_e( 'Gruppe', 'fahrgemeinschaften' ); ?></label></th>
+						<td>
+							<input type="text" id="fg-group" name="fg_group_name" class="regular-text" maxlength="<?php echo esc_attr( FG_Schema::GROUP_MAX ); ?>" value="<?php echo esc_attr( $group ); ?>">
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="fg-demand"><?php esc_html_e( 'Bedarf an Personen', 'fahrgemeinschaften' ); ?></label></th>
+						<td>
+							<input type="number" id="fg-demand" name="fg_demand" class="small-text" min="0" max="<?php echo esc_attr( FG_Schema::COUNT_MAX ); ?>" step="1" value="<?php echo esc_attr( $demand ); ?>">
+							<span class="description"><?php esc_html_e( 'Leer lassen, wenn der Verein keine Zahl angibt. Der Wert wird öffentlich als „8 Personen“ angezeigt.', 'fahrgemeinschaften' ); ?></span>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="fg-duration"><?php esc_html_e( 'Dauer in Stunden', 'fahrgemeinschaften' ); ?></label></th>
+						<td>
+							<input type="number" id="fg-duration" name="fg_duration_hours" class="small-text" min="0" max="<?php echo esc_attr( FG_Schema::COUNT_MAX ); ?>" step="1" value="<?php echo esc_attr( $duration ); ?>">
+							<span class="description"><?php esc_html_e( 'Ganze Stunden, leer lassen, wenn die Dauer nicht bekannt ist.', 'fahrgemeinschaften' ); ?></span>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="fg-description"><?php esc_html_e( 'Beschreibung', 'fahrgemeinschaften' ); ?></label></th>
+						<td>
+							<textarea id="fg-description" name="fg_description" rows="5" class="large-text" maxlength="<?php echo esc_attr( FG_Schema::DESCRIPTION_MAX ); ?>"><?php echo esc_textarea( $text ); ?></textarea>
+							<span class="description"><?php esc_html_e( 'Zeilenumbrüche bleiben auf der öffentlichen Seite erhalten. HTML ist hier nicht möglich; eine Angabe wie „<b>fett</b>“ erscheint genau so, wie sie eingegeben wurde.', 'fahrgemeinschaften' ); ?></span>
 						</td>
 					</tr>
 					<tr>
@@ -251,6 +288,10 @@ final class FG_Admin_Events {
 		$raw_time     = isset( $_POST['fg_event_time'] ) ? sanitize_text_field( wp_unslash( $_POST['fg_event_time'] ) ) : '';
 		$participants = isset( $_POST['fg_event_participants'] ) ? sanitize_textarea_field( wp_unslash( $_POST['fg_event_participants'] ) ) : '';
 		$active       = isset( $_POST['fg_event_active'] ) && '1' === (string) wp_unslash( $_POST['fg_event_active'] );
+		$group        = isset( $_POST['fg_group_name'] ) ? str_replace( "\n", ' ', $this->read_text( wp_unslash( $_POST['fg_group_name'] ) ) ) : '';
+		$raw_demand   = isset( $_POST['fg_demand'] ) ? sanitize_text_field( wp_unslash( $_POST['fg_demand'] ) ) : '';
+		$raw_duration = isset( $_POST['fg_duration_hours'] ) ? sanitize_text_field( wp_unslash( $_POST['fg_duration_hours'] ) ) : '';
+		$text         = isset( $_POST['fg_description'] ) ? $this->read_text( wp_unslash( $_POST['fg_description'] ) ) : '';
 
 		if ( '' === $title ) {
 			FG_Admin::store_notice( __( 'Bitte einen Titel für den Arbeitsdienst eingeben.', 'fahrgemeinschaften' ), 'error' );
@@ -267,12 +308,36 @@ final class FG_Admin_Events {
 			$this->redirect_back( $event_id );
 		}
 
+		// The browser stops a long text in the field, but a post does not have
+		// to come from the form. Nothing is cut off silently here either: the
+		// field is named and the save is refused, so what the club typed is
+		// either stored whole or not at all.
+		foreach ( $this->text_fields_over_limit( $group, $text ) as $too_long ) {
+			FG_Admin::store_notice(
+				sprintf(
+					/* translators: 1: field label, 2: number of characters allowed. */
+					__( '%1$s ist zu lang, es sind höchstens %2$s Zeichen erlaubt. Es wurde nichts gespeichert.', 'fahrgemeinschaften' ),
+					$too_long['label'],
+					$too_long['limit']
+				),
+				'error'
+			);
+			$this->redirect_back( $event_id );
+		}
+
+		$demand   = $this->count_or_error( $raw_demand, __( 'Bedarf an Personen', 'fahrgemeinschaften' ), $event_id );
+		$duration = $this->count_or_error( $raw_duration, __( 'Dauer', 'fahrgemeinschaften' ), $event_id );
+
 		$fields = array(
-			'title'        => $title,
-			'event_date'   => $raw_date,
-			'event_time'   => $raw_time,
-			'participants' => $participants,
-			'is_active'    => $active,
+			'title'          => $title,
+			'event_date'     => $raw_date,
+			'event_time'     => $raw_time,
+			'participants'   => $participants,
+			'is_active'      => $active,
+			'group_name'     => $group,
+			'demand'         => $demand,
+			'duration_hours' => $duration,
+			'description'    => $text,
 		);
 
 		if ( $event_id ) {
@@ -293,6 +358,112 @@ final class FG_Admin_Events {
 
 		FG_Admin::store_notice( __( 'Der Arbeitsdienst wurde angelegt.', 'fahrgemeinschaften' ) );
 		$this->redirect_back( $new_id );
+	}
+
+	/**
+	 * Name every submitted text field that is longer than its column allows.
+	 *
+	 * @param string $group Submitted group text.
+	 * @param string $text  Submitted description.
+	 * @return array List of fields to complain about, empty when all of them fit.
+	 */
+	private function text_fields_over_limit( $group, $text ) {
+		$felder = array(
+			array(
+				'label' => __( 'Gruppe', 'fahrgemeinschaften' ),
+				'wert'  => $group,
+				'limit' => FG_Schema::GROUP_MAX,
+			),
+			array(
+				'label' => __( 'Beschreibung', 'fahrgemeinschaften' ),
+				'wert'  => $text,
+				'limit' => FG_Schema::DESCRIPTION_MAX,
+			),
+		);
+
+		$zu_lang = array();
+		foreach ( $felder as $feld ) {
+			if ( $this->string_length( $feld['wert'] ) > $feld['limit'] ) {
+				$zu_lang[] = array(
+					'label' => $feld['label'],
+					'limit' => $feld['limit'],
+				);
+			}
+		}
+
+		return $zu_lang;
+	}
+
+	/**
+	 * Turn a submitted number into a count, or refuse the save.
+	 *
+	 * An empty field is not an error: it means the club states no number. A
+	 * value that is not a plain count is refused rather than repaired, so a
+	 * mistyped number never becomes a different number in public.
+	 *
+	 * @param string $raw      Submitted value.
+	 * @param string $label    Field label for the message.
+	 * @param int    $event_id Record to return to.
+	 * @return int
+	 */
+	private function count_or_error( $raw, $label, $event_id ) {
+		$wert = trim( $raw );
+
+		if ( '' === $wert ) {
+			return 0;
+		}
+
+		if ( ! preg_match( '/^[0-9]+$/', $wert ) || (int) $wert > FG_Schema::COUNT_MAX ) {
+			FG_Admin::store_notice(
+				sprintf(
+					/* translators: 1: field label, 2: largest accepted number. */
+					__( '%1$s muss eine ganze Zahl ohne Vorzeichen bis %2$s sein. Es wurde nichts gespeichert.', 'fahrgemeinschaften' ),
+					$label,
+					FG_Schema::COUNT_MAX
+				),
+				'error'
+			);
+			$this->redirect_back( $event_id );
+		}
+
+		return (int) $wert;
+	}
+
+	/**
+	 * UTF-8-aware string length.
+	 *
+	 * @param string $value Value.
+	 * @return int
+	 */
+	private function string_length( $value ) {
+		return function_exists( 'mb_strlen' ) ? mb_strlen( $value, 'UTF-8' ) : strlen( $value );
+	}
+
+	/**
+	 * Read a submitted text the way it was written.
+	 *
+	 * Nothing is filtered out of these two fields. A text field holds text and
+	 * nothing else, and the only thing that decides what becomes a tag is the
+	 * one that writes the page: the card escapes what it prints. Filtering here
+	 * as well would cost the club its own words without making the page any
+	 * safer — a sentence like "unter 5 Euro" or a size written as "< 2 m" would
+	 * come back changed, and in the case of the group it would come back
+	 * changed twice, because a filter that writes "&lt;" and a page that
+	 * escapes again show "&amp;lt;".
+	 *
+	 * A browser sends the lines of a textarea separated by CRLF. Only that is
+	 * straightened out here, so the text has one and the same form whether it
+	 * came from Windows, from a phone or from a script.
+	 *
+	 * @param string $value Submitted text.
+	 * @return string
+	 */
+	private function read_text( $value ) {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+
+		return trim( str_replace( "\r", "\n", $value ) );
 	}
 
 	/**

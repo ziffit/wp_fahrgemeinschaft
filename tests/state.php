@@ -52,6 +52,26 @@ switch ( $command ) {
 		fg_state_out( $repo->count_rides( array( 'status' => isset( $args[0] ) ? $args[0] : '' ) ) );
 		break;
 
+	// How many work duties the public list is allowed to show at all: the ones
+	// that are still ahead and are marked visible. The HTTP check compares this
+	// number with the number of cards on the page, so a duty that silently
+	// disappears from the list cannot pass unnoticed.
+	case 'count-events':
+		fg_state_out( count( $repo->get_active_events() ) );
+		break;
+
+	// The duty that stands at the top of the list, and the date the list is
+	// expected to print for it. Both are read the same way the page reads them,
+	// so the check compares two renderings of one rule and not a guess.
+	case 'first-event':
+		$erste = $repo->get_active_events();
+		fg_state_out( $erste ? $erste[0]->id : 0 );
+		break;
+
+	case 'format-date':
+		fg_state_out( $repo->format_event_date_long( isset( $args[0] ) ? $args[0] : 0 ) );
+		break;
+
 	// Sum of a daily counter over all days. The counters are what the server
 	// counts on its own, so they are the only place to see whether a submitted
 	// value was treated as a contact detail or as a name.
@@ -119,6 +139,10 @@ switch ( $command ) {
 			'public_ref',
 			'is_active',
 			'created_at',
+			'group_name',
+			'demand',
+			'duration_hours',
+			'description',
 		);
 		$name = isset( $args[1] ) ? $args[1] : 'id';
 		fg_state_out( in_array( $name, $fields, true ) ? $event->{$name} : 'unknown-field' );

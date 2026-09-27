@@ -37,7 +37,11 @@ final class FG_Event {
 	public $event_date = '';
 
 	/**
-	 * Optional cut-off time as `H:i`, empty when the whole day counts.
+	 * Start time of the duty as `H:i`, empty when the duty lasts the whole day.
+	 *
+	 * The time has two jobs that happen to be one: it says when the duty begins,
+	 * and it is the point at which the duty stops being offered, because
+	 * afterwards nobody can join a car any more.
 	 *
 	 * @var string
 	 */
@@ -77,6 +81,34 @@ final class FG_Event {
 	 * @var string
 	 */
 	public $created_at = '';
+
+	/**
+	 * Free text naming the group the duty belongs to.
+	 *
+	 * @var string
+	 */
+	public $group_name = '';
+
+	/**
+	 * Number of people the duty needs, 0 when the club states none.
+	 *
+	 * @var int
+	 */
+	public $demand = 0;
+
+	/**
+	 * Length of the duty in whole hours, 0 when unknown.
+	 *
+	 * @var int
+	 */
+	public $duration_hours = 0;
+
+	/**
+	 * Free text about the duty, line breaks included.
+	 *
+	 * @var string
+	 */
+	public $description = '';
 }
 
 /**

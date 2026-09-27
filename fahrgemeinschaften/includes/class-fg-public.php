@@ -39,17 +39,24 @@ final class FG_Public {
 	}
 
 	/**
-	 * Register the front-end stylesheet.
+	 * Put the front-end stylesheet on the page.
+	 *
+	 * Two shortcodes use it, and both must arrive at the same rules. Registering
+	 * the same handle twice is harmless in WordPress, but a second copy of the
+	 * path would be a second place to forget the version number, so the call
+	 * lives in one place and both callers use it.
 	 *
 	 * @return void
 	 */
-	public function register_assets() {
+	public static function enqueue_style() {
 		wp_register_style(
 			'fahrgemeinschaften-public',
 			plugins_url( 'assets/css/fahrgemeinschaften.css', dirname( __DIR__ ) . '/fahrgemeinschaften.php' ),
 			array(),
 			FG_VERSION
 		);
+
+		wp_enqueue_style( 'fahrgemeinschaften-public' );
 	}
 
 	/**
@@ -66,8 +73,7 @@ final class FG_Public {
 			return '<div class="fg-notice fg-notice-error" role="alert">' . esc_html__( 'Diese Seite ist nur über eine sichere HTTPS-Verbindung verfügbar.', 'fahrgemeinschaften' ) . '</div>';
 		}
 
-		$this->register_assets();
-		wp_enqueue_style( 'fahrgemeinschaften-public' );
+		self::enqueue_style();
 
 		$events    = $this->repository->get_active_events();
 		$source    = $this->current_source_url();

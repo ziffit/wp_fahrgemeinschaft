@@ -7,6 +7,23 @@ tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 Letzter vollständiger Lauf: 26.09.2026 — **399 Prüfungen, 0 Fehler**
 (CLI 153, öffentliches HTTP 41, Mail-Ebene 66, Admin-Ebene 139).
 
+Seit diesem Lauf ist die Arbeitsdienstliste dazugekommen. Ein vollständiger Lauf
+`run-all.sh` ist bis heute nicht gefahren, weil er am Anfang alle Arbeitsdienste und
+Fahrgemeinschaften löscht und die Testdaten des Vereins damit nicht mehr da wären.
+Stattdessen sind die neuen Prüfungen einzeln gegen die laufende Installation gefahren
+worden, mit unverändertem Prüftext aus den eingecheckten Dateien:
+
+| Was | Lauf | Ergebnis |
+| --- | --- | --- |
+| CLI-Abschnitte `[2a]` und `[3c]` | 63 | 0 Fehler |
+| Admin-Suite, vollständig | 195 | 0 Fehler |
+| HTTP-Abschnitt `[8]` | 15 | 0 Fehler |
+
+Die Zahlen der drei Läufe lassen sich nicht mit denen vom 26.09. verrechnen: Sie
+enthalten je Suite nur den Teil, der ohne den zerstörenden Aufbau zu fahren war. Ein
+Gesamtlauf steht noch aus.
+
+
 ## Stack
 
 | Teil | Ort |
@@ -78,10 +95,53 @@ Fahrgemeinschaften sowie die Statistik-Option, es gibt also keinen Zustand vom V
 
 | Suite | Datei | Vorgehen |
 | --- | --- | --- |
-| CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–16: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinierung, Datenschutz, HTTPS, Markup-Hygiene |
-| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data` sowie das Verhalten der Schaltflächen im Stylesheet |
+| CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–16: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene; dazu die Abschnitte `[2a]` (die vier freiwilligen Angaben eines Arbeitsdienstes) und `[3c]` (die Liste der Arbeitsdienste) |
+| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data`, Verhalten der Schaltflächen im Stylesheet; dazu Abschnitt `[8]` für die Arbeitsdienstliste auf einer eigenen Seite |
 | Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo` |
-| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der vier Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau |
+| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der vier Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die vier freiwilligen Angaben im Formular, ihr Rundlauf durch die Tabelle und die Fälle, in denen das Speichern verweigert wird |
+
+### Die Abschnitte `[2a]`, `[3c]` und `[8]`
+
+`[2a]` prüft die vier neuen Felder dort, wo sie hingehören: an der Tabelle. Der
+Nachweis steht am Anfang und heißt, dass die vier Spalten am **Ende** einer bereits
+bestehenden Tabelle stehen — eine Neuinstallation und eine Aktualisierung müssen
+dieselbe Spaltenreihenfolge haben, sonst meint dieselbe Spaltennummer auf zwei
+Installationen etwas anderes. Danach Rundlauf, Vorgabewerte, Teilaktualisierung,
+Zeichen- statt Bytegrenze und die Fälle, in denen das Speichern verweigert wird.
+
+Eine Grenze trägt nur dann etwas, wenn ein Wert sie auch wirklich erreicht. Bei der
+Gruppe ist das anders als bei der Beschreibung, und der Unterschied ist gemessen:
+`$wpdb->insert()` weist einen Wert, der länger ist als die Spalte, mit einer
+WordPress-Meldung ab, das `text`-Feld der Beschreibung nimmt dagegen 501 Zeichen
+ohne Murren. Die Prüfung, dass eine zu lange Beschreibung abgelehnt wird, beweist
+deshalb die Grenze des Plugins. Bei der Gruppe decken sich die Grenze des Plugins
+und die Breite der Spalte; die Prüfung merkt es also nicht, ob die Zeile im Plugin
+weggelassen wurde oder die Spalte es verhindert hat. Sie bleibt trotzdem stehen, weil
+sie das beobachtbare Verhalten festhält — nichts gespeichert, nichts abgeschnitten —
+und dieser Nachweis ist der, der zählt.
+
+`[3c]` prüft die Liste, wie sie im Browser entsteht, und schließt die Wege, die ein
+Fehler leicht öffnet: leerer Text und die Zahl 0, Mark-up in der Beschreibung, ein
+Zeilenumbruch, der ein Zeilenumbruch bleiben muss, Reihenfolge einschließlich des
+ganztägigen Dienstes, und das Fehlen von Formular und Script. Der Wochentag wird
+zweimal geprüft, weil `date()` auch bei gesetzter `LC_TIME` „Monday“ liefert: einmal
+gegen das erwartete deutsche Wort und einmal dagegen, dass kein englischer Wochentag
+auf der Seite steht.
+
+`[8]` holt dieselbe Seite über TLS, so wie ein Besucher sie aufruft. Die Zahl der
+Karten wird mit der Zahl der Datensätze aus der Tabelle verglichen, damit ein
+Dienst, der stillschweigend fehlt, nicht durchrutscht. Beim Script-Vergleich wird
+nicht die ganze Seite geprüft — Theme und WordPress bringen auf jede Seite ihre
+eigenen mit —, sondern die Differenz zur anderen Plugin-Seite, zusätzlich die Zahl der
+Script-Elemente, weil ein Script ohne eigene Datei in einer Liste von Adressen
+unsichtbar wäre.
+
+Zwei Feinheiten der Prüftechnik, die sich hier bewährt haben: Die Wochentagsprüfung
+vergleicht nicht mit einem festen Wort, sondern mit dem, was `format_event_date_long()`
+aus der Tabelle rechnet — sonst wäre sie eine zweite Implementierung derselben
+Regel. Und der Container hält den alten Bytecode eine Weile fest, nachdem eine Datei
+ersetzt wurde: Ein Gegenprobenlauf, der direkt nach dem Kopieren misst, prüft die
+vorige Fassung. Deshalb misst jede Gegenprobe zweimal.
 
 Die Mediathek-Auswahl des Logos wird nicht angeklickt, sondern über ihre Stellung im
 Dokument geprüft: Das Script hängt mit `wp_add_inline_script()` an `media-views` und wird

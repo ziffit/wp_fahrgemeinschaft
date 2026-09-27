@@ -16,6 +16,18 @@ defined( 'ABSPATH' ) || exit;
  */
 final class FG_Store {
 	/**
+	 * Sort order of a listing by date.
+	 *
+	 * Within one day the start time decides, because that is the order in which
+	 * the duties happen. A duty without a time has no place in the order of the
+	 * day, so it comes last instead of first: `event_time IS NULL` is 0 for a
+	 * time that is there and 1 for one that is missing.
+	 *
+	 * @var string
+	 */
+	const SORT_DATE = 'event_date ASC, (event_time IS NULL) ASC, event_time ASC, title ASC';
+
+	/**
 	 * Writable event columns.
 	 *
 	 * @var string[]
@@ -29,6 +41,10 @@ final class FG_Store {
 		'public_ref',
 		'is_active',
 		'created_at',
+		'group_name',
+		'demand',
+		'duration_hours',
+		'description',
 	);
 
 	/**
@@ -152,7 +168,7 @@ final class FG_Store {
 	public function query_events( $active_only, $order = 'date', $limit = 0, $offset = 0 ) {
 		$table  = FG_Schema::events_table();
 		$where  = $active_only ? 'WHERE is_active = 1' : '';
-		$sort   = 'title' === $order ? 'title ASC, event_date ASC' : 'event_date ASC, title ASC';
+		$sort   = 'title' === $order ? 'title ASC, event_date ASC' : self::SORT_DATE;
 		$clause = '';
 
 		if ( $limit > 0 ) {
@@ -183,7 +199,7 @@ final class FG_Store {
 			"SELECT * FROM $table
 			WHERE is_active = 1
 			AND ( event_date > %s OR ( event_date = %s AND ( event_time IS NULL OR event_time >= %s ) ) )
-			ORDER BY event_date ASC, title ASC",
+			ORDER BY " . self::SORT_DATE,
 			(string) $today,
 			(string) $today,
 			(string) $now
@@ -547,6 +563,8 @@ final class FG_Store {
 				case 'id':
 				case 'event_id':
 				case 'is_active':
+				case 'demand':
+				case 'duration_hours':
 				case 'pending_confirm_expires':
 				case 'pending_discard_expires':
 				case 'delete_expires':
@@ -578,6 +596,10 @@ final class FG_Store {
 		$event->public_ref = (string) $row['public_ref'];
 		$event->is_active  = (bool) (int) $row['is_active'];
 		$event->created_at = (string) $row['created_at'];
+		$event->group_name = (string) $row['group_name'];
+		$event->demand     = (int) $row['demand'];
+		$event->duration_hours = (int) $row['duration_hours'];
+		$event->description = (string) $row['description'];
 
 		return $event;
 	}

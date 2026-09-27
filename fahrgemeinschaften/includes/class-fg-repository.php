@@ -179,7 +179,7 @@ final class FG_Repository {
 	 * Reference, UUID and creation time are filled in here so no caller can
 	 * create an event that is unreachable or has no identity.
 	 *
-	 * @param array $fields Event fields: title, event_date, event_time, participants, is_active.
+	 * @param array $fields Event fields: title, event_date, event_time, participants, is_active, and optionally group_name, demand, duration_hours, description.
 	 * @return int New event ID, 0 on failure.
 	 */
 	public function insert_event( array $fields ) {
@@ -187,8 +187,9 @@ final class FG_Repository {
 		$date      = isset( $fields['event_date'] ) ? (string) $fields['event_date'] : '';
 		$time      = isset( $fields['event_time'] ) ? (string) $fields['event_time'] : '';
 		$active    = ! empty( $fields['is_active'] );
+		$details   = $this->read_event_details( $fields );
 
-		if ( '' === $title || ! self::is_valid_date( $date ) || ( '' !== $time && ! self::is_valid_time( $time ) ) ) {
+		if ( '' === $title || ! self::is_valid_date( $date ) || ( '' !== $time && ! self::is_valid_time( $time ) ) || null === $details ) {
 			return 0;
 		}
 
@@ -199,15 +200,18 @@ final class FG_Repository {
 		}
 
 		return $this->store->insert_event(
-			array(
-				'title'        => $title,
-				'event_date'   => $date,
-				'event_time'   => '' === $time ? null : $time . ':00',
-				'participants' => $this->participants_to_text( isset( $fields['participants'] ) ? $fields['participants'] : array() ),
-				'event_uuid'   => $this->create_uuid(),
-				'public_ref'   => $this->create_public_reference( 'events' ),
-				'is_active'    => $active ? 1 : 0,
-				'created_at'   => current_time( 'mysql' ),
+			array_merge(
+				$details,
+				array(
+					'title'        => $title,
+					'event_date'   => $date,
+					'event_time'   => '' === $time ? null : $time . ':00',
+					'participants' => $this->participants_to_text( isset( $fields['participants'] ) ? $fields['participants'] : array() ),
+					'event_uuid'   => $this->create_uuid(),
+					'public_ref'   => $this->create_public_reference( 'events' ),
+					'is_active'    => $active ? 1 : 0,
+					'created_at'   => current_time( 'mysql' ),
+				)
 			)
 		);
 	}
@@ -216,7 +220,7 @@ final class FG_Repository {
 	 * Update an existing event.
 	 *
 	 * @param int   $event_id Event ID.
-	 * @param array $fields   Event fields: title, event_date, event_time, participants, is_active.
+	 * @param array $fields   Event fields: title, event_date, event_time, participants, is_active, and optionally group_name, demand, duration_hours, description.
 	 * @return bool
 	 */
 	public function update_event( $event_id, array $fields ) {
@@ -234,11 +238,33 @@ final class FG_Repository {
 			return false;
 		}
 
-		$data = array(
-			'title'      => $title,
-			'event_date' => $date,
-			'event_time' => '' === $time ? null : $time . ':00',
-			'is_active'  => $active ? 1 : 0,
+		// The four optional fields are read the same way for a new and for an
+		// existing record, so a value can never pass a check on one path and
+		// not on the other. What was not submitted keeps the stored value.
+		$details = $this->read_event_details(
+			array_merge(
+				array(
+					'group_name'     => $event->group_name,
+					'description'    => $event->description,
+					'demand'         => (string) $event->demand,
+					'duration_hours' => (string) $event->duration_hours,
+				),
+				array_intersect_key( $fields, array_flip( array( 'group_name', 'description', 'demand', 'duration_hours' ) ) )
+			)
+		);
+
+		if ( null === $details ) {
+			return false;
+		}
+
+		$data = array_merge(
+			$details,
+			array(
+				'title'      => $title,
+				'event_date' => $date,
+				'event_time' => '' === $time ? null : $time . ':00',
+				'is_active'  => $active ? 1 : 0,
+			)
 		);
 
 		if ( array_key_exists( 'participants', $fields ) ) {
@@ -384,6 +410,67 @@ final class FG_Repository {
 		}
 
 		return wp_date( get_option( 'date_format' ), $local_date->getTimestamp(), wp_timezone() );
+	}
+
+	/**
+	 * Format an event date with its weekday, for display.
+	 *
+	 * The weekday is taken from the translation files of the site and not from
+	 * the date function of PHP. `date()` and `DateTime::format()` know no
+	 * language and hand out English names unless the process itself was started
+	 * with a matching locale, which is not something a plugin can rely on. The
+	 * translation files are the dependable source, and they are read here.
+	 *
+	 * The date behind it keeps the format the site has chosen, so a site with a
+	 * different date format does not suddenly get a mixture of two.
+	 *
+	 * @param FG_Event|int $event Event or event ID.
+	 * @return string
+	 */
+	public function format_event_date_long( $event ) {
+		$event = $this->resolve_event( $event );
+		if ( ! $event || ! self::is_valid_date( $event->event_date ) ) {
+			return '';
+		}
+
+		$local_date = DateTimeImmutable::createFromFormat( '!Y-m-d', $event->event_date, wp_timezone() );
+		if ( ! $local_date instanceof DateTimeImmutable ) {
+			return '';
+		}
+
+		global $wp_locale;
+
+		return sprintf(
+			/* translators: 1: weekday, 2: date, both in the language of the site. */
+			__( '%1$s, den %2$s', 'fahrgemeinschaften' ),
+			$wp_locale->get_weekday( (int) $local_date->format( 'w' ) ),
+			wp_date( get_option( 'date_format' ), $local_date->getTimestamp(), wp_timezone() )
+		);
+	}
+
+	/**
+	 * Format the start time of an event, or an empty string when it has none.
+	 *
+	 * @param FG_Event|int $event Event or event ID.
+	 * @return string
+	 */
+	public function format_event_time( $event ) {
+		$event = $this->resolve_event( $event );
+		if ( ! $event || ! self::is_valid_time( $event->event_time ) ) {
+			return '';
+		}
+
+		$local = DateTimeImmutable::createFromFormat(
+			'!Y-m-d H:i',
+			$event->event_date . ' ' . $event->event_time,
+			wp_timezone()
+		);
+
+		if ( ! $local instanceof DateTimeImmutable ) {
+			return '';
+		}
+
+		return wp_date( get_option( 'time_format' ), $local->getTimestamp(), wp_timezone() );
 	}
 
 	/**
@@ -734,6 +821,87 @@ final class FG_Repository {
 		}
 
 		return implode( "\n", array_values( $clean ) );
+	}
+
+	/**
+	 * Read and check the four optional fields of a work duty.
+	 *
+	 * All four are optional, and an empty value or a zero means the club states
+	 * nothing. A value that is not a plain count within the accepted range is
+	 * not repaired: the whole write is refused instead, because a silent
+	 * correction would store something other than what was sent.
+	 *
+	 * A text that is too long is refused here for a reason of its own. The
+	 * column would catch a too-long group on its own, and it does, but it
+	 * catches it as a database error that names no field and no limit; the
+	 * description lives in a text column that holds a great deal more than the
+	 * 500 characters this form allows, so nothing but this check holds it to
+	 * the limit. Refusing in the one place keeps one message for both fields
+	 * and one number that decides how long they may be.
+	 *
+	 * @param array $fields Submitted fields; missing keys count as empty.
+	 * @return array|null Normalised fields, or null when one of them is invalid.
+	 */
+	private function read_event_details( array $fields ) {
+		$group       = isset( $fields['group_name'] ) ? (string) $fields['group_name'] : '';
+		$description = isset( $fields['description'] ) ? (string) $fields['description'] : '';
+		$demand      = $this->read_count( isset( $fields['demand'] ) ? $fields['demand'] : '' );
+		$duration    = $this->read_count( isset( $fields['duration_hours'] ) ? $fields['duration_hours'] : '' );
+
+		if ( null === $demand || null === $duration ) {
+			return null;
+		}
+
+		if ( $this->string_length( $group ) > FG_Schema::GROUP_MAX ) {
+			return null;
+		}
+
+		if ( $this->string_length( $description ) > FG_Schema::DESCRIPTION_MAX ) {
+			return null;
+		}
+
+		return array(
+			'group_name'     => $group,
+			'demand'         => $demand,
+			'duration_hours' => $duration,
+			'description'    => $description,
+		);
+	}
+
+	/**
+	 * Read a submitted number that may be left empty.
+	 *
+	 * Anything that is not a plain count within the accepted range is refused.
+	 * `absint()` would be the shorter answer, but it turns a negative number
+	 * and an overflowing digit string into a different number without saying
+	 * so, and both columns are unsigned.
+	 *
+	 * @param mixed $value Submitted value.
+	 * @return int|null The number, 0 for an empty field, or null when invalid.
+	 */
+	private function read_count( $value ) {
+		$value = trim( (string) $value );
+		if ( '' === $value ) {
+			return 0;
+		}
+
+		if ( ! preg_match( '/^[0-9]+$/', $value ) ) {
+			return null;
+		}
+
+		$number = (int) $value;
+
+		return $number > FG_Schema::COUNT_MAX ? null : $number;
+	}
+
+	/**
+	 * UTF-8-aware string length.
+	 *
+	 * @param string $value Value.
+	 * @return int
+	 */
+	private function string_length( $value ) {
+		return function_exists( 'mb_strlen' ) ? mb_strlen( $value, 'UTF-8' ) : strlen( $value );
 	}
 
 	/**

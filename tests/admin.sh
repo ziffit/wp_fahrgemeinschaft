@@ -137,10 +137,31 @@ echo "[2] work duty list"
 events=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events")
 has "event is listed" "$events" "Arbeitsdienst Laber"
 has "date column exists" "$events" ">Datum<"
+has "group column exists" "$events" ">Gruppe<"
+has "demand column exists" "$events" ">Bedarf<"
 has "visibility column exists" "$events" "Öffentlich sichtbar"
 has "participant column exists" "$events" ">Teilnehmer<"
 has "edit link exists" "$events" "event=$EVENT_ID"
 hasnt "no trash column" "$events" ">Papierkorb<"
+# The four fields are optional, so the list has to be able to say "nothing
+# stated" without inventing a number for it. The cell of one known record is
+# read on its own: the counts of the other columns are numbers too, so a search
+# over the whole screen would be measuring the wrong thing. The cell of the
+# demand is the fourth, after title, date and group.
+demand_cell=$(printf '%s' "$events" | python3 -c "
+import re, sys
+html = sys.stdin.read()
+m = re.search(r'<tr[^>]*>.*?event=$EVENT_ID.*?</tr>', html, re.S)
+if not m:
+    print('no-row')
+else:
+    cells = re.findall(r'<td[^>]*>(.*?)</td>', m.group(0), re.S)
+    print(re.sub(r'<[^>]+>', '', cells[3]).strip() if len(cells) > 3 else 'too-few-cells:%d' % len(cells))")
+if [ "$demand_cell" = "—" ]; then
+	ok "a duty with no demand shows a dash, not a zero"
+else
+	bad "a duty with no demand shows a dash, not a zero" "cell reads: $demand_cell"
+fi
 clean "$events" "event list"
 
 # --- event form
@@ -150,6 +171,17 @@ has "date field present" "$screen" 'name="fg_event_date"'
 has "time field present" "$screen" 'name="fg_event_time"'
 has "participants field present" "$screen" 'name="fg_event_participants"'
 has "visibility checkbox present" "$screen" 'name="fg_event_active"'
+has "group field present" "$screen" 'name="fg_group_name"'
+has "demand field present" "$screen" 'name="fg_demand"'
+has "duration field present" "$screen" 'name="fg_duration_hours"'
+has "description field present" "$screen" 'name="fg_description"'
+# The time is the point where the duty starts, so the field says so.
+has "the time field is named as the start" "$screen" "Beginn (Uhrzeit, optional)"
+has "the start is explained" "$screen" "weil der Dienst dann beginnt"
+# A browser stops a long text in the field; a post does not have to.
+has "the group field carries its limit" "$screen" 'maxlength="100"'
+has "the description field carries its limit" "$screen" 'maxlength="500"'
+has "the demand field refuses fractions" "$screen" 'step="1"'
 has "uuid is shown" "$screen" "$(s event "$EVENT_ID" event_uuid)"
 has "uuid is read only" "$screen" 'readonly'
 hasnt "no internal table name on the screen" "$screen" "fg_events"
@@ -204,6 +236,11 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/saved.html" -w '%{url_effective}'
 	--data-urlencode "fg_event_date=2027-03-04" \
 	--data-urlencode "fg_event_time=07:30" \
 	--data-urlencode "fg_event_active=1" \
+	--data-urlencode "fg_group_name=Gartenpflege Nord" \
+	--data-urlencode "fg_demand=8" \
+	--data-urlencode "fg_duration_hours=4" \
+	--data-urlencode "fg_description=Bitte festes Schuhwerk mitbringen.
+Handschuhe sind vorhanden." \
 	--data-urlencode "fg_event_participants=neu@example.org
 zweite@example.org")
 saved=$(cat "$DIR/saved.html")
@@ -215,12 +252,26 @@ if [ "$(s event "$NEW_ID" event_date)" = "2027-03-04" ]; then ok "date stored"; 
 if [ "$(s event "$NEW_ID" participants)" = "neu@example.org,zweite@example.org" ]; then ok "participants stored"; else bad "participants stored" "$(s event "$NEW_ID" participants)"; fi
 if [ "$(s event "$NEW_ID" is_active)" = "1" ]; then ok "visibility stored"; else bad "visibility stored" "$(s event "$NEW_ID" is_active)"; fi
 if [ -n "$(s event "$NEW_ID" event_uuid)" ]; then ok "uuid generated on insert"; else bad "uuid generated on insert" "empty"; fi
+if [ "$(s event "$NEW_ID" group_name)" = "Gartenpflege Nord" ]; then ok "group stored"; else bad "group stored" "$(s event "$NEW_ID" group_name)"; fi
+if [ "$(s event "$NEW_ID" demand)" = "8" ]; then ok "demand stored"; else bad "demand stored" "$(s event "$NEW_ID" demand)"; fi
+if [ "$(s event "$NEW_ID" duration_hours)" = "4" ]; then ok "duration stored"; else bad "duration stored" "$(s event "$NEW_ID" duration_hours)"; fi
+if [ "$(s event "$NEW_ID" description)" = "Bitte festes Schuhwerk mitbringen.
+Handschuhe sind vorhanden." ]; then ok "description stored with its line break"; else bad "description stored with its line break" "$(s event "$NEW_ID" description)"; fi
 clean "$saved" "work duty create"
+
+echo "[5a] the four fields come back into the form"
+back=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$NEW_ID")
+has "group is filled in" "$back" 'value="Gartenpflege Nord"'
+has "demand is filled in" "$back" 'value="8"'
+has "duration is filled in" "$back" 'value="4"'
+has "description is filled in" "$back" "Bitte festes Schuhwerk mitbringen."
+clean "$back" "form after the four fields"
 
 echo "[5b] editing the new work duty"
 editform=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$NEW_ID")
 has "form is filled with the stored title" "$editform" 'value="Neuer Dienst aus dem Admin"'
 has "form is filled with the stored time" "$editform" 'value="07:30"'
+has "form is filled with the stored demand" "$editform" 'value="8"'
 ENONCE=$(val /dev/stdin fg_event_nonce <<< "$editform")
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/edited.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_save_event" \
@@ -229,13 +280,109 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/edited.html" -w '%{url_effective}
 	--data-urlencode "fg_title=Geänderter Dienst" \
 	--data-urlencode "fg_event_date=2027-03-05" \
 	--data-urlencode "fg_event_time=" \
+	--data-urlencode "fg_group_name=Winterdienst Süd" \
+	--data-urlencode "fg_demand=1" \
+	--data-urlencode "fg_duration_hours=" \
+	--data-urlencode "fg_description=Neu: nur noch drei Personen gebraucht." \
 	--data-urlencode "fg_event_participants=neu@example.org")
 edited=$(cat "$DIR/edited.html")
 has "save confirms the change" "$edited" "Der Arbeitsdienst wurde gespeichert."
 if [ "$(s event "$NEW_ID" title)" = "Geänderter Dienst" ]; then ok "title stored"; else bad "title stored" "$(s event "$NEW_ID" title)"; fi
 if [ "$(s event "$NEW_ID" event_date)" = "2027-03-05" ]; then ok "changed date stored"; else bad "changed date stored" "$(s event "$NEW_ID" event_date)"; fi
 if [ "$(s event "$NEW_ID" event_time)" = "" ]; then ok "cleared time stored as empty"; else bad "cleared time stored as empty" "$(s event "$NEW_ID" event_time)"; fi
+if [ "$(s event "$NEW_ID" group_name)" = "Winterdienst Süd" ]; then ok "changed group stored"; else bad "changed group stored" "$(s event "$NEW_ID" group_name)"; fi
+if [ "$(s event "$NEW_ID" demand)" = "1" ]; then ok "changed demand stored"; else bad "changed demand stored" "$(s event "$NEW_ID" demand)"; fi
+# An emptied field means the club no longer states a duration, and the stored
+# number has to go with it.
+if [ "$(s event "$NEW_ID" duration_hours)" = "0" ]; then ok "cleared duration stored as no statement"; else bad "cleared duration stored as no statement" "$(s event "$NEW_ID" duration_hours)"; fi
+if [ "$(s event "$NEW_ID" description)" = "Neu: nur noch drei Personen gebraucht." ]; then ok "changed description stored"; else bad "changed description stored" "$(s event "$NEW_ID" description)"; fi
 clean "$edited" "work duty edit"
+
+echo "[5c1] a value the store does not accept is refused, and nothing changes"
+LANG_GRUPPE=$(python3 -c "print('ä' * 101)")
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/toolong.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_event" \
+	--data-urlencode "fg_event_id=$NEW_ID" \
+	--data-urlencode "fg_event_nonce=$ENONCE" \
+	--data-urlencode "fg_title=Geänderter Dienst" \
+	--data-urlencode "fg_event_date=2027-03-05" \
+	--data-urlencode "fg_group_name=$LANG_GRUPPE" \
+	--data-urlencode "fg_demand=2" \
+	--data-urlencode "fg_event_participants=neu@example.org")
+toolong=$(cat "$DIR/toolong.html")
+has "the too long group is named" "$toolong" "Gruppe ist zu lang"
+has "the limit is named" "$toolong" "höchstens 100 Zeichen"
+has "nothing was saved" "$toolong" "Es wurde nichts gespeichert."
+if [ "$(s event "$NEW_ID" group_name)" = "Winterdienst Süd" ]; then ok "the previous group is kept ($(s event "$NEW_ID" group_name))"; else bad "the previous group is kept" "$(s event "$NEW_ID" group_name)"; fi
+if [ "$(s event "$NEW_ID" demand)" = "1" ]; then ok "the other fields of the refused save are kept too"; else bad "the other fields of the refused save are kept too" "$(s event "$NEW_ID" demand)"; fi
+clean "$toolong" "work duty save with a too long group"
+
+LANG_TEXT=$(python3 -c "print('ö' * 501)")
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/toolong2.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_event" \
+	--data-urlencode "fg_event_id=$NEW_ID" \
+	--data-urlencode "fg_event_nonce=$ENONCE" \
+	--data-urlencode "fg_title=Geänderter Dienst" \
+	--data-urlencode "fg_event_date=2027-03-05" \
+	--data-urlencode "fg_description=$LANG_TEXT" \
+	--data-urlencode "fg_event_participants=neu@example.org")
+toolong2=$(cat "$DIR/toolong2.html")
+has "the too long description is named" "$toolong2" "Beschreibung ist zu lang"
+has "the description limit is named" "$toolong2" "höchstens 500 Zeichen"
+if [ "$(s event "$NEW_ID" description)" = "Neu: nur noch drei Personen gebraucht." ]; then ok "the previous description is kept"; else bad "the previous description is kept" "$(s event "$NEW_ID" description)"; fi
+clean "$toolong2" "work duty save with a too long description"
+
+for raw in -3 2.5 acht 1e3; do
+	out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/count.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+		--data-urlencode "action=fg_save_event" \
+		--data-urlencode "fg_event_id=$NEW_ID" \
+		--data-urlencode "fg_event_nonce=$ENONCE" \
+		--data-urlencode "fg_title=Geänderter Dienst" \
+		--data-urlencode "fg_event_date=2027-03-05" \
+		--data-urlencode "fg_demand=$raw" \
+		--data-urlencode "fg_event_participants=neu@example.org")
+	count_bad=$(cat "$DIR/count.html")
+	has "the demand \"$raw\" is refused by name" "$count_bad" "Bedarf an Personen muss eine ganze Zahl"
+	if [ "$(s event "$NEW_ID" demand)" = "1" ]; then ok "the previous demand is kept after \"$raw\""; else bad "the previous demand is kept after \"$raw\"" "$(s event "$NEW_ID" demand)"; fi
+done
+clean "$(cat "$DIR/count.html")" "work duty save with a demand that is not a count"
+
+# Exactly on the limit is not a refusal, otherwise the field could never hold
+# the number the club allows itself.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/exact.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_event" \
+	--data-urlencode "fg_event_id=$NEW_ID" \
+	--data-urlencode "fg_event_nonce=$ENONCE" \
+	--data-urlencode "fg_title=Geänderter Dienst" \
+	--data-urlencode "fg_event_date=2027-03-05" \
+	--data-urlencode "fg_group_name=$(python3 -c "print('ä' * 100)")" \
+	--data-urlencode "fg_demand=0" \
+	--data-urlencode "fg_description=$(python3 -c "print('ö' * 500)")" \
+	--data-urlencode "fg_event_participants=neu@example.org")
+exact=$(cat "$DIR/exact.html")
+hasnt "a text exactly on the limit is not refused" "$exact" "Es wurde nichts gespeichert."
+if [ "$(s event "$NEW_ID" demand)" = "0" ]; then ok "a demand of zero is stored as no statement"; else bad "a demand of zero is stored as no statement" "$(s event "$NEW_ID" demand)"; fi
+if [ "$(s event "$NEW_ID" group_name | wc -m)" = "101" ]; then ok "a group of exactly 100 characters is stored whole"; else bad "a group of exactly 100 characters is stored whole" "$(s event "$NEW_ID" group_name | wc -m)"; fi
+if [ "$(s event "$NEW_ID" description | wc -m)" = "501" ]; then ok "a description of exactly 500 characters is stored whole"; else bad "a description of exactly 500 characters is stored whole" "$(s event "$NEW_ID" description | wc -m)"; fi
+clean "$exact" "work duty save exactly on the limit"
+
+# The fields hold text, not markup. A typed angle bracket has to come back as
+# itself, and the page has to show it as itself.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/plain.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_event" \
+	--data-urlencode "fg_event_id=$NEW_ID" \
+	--data-urlencode "fg_event_nonce=$ENONCE" \
+	--data-urlencode "fg_title=Geänderter Dienst" \
+	--data-urlencode "fg_event_date=2027-03-05" \
+	--data-urlencode "fg_group_name=Gruppe < Nord" \
+	--data-urlencode "fg_description=Motive < 2 m, <b>fett</b>" \
+	--data-urlencode "fg_event_participants=neu@example.org")
+if [ "$(s event "$NEW_ID" group_name)" = "Gruppe < Nord" ]; then ok "an angle bracket in the group survives"; else bad "an angle bracket in the group survives" "$(s event "$NEW_ID" group_name)"; fi
+if [ "$(s event "$NEW_ID" description)" = "Motive < 2 m, <b>fett</b>" ]; then ok "a typed description is stored exactly as written"; else bad "a typed description is stored exactly as written" "$(s event "$NEW_ID" description)"; fi
+plainform=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$NEW_ID")
+has "the typed description comes back into the form" "$plainform" "Motive &lt; 2 m, &lt;b&gt;fett&lt;/b&gt;"
+hasnt "the form does not run the description through a second escape" "$plainform" "&amp;lt;"
+clean "$plainform" "form after a typed description"
 
 echo "[5c] an invalid date is refused and nothing is stored"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/bad.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \

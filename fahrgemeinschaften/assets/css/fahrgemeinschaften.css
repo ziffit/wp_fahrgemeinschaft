@@ -50,6 +50,7 @@
 }
 
 .fg-section,
+.fg-event-card,
 .fg-ride {
 	margin: 0 0 1.5rem;
 	padding: 1.25rem;
@@ -60,6 +61,7 @@
 
 .fg-section > h2,
 .fg-section > h3,
+.fg-event-card > h3,
 .fg-ride > h4 {
 	margin-top: 0;
 }
@@ -285,6 +287,49 @@ details.fg-contact[open] > summary.fg-contact-toggle > .fg-label-open {
 	overflow: hidden !important;
 }
 
+/* --- the list of work duties: one card per duty, a table of its details --- */
+
+.fg-event-title {
+	margin: 0 0 0.75rem;
+	font-size: 1.15rem;
+}
+
+.fg-event-data {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+/* The name of the field keeps the width of its own text and the value takes
+   what is left, so a long description wraps instead of pushing the page
+   sideways. `width: 1%` is what shrinks the column to its content; the
+   alternative, a fixed width in percent, would take space away from the value
+   on a narrow screen, and the value is the part that is worth reading. */
+.fg-event-data th {
+	width: 1%;
+	white-space: nowrap;
+	text-align: left;
+	vertical-align: top;
+	padding: 0.35rem 0.9rem 0.35rem 0;
+	font-weight: 600;
+}
+
+.fg-event-data td {
+	vertical-align: top;
+	padding: 0.35rem 0;
+	overflow-wrap: break-word;
+}
+
+.fg-event-data tr + tr th,
+.fg-event-data tr + tr td {
+	border-top: 1px solid var(--fg-border);
+}
+
+/* The date is the one thing a reader looks for first, so it is not a note next
+   to the title like it is in the list of rides. */
+.fg-event-data tr:first-child td {
+	font-weight: 600;
+}
+
 @media (max-width: 640px) {
 	.fg-form-grid {
 		grid-template-columns: 1fr;
@@ -295,6 +340,7 @@ details.fg-contact[open] > summary.fg-contact-toggle > .fg-label-open {
 	}
 
 	.fg-section,
+	.fg-event-card,
 	.fg-ride {
 		padding: 1rem;
 	}

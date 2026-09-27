@@ -220,16 +220,19 @@ function fg_render_action_page( array $get ) {
 	return array( $html, $err, $code, implode( "\n", $out ) );
 }
 
-function fg_make_event( $title, $date, $participants, $time = '', $active = true ) {
+function fg_make_event( $title, $date, $participants, $time = '', $active = true, array $details = array() ) {
 	global $fg_repo;
 
 	$event_id = $fg_repo->insert_event(
-		array(
-			'title'        => $title,
-			'event_date'   => $date,
-			'event_time'   => $time,
-			'participants' => $participants,
-			'is_active'    => $active,
+		array_merge(
+			array(
+				'title'        => $title,
+				'event_date'   => $date,
+				'event_time'   => $time,
+				'participants' => $participants,
+				'is_active'    => $active,
+			),
+			$details
 		)
 	);
 	if ( ! $event_id ) {
@@ -237,6 +240,65 @@ function fg_make_event( $title, $date, $participants, $time = '', $active = true
 	}
 
 	return (int) $event_id;
+}
+
+/**
+ * Offer one set of fields to the store and undo it right away.
+ *
+ * The refusal is the thing under test in [2a], so the record that a mistake
+ * would create is removed again. Otherwise one failed check would leave a work
+ * duty behind that the counts of the later sections would trip over.
+ *
+ * @param array $fields Fields for the insert.
+ * @return bool Whether the store accepted the fields.
+ */
+function fg_event_accepted( array $fields ) {
+	global $fg_repo;
+
+	$id = $fg_repo->insert_event( $fields );
+	if ( ! $id ) {
+		return false;
+	}
+
+	$fg_repo->delete_event( $id );
+	return true;
+}
+
+/**
+ * Reduce rendered HTML to one line of plain text.
+ *
+ * The cards are written across several lines on purpose, so the wording of a
+ * row cannot be looked for in the markup directly. Stripping the tags and
+ * folding the whitespace leaves "Datum Montag, den 5. Oktober 2026", which can
+ * be compared with a sentence.
+ *
+ * @param string $html Rendered page.
+ * @return string
+ */
+function fg_text_of( $html ) {
+	return trim( (string) preg_replace( '/\s+/u', ' ', wp_strip_all_tags( (string) $html ) ) );
+}
+
+/**
+ * Cut out the card of one work duty from the rendered list.
+ *
+ * The checks are about one duty and not about the whole list. The list holds
+ * the work duties of whoever is using the installation, so a row belonging to
+ * another duty could make a check pass that has nothing to do with the one
+ * under test.
+ *
+ * @param string $html  Rendered list.
+ * @param string $title Title of the duty.
+ * @return string The card, or an empty string when there is none.
+ */
+function fg_card_of( $html, $title ) {
+	$start = strpos( (string) $html, '<h3 class="fg-event-title">' . esc_html( $title ) . '</h3>' );
+	if ( false === $start ) {
+		return '';
+	}
+
+	$end = strpos( (string) $html, '</article>', $start );
+	return substr( (string) $html, $start, false === $end ? strlen( (string) $html ) : $end - $start );
 }
 
 function fg_newest_ride() {
@@ -423,6 +485,167 @@ $GLOBALS['fg_state']['today_event']   = $today_event;
 $GLOBALS['fg_state']['past_event']    = $past_event;
 $GLOBALS['fg_state']['draft_event']   = $inactive_event;
 
+/* ----------------------------------------------------------------- 2a */
+/* The four optional details of a work duty.
+ *
+ * Two things are proved here that a rendered page could never show: that the
+ * four columns really came into a table that already existed, and that a value
+ * the server does not accept is refused instead of stored in a corrected form.
+ * A page can only show what was stored; it cannot show what was thrown away.
+ */
+echo "[2a] The four optional details of a work duty\n";
+
+global $wpdb;
+$event_columns_seen = array();
+foreach ( (array) $wpdb->get_results( 'SHOW COLUMNS FROM ' . FG_Schema::events_table(), ARRAY_A ) as $column ) {
+	$event_columns_seen[] = $column['Field'];
+}
+fg_ok(
+	array( 'group_name', 'demand', 'duration_hours', 'description' ) === array_slice( $event_columns_seen, -4 ),
+	'the four columns stand at the end of a table that already existed',
+	implode( ',', $event_columns_seen )
+);
+
+$detail_event = fg_make_event(
+	'Dienst mit Angaben',
+	$soon,
+	$participants,
+	'08:00',
+	true,
+	array(
+		'group_name'     => 'Gartenpflege Nord',
+		'demand'         => 8,
+		'duration_hours' => 4,
+		'description'    => "Bitte festes Schuhwerk mitbringen.\nHandschuhe sind vorhanden.",
+	)
+);
+$details      = $fg_repo->get_event( $detail_event );
+fg_ok( 'Gartenpflege Nord' === $details->group_name, 'group stored and read back', $details->group_name );
+fg_ok( 8 === $details->demand, 'head count stored as a number', var_export( $details->demand, true ) );
+fg_ok( 4 === $details->duration_hours, 'duration stored as a number', var_export( $details->duration_hours, true ) );
+fg_ok( false !== strpos( $details->description, "\n" ), 'line break kept inside the description' );
+
+// A duty without the four fields keeps the column defaults, which is what makes
+// the rows on the public list disappear rather than show a zero.
+$plain_event = fg_make_event( 'Dienst ohne Angaben', $soon, $participants );
+$plain       = $fg_repo->get_event( $plain_event );
+fg_ok(
+	'' === $plain->group_name && '' === $plain->description && 0 === $plain->demand && 0 === $plain->duration_hours,
+	'a duty without the fields has them empty, not zero-filled text',
+	wp_json_encode( array( $plain->group_name, $plain->description, $plain->demand, $plain->duration_hours ) )
+);
+
+fg_ok( $fg_repo->update_event( $detail_event, array( 'demand' => 3 ) ), 'an update of one field is accepted' );
+$updated = $fg_repo->get_event( $detail_event );
+fg_ok( 3 === $updated->demand, 'the head count changed', var_export( $updated->demand, true ) );
+fg_ok(
+	'Gartenpflege Nord' === $updated->group_name && 4 === $updated->duration_hours,
+	'the fields that were not submitted keep their value',
+	wp_json_encode( array( $updated->group_name, $updated->duration_hours ) )
+);
+
+$events_before = $fg_repo->count_events();
+
+// The limits are counted in characters, not in bytes. 100 umlauts are 200 bytes
+// and still exactly the 100 characters the column holds.
+//
+// The description is the one that carries the weight: it lives in a text column
+// that would take far more than 500 characters without a word, so only the
+// check of the plugin holds it to the limit. The group is refused by the column
+// as well, so that check pins the behaviour down and not the place it comes
+// from.
+fg_ok(
+	fg_event_accepted( array( 'title' => 'Grenzfall', 'event_date' => $soon, 'is_active' => true, 'group_name' => str_repeat( 'ä', FG_Schema::GROUP_MAX ) ) ),
+	'a group of exactly the allowed number of characters is stored'
+);
+fg_ok(
+	! fg_event_accepted( array( 'title' => 'Grenzfall', 'event_date' => $soon, 'is_active' => true, 'group_name' => str_repeat( 'ä', FG_Schema::GROUP_MAX + 1 ) ) ),
+	'a group of one character too much is refused'
+);
+fg_ok(
+	fg_event_accepted( array( 'title' => 'Grenzfall', 'event_date' => $soon, 'is_active' => true, 'description' => str_repeat( 'ö', FG_Schema::DESCRIPTION_MAX ) ) ),
+	'a description of exactly the allowed number of characters is stored'
+);
+fg_ok(
+	! fg_event_accepted( array( 'title' => 'Grenzfall', 'event_date' => $soon, 'is_active' => true, 'description' => str_repeat( 'ö', FG_Schema::DESCRIPTION_MAX + 1 ) ) ),
+	'a description of one character too much is refused'
+);
+
+// A description that the column would take without complaint, refused all the
+// same. Without this the check above would also pass on a column that happens
+// to be narrow enough, and the limit would live in the wrong place.
+global $wpdb;
+$wpdb->suppress_errors( true );
+$wpdb->last_error     = '';
+$langer_text         = str_repeat( 'ö', FG_Schema::DESCRIPTION_MAX + 1 );
+$wpdb->insert(
+	FG_Schema::events_table(),
+	array(
+		'title'          => 'Spaltenprobe',
+		'event_date'     => $soon,
+		'event_time'     => null,
+		'participants'   => '',
+		'event_uuid'     => '00000000-0000-4000-8000-0000000000ff',
+		'public_ref'     => 'spaltenprobe' . substr( md5( (string) microtime( true ) ), 0, 19 ),
+		'is_active'      => 1,
+		'created_at'     => current_time( 'mysql' ),
+		'group_name'     => '',
+		'demand'         => 0,
+		'duration_hours' => 0,
+		'description'    => $langer_text,
+	),
+	array( '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%s' )
+);
+$spaltenprobe = (int) $wpdb->insert_id;
+$wpdb->suppress_errors( false );
+fg_ok(
+	$spaltenprobe > 0 && FG_Schema::DESCRIPTION_MAX + 1 === mb_strlen( (string) $wpdb->get_var( $wpdb->prepare( 'SELECT description FROM ' . FG_Schema::events_table() . ' WHERE id = %d', $spaltenprobe ) ), 'UTF-8' ),
+	'the column would have taken the long description, so the refusal is the plugin\'s',
+	$spaltenprobe > 0 ? 'column accepted it' : 'column refused it: ' . $wpdb->last_error
+);
+if ( $spaltenprobe > 0 ) {
+	$fg_repo->delete_event( $spaltenprobe );
+}
+
+// A number that is not a plain count is refused. `absint()` would have stored 3
+// for "-3" and 0 for a digit string that overflows the column, and both would
+// have stood on the public page as a claim the club never made.
+$bad_numbers = array( '-3', '3.5', 'eight', '1e3', '+4', '0x10', str_repeat( '9', 30 ), FG_Schema::COUNT_MAX + 1 );
+$accepted_bad = array();
+foreach ( $bad_numbers as $bad ) {
+	if ( fg_event_accepted( array( 'title' => 'Zahlprobe', 'event_date' => $soon, 'is_active' => true, 'demand' => $bad ) ) ) {
+		$accepted_bad[] = $bad;
+	}
+}
+fg_ok( empty( $accepted_bad ), 'a head count that is not a plain count is never stored', implode( ' | ', $accepted_bad ) );
+fg_ok(
+	$events_before === $fg_repo->count_events(),
+	'nothing was left behind by the refused values',
+	$events_before . ' -> ' . $fg_repo->count_events()
+);
+
+// An empty field and a field holding nothing but spaces both mean "not stated".
+// They are not errors, because a browser sends an empty string for a field the
+// visitor never touched.
+foreach ( array( '', '   ' ) as $leer ) {
+	$probe = fg_event_accepted(
+		array( 'title' => 'Zahlprobe', 'event_date' => $soon, 'is_active' => true, 'demand' => $leer, 'duration_hours' => $leer )
+	);
+	fg_ok( $probe, 'an empty head count is stored as no statement', var_export( $leer, true ) );
+}
+
+// A refused update changes nothing. The record that carried a good value keeps
+// it, instead of losing it to a mistyped one.
+$before_refused = $fg_repo->get_event( $detail_event );
+fg_ok( ! $fg_repo->update_event( $detail_event, array( 'group_name' => str_repeat( 'a', FG_Schema::GROUP_MAX + 1 ) ) ), 'an over-long group is refused on update' );
+fg_ok( ! $fg_repo->update_event( $detail_event, array( 'demand' => 'viele' ) ), 'a head count that is not a number is refused on update' );
+$after_refused = $fg_repo->get_event( $detail_event );
+fg_ok(
+	$before_refused->group_name === $after_refused->group_name && $before_refused->demand === $after_refused->demand,
+	'the refused update left the stored values alone',
+	wp_json_encode( array( $after_refused->group_name, $after_refused->demand ) )
+);
+
 /* ------------------------------------------------------------------ 3 */
 echo "[3] Public page markup\n";
 $page_id = wp_insert_post(
@@ -481,15 +704,18 @@ function fg_leeren_filter( $table ) {
 }
 
 /**
- * Renders the shortcode while one table of the plugin looks empty.
+ * Renders a shortcode while one table of the plugin looks empty.
  *
- * @param string $table Table name without prefix.
+ * @param string        $table  Table name without prefix.
+ * @param callable|null $render Renderer to call; the ride page by default.
  * @return string Rendered page.
  */
-function fg_render_with_empty( $table ) {
+function fg_render_with_empty( $table, $render = null ) {
 	$filter = fg_leeren_filter( $table );
 	add_filter( 'query', $filter );
-	$html = ( new FG_Public( new FG_Repository() ) )->render_shortcode();
+	$html = $render
+		? call_user_func( $render )
+		: ( new FG_Public( new FG_Repository() ) )->render_shortcode();
 	remove_filter( 'query', $filter );
 	return $html;
 }
@@ -522,6 +748,185 @@ fg_ok(
 	substr_count( $html, '<article class="fg-ride">' ) === substr_count( $wieder, '<article class="fg-ride">' ),
 	'every entry is still there after both renders',
 	substr_count( $html, '<article class="fg-ride">' ) . ' -> ' . substr_count( $wieder, '<article class="fg-ride">' )
+);
+
+/* ----------------------------------------------------------------- 3c */
+/* The list of work duties behind [arbeitsdienste].
+ *
+ * Read-only in the same sense as [3b]: the empty state is reached with the
+ * `query` filter rather than by taking the work duties offline. The duties that
+ * the ordering and the wording are shown with are the run's own, and are
+ * removed again before the counts are taken, so the counts describe the duties
+ * of the installation and nothing else.
+ */
+echo "[3c] The list of work duties\n";
+
+fg_ok( shortcode_exists( 'arbeitsdienste' ), 'the shortcode is registered' );
+
+// A duty of this section carries every value the list is asked to show, so the
+// wording below does not depend on what an earlier section left in the database.
+$voll_event = fg_make_event(
+	'Dienst mit Angaben',
+	$soon,
+	$participants,
+	'08:00',
+	true,
+	array(
+		'group_name'     => 'Gartenpflege Nord',
+		'demand'         => 8,
+		'duration_hours' => 4,
+		'description'    => "Bitte festes Schuhwerk mitbringen.\nHandschuhe sind vorhanden.",
+	)
+);
+$voll = $fg_repo->get_event( $voll_event );
+
+$dienste      = new FG_Public_Events( new FG_Repository() );
+$dienste_html = $dienste->render_shortcode();
+
+fg_contains( 'id="fg-dienste"', $dienste_html, 'the list has a heading with an anchor' );
+fg_contains( 'Kommende Arbeitsdienste', $dienste_html, 'the list says what it lists' );
+fg_ok(
+	substr_count( $dienste_html, '<table class="fg-event-data">' ) === substr_count( $dienste_html, '<article class="fg-event-card">' )
+		&& substr_count( $dienste_html, '<table class="fg-event-data">' ) > 0,
+	'every card holds exactly one table of details',
+	substr_count( $dienste_html, '<article class="fg-event-card">' ) . ' cards, ' . substr_count( $dienste_html, '<table class="fg-event-data">' ) . ' tables'
+);
+fg_contains( '<th scope="row">Datum</th>', $dienste_html, 'the fields stand as row headers' );
+
+// The date is built from the translation files of the site, not from the date
+// format of PHP, so the weekday reads the same on every server.
+global $wp_locale;
+$datum     = DateTimeImmutable::createFromFormat( '!Y-m-d', $voll->event_date, wp_timezone() );
+$wochentag  = $wp_locale->get_weekday( (int) $datum->format( 'w' ) );
+$erwartet   = $wochentag . ', den ' . wp_date( get_option( 'date_format' ), $datum->getTimestamp(), wp_timezone() );
+fg_contains( 'Datum ' . $erwartet, fg_text_of( $dienste_html ), 'the date reads weekday, den, then the date format of the site' );
+
+// The weekday must come from the translation files and not from the locale of
+// the server. The container happens to run a German locale, so the difference
+// only shows when the process is switched to the C locale a plain server has.
+$locale_vorher = setlocale( LC_TIME, '0' );
+setlocale( LC_TIME, 'C' );
+$c_text = fg_text_of( $dienste->render_shortcode() );
+setlocale( LC_TIME, $locale_vorher );
+fg_contains( $wochentag, $c_text, 'the weekday stays German on a server with the C locale' );
+fg_not_contains( 'Monday', $c_text, 'no weekday of the server locale leaks in' );
+
+// Without the stylesheet the cards are unframed blocks of text.
+fg_ok( wp_style_is( 'fahrgemeinschaften-public', 'enqueued' ), 'the list brings the stylesheet with it' );
+
+// The wording of a number is checked with a letter behind it that must not
+// follow. Without it the check for the singular would also pass on "Personen".
+$dienste_text = fg_text_of( $dienste_html );
+fg_ok( 1 === preg_match( '/Bedarf 8 Personen(?![a-zäöüß])/u', $dienste_text ), 'the head count reads as eight persons' );
+fg_ok( 1 === preg_match( '/Dauer 4 Stunden(?![a-zäöüß])/u', $dienste_text ), 'the duration reads as four hours' );
+fg_contains( 'Gruppe Gartenpflege Nord', $dienste_text, 'the group stands in its own row' );
+
+$einzel_event = fg_make_event( 'Einzelwerte', $soon, $participants, '', true, array( 'demand' => 1, 'duration_hours' => 1 ) );
+$einzel_text  = fg_text_of( $dienste->render_shortcode() );
+fg_ok( 1 === preg_match( '/Bedarf 1 Person(?![a-zäöüß])/u', $einzel_text ), 'one person is one person, not persons' );
+fg_ok( 1 === preg_match( '/Dauer 1 Stunde(?![a-zäöüß])/u', $einzel_text ), 'one hour is one hour, not hours' );
+
+// A field the club left empty has no row at all. "0 Personen" would be read as a
+// claim about the duty, so the row is left out rather than filled with a zero.
+$leer_karte = fg_card_of( $dienste->render_shortcode(), 'Dienst ohne Angaben' );
+fg_ok( '' !== $leer_karte, 'the duty without details has a card of its own' );
+fg_not_contains( 'Bedarf', $leer_karte, 'no head count row without a number' );
+fg_not_contains( 'Dauer', $leer_karte, 'no duration row without a number' );
+fg_not_contains( 'Gruppe', $leer_karte, 'no group row without a text' );
+fg_not_contains( 'Beschreibung', $leer_karte, 'no description row without a text' );
+fg_not_contains( 'Beginn', $leer_karte, 'no start row without a time' );
+fg_contains( 'Datum', $leer_karte, 'the date is there even when nothing else is' );
+
+$null_event = fg_make_event(
+	'Ausdruecklich ohne Zahl',
+	$soon,
+	$participants,
+	'',
+	true,
+	array( 'group_name' => '', 'description' => '', 'demand' => 0, 'duration_hours' => 0 )
+);
+$null_karte = fg_card_of( $dienste->render_shortcode(), 'Ausdruecklich ohne Zahl' );
+fg_ok( '' !== $null_karte, 'the duty with zeroes has a card of its own' );
+fg_not_contains( 'Bedarf', $null_karte, 'a head count of zero states nothing' );
+fg_not_contains( 'Dauer', $null_karte, 'a duration of zero states nothing' );
+fg_not_contains( '0 ', $null_karte, 'no zero is shown in the card' );
+
+$beginn_karte = fg_card_of( $dienste->render_shortcode(), 'Dienst mit Angaben' );
+fg_contains( 'Beginn', $beginn_karte, 'a duty with a time has a start row' );
+fg_contains( '<br />', $beginn_karte, 'the line break in the description stays a line break' );
+
+// Markup typed into the description reaches the page as the text that was typed.
+// The store is not the place that strips it, the renderer is.
+$markup_event = fg_make_event( 'Mit Markup', $soon, $participants, '', true, array( 'description' => '<b>fett</b> & mehr' ) );
+$markup_html  = $dienste->render_shortcode();
+$markup_karte = fg_card_of( $markup_html, 'Mit Markup' );
+fg_ok( '' !== $markup_karte, 'the duty with markup has a card of its own' );
+fg_not_contains( '<b>', $markup_karte, 'no markup from the description reaches the page' );
+fg_contains( '&lt;b&gt;fett&lt;/b&gt;', $markup_karte, 'the markup is shown as the text that was typed' );
+
+// Within one day the start time decides, and a duty without a time has no place
+// in the order of the day, so it stands last.
+$order_tag    = 'Sortierprobe';
+$sort_tag     = current_datetime()->modify( '+20 days' )->format( 'Y-m-d' );
+$spaeter_tag  = current_datetime()->modify( '+21 days' )->format( 'Y-m-d' );
+$sort_ids     = array(
+	fg_make_event( $order_tag . ' spaet', $sort_tag, $participants, '16:00' ),
+	fg_make_event( $order_tag . ' frueh', $sort_tag, $participants, '07:00' ),
+	fg_make_event( $order_tag . ' ganztags', $sort_tag, $participants ),
+	fg_make_event( $order_tag . ' naechster tag', $spaeter_tag, $participants, '07:00' ),
+);
+$sort_html      = $dienste->render_shortcode();
+$sort_positionen = array();
+$sort_fehlt     = false;
+foreach ( $sort_ids as $sort_id ) {
+	$sort_titel  = $fg_repo->get_event( $sort_id )->title;
+	$sort_pos    = strpos( $sort_html, '<h3 class="fg-event-title">' . esc_html( $sort_titel ) . '</h3>' );
+	$sort_fehlt  = $sort_fehlt || false === $sort_pos;
+	$sort_positionen[ false === $sort_pos ? PHP_INT_MAX : $sort_pos ] = $sort_titel;
+}
+ksort( $sort_positionen );
+fg_ok( ! $sort_fehlt, 'every duty of the ordering probe is on the list' );
+$sort_titel = array_map(
+	function ( $titel ) use ( $order_tag ) {
+		return substr( $titel, strlen( $order_tag ) + 1 );
+	},
+	array_values( $sort_positionen )
+);
+fg_ok(
+	array( 'frueh', 'spaet', 'ganztags', 'naechster tag' ) === $sort_titel,
+	'the duties come by day, and within the day by start time with the day-long one last',
+	implode( ',', $sort_titel )
+);
+foreach ( $sort_ids as $sort_id ) {
+	$fg_repo->delete_event( $sort_id );
+}
+
+// Past and unpublished duties are not part of what is coming up. The two duties
+// from [2] serve, so no duty has to be taken offline for this.
+$dienste_html = $dienste->render_shortcode();
+fg_not_contains( 'Vergangener Dienst', $dienste_html, 'a past duty is not listed' );
+fg_not_contains( 'Nicht sichtbar', $dienste_html, 'a duty that is not public is not listed' );
+fg_not_contains( '<form', $dienste_html, 'the list carries no form' );
+fg_not_contains( '<script', $dienste_html, 'the list needs no script' );
+
+$erwartete_karten = count( $fg_repo->get_active_events() );
+fg_ok(
+	$erwartete_karten === substr_count( $dienste_html, '<article class="fg-event-card">' ),
+	'one card for every upcoming public duty',
+	$erwartete_karten . ' expected, ' . substr_count( $dienste_html, '<article class="fg-event-card">' ) . ' shown'
+);
+
+$ohne_dienste_liste = fg_render_with_empty( FG_Schema::events_table(), array( $dienste, 'render_shortcode' ) );
+fg_ok( 1 === substr_count( $ohne_dienste_liste, 'class="fg-empty"' ), 'exactly one message when no duty is coming up', substr_count( $ohne_dienste_liste, 'class="fg-empty"' ) . ' messages' );
+fg_not_contains( '<article', $ohne_dienste_liste, 'no card when no duty is coming up' );
+fg_contains( 'Kommende Arbeitsdienste', $ohne_dienste_liste, 'the heading stays, so the page is not blank' );
+
+$wieder_dienste = $dienste->render_shortcode();
+fg_contains( 'Dienst mit Angaben', $wieder_dienste, 'the duties are back once the filter is gone' );
+fg_ok(
+	substr_count( $dienste_html, '<article class="fg-event-card">' ) === substr_count( $wieder_dienste, '<article class="fg-event-card">' ),
+	'every card is still there after the empty render',
+	substr_count( $dienste_html, '<article class="fg-event-card">' ) . ' -> ' . substr_count( $wieder_dienste, '<article class="fg-event-card">' )
 );
 
 /* ------------------------------------------------------------------ 4 */

@@ -23,6 +23,19 @@ $page_id = wp_insert_post(
 	)
 );
 
+// A second page, carrying nothing but the list of work duties. It stands on
+// its own so that the list is fetched the way a visitor finds it: over the
+// site's own address, inside the theme, without the form around it.
+$list_page_id = wp_insert_post(
+	array(
+		'post_type'    => 'page',
+		'post_status'  => 'publish',
+		'post_title'   => 'Arbeitsdienste',
+		'post_name'    => 'arbeitsdienste',
+		'post_content' => '[arbeitsdienste]',
+	)
+);
+
 $soon   = current_datetime()->modify( '+9 days' )->format( 'Y-m-d' );
 $people = array( 'Anton@angeln.example.org', 'Berta@angeln.example.org', 'Cem@angeln.example.org' );
 
@@ -88,6 +101,8 @@ $event = $repo->get_event( $event_id );
 
 $output = array(
 	'page_id'        => $page_id,
+	'list_page_id'   => $list_page_id,
+	'list_page_path' => wp_make_link_relative( get_permalink( $list_page_id ) ),
 	'event_id'       => $event_id,
 	'event_ref'      => $event->public_ref,
 	'event_uuid'     => $event->event_uuid,

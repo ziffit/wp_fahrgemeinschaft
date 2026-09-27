@@ -514,6 +514,125 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "fg_submit_nonce=manipuliert")
 if printf '%s' "$loc" | grep -q "fg_notice=form_expired"; then ok "manipulated nonce gets a reload hint ($loc)"; else bad "manipulated nonce gets a reload hint" "$loc"; fi
 
+# --- 8. the list of work duties on a page of its own
+# The list is a shortcode of its own and gets a page of its own, so it is
+# fetched over the same address a visitor would use. Everything asserted here
+# is visible on the page, not in a table: the point of the check is that the
+# work a visitor gets is the work the plugin says it did.
+echo "[8] the list of work duties"
+LIST_PATH=$(jq list_page_path)
+list=$(curl -sk "$BASE$LIST_PATH")
+LIST_CODE=$(curl -sk -o /dev/null -w '%{http_code}' "$BASE$LIST_PATH")
+if [ "$LIST_CODE" = "200" ]; then ok "the list page answers ($LIST_CODE)"; else bad "the list page answers" "$LIST_CODE"; fi
+has "the list names itself" "$list" "Kommende Arbeitsdienste"
+has "the list stands in a section with an anchor" "$list" 'aria-labelledby="fg-dienste"'
+# One card per work duty that is ahead and visible, and no other. The number
+# comes from the tables, so a duty that is silently left out of the page, or
+# one that is on the page without being due, makes the two disagree.
+erwartet=$(s count-events)
+karten=$(printf '%s' "$list" | grep -c '<article class="fg-event-card">')
+if [ "$erwartet" -gt 0 ] && [ "$karten" = "$erwartet" ]; then
+	ok "every due duty has exactly one card ($karten of $erwartet)"
+else
+	bad "every due duty has exactly one card" "$karten cards for $erwartet duties"
+fi
+struct "$list" "every card holds a table of details" "
+import re, sys
+h = sys.stdin.read()
+karten = re.findall(r'<article class=\"fg-event-card\">.*?</article>', h, re.S)
+if not karten:
+    sys.exit(1)
+for karte in karten:
+    if len(re.findall(r'<table class=\"fg-event-data\">', karte)) != 1:
+        sys.exit(1)
+    if '<tbody>' not in karte:
+        sys.exit(1)
+sys.exit(0)
+" "a card has no table, more than one table, or no body for the rows"
+# The date carries the weekday, the word "den" and the date format of the site.
+# What the site would print on any other day is not the date of this duty, so
+# the real date of the first card is looked up and compared.
+erste=$(s first-event)
+if [ "$erste" -gt 0 ]; then
+	erwartetes_datum=$(s format-date "$erste")
+	struct "$list" "the first card carries its own date with the weekday" "
+import re, sys
+h = sys.stdin.read()
+karte = re.search(r'<article class=\"fg-event-card\">.*?</article>', h, re.S)
+if not karte:
+    sys.exit(1)
+zelle = re.search(r'<th scope=\"row\">Datum</th>\s*<td>(.*?)</td>', karte.group(0), re.S)
+if not zelle:
+    sys.exit(1)
+text = re.sub(r'<[^>]+>', '', zelle.group(1)).strip()
+sys.exit(0 if text == '''$erwartetes_datum''' and ', den ' in text else 1)
+" "the date row of the first card is not \"Wochentag, den <Datum>\" of that duty"
+fi
+# A read-only list that hands out no form and needs no script of its own. The
+# theme and WordPress bring scripts of their own onto every page, so only what
+# the plugin puts into the page is looked at: nothing inside its own block, and
+# no file of the plugin loaded from anywhere.
+hasnt "the list carries no form" "$list" "<form"
+struct "$list" "the plugin puts no script into the block it writes" "
+import re, sys
+h = sys.stdin.read()
+block = re.search(r'<section class=\"fg-section\" aria-labelledby=\"fg-dienste\">.*?</section>', h, re.S)
+if not block:
+    sys.exit(1)
+sys.exit(0 if '<script' not in block.group(0) else 1)
+" "the plugin's own block contains a script"
+# A script outside that block would be invisible to the check above, so the
+# whole page is compared with the other page of the plugin, which carries the
+# other shortcode. Theme and core bring the same scripts onto both and cancel
+# out; anything the list adds on its own stands in the difference. The number
+# of script elements is compared as well, because a script without a source of
+# its own is invisible in a list of sources: an inline script would slip
+# through a comparison of addresses and be caught only by the count.
+referenz=$(curl -sk "$BASE/?page_id=$PAGE_ID")
+struct "$referenz
+%%FG_TRENNER%%
+$list" "the list page loads no script the other plugin page does not" "
+import re, sys
+referenz, liste = sys.stdin.read().split('%%FG_TRENNER%%')
+def skripte(h):
+    return set(re.findall(r'<script[^>]*src=[\"\x27]([^\"\x27]+)', h))
+extra = sorted(skripte(liste) - skripte(referenz))
+if extra:
+    print('zusaetzlich geladen: %s' % extra, file=sys.stderr)
+    sys.exit(1)
+nur_liste = len(re.findall(r'<script', liste)) - len(re.findall(r'<script', referenz))
+if nur_liste > 0:
+    print('%d weiteres Skriptelement ohne Quelle' % nur_liste, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the list page carries a script of its own"
+# Nothing from the tables reaches the page.
+hasnt "the list hides internal ids" "$list" "fg_event"
+hasnt "the list hides the work duty uuid" "$list" "$(s event "$erste" event_uuid)"
+hasnt "the list hides contact addresses" "$list" "@angeln.example.org"
+# The stylesheet has to come with the page, otherwise the cards arrive as an
+# unstyled pile of tables.
+list_css=$(printf '%s' "$list" | grep -o "href='[^']*fahrgemeinschaften\.css?ver=[^']*'" | head -1 | sed "s/^href='//;s/'$//")
+if [ -n "$list_css" ]; then
+	ok "the list page brings the stylesheet with it"
+	has "the stylesheet is requested with a version" "$list_css" "?ver="
+	list_style=$(curl -sk "$list_css")
+	struct "$list_style" "the stylesheet knows the card and its table" "
+import re, sys
+css = re.sub(r'/\*.*?\*/', '', sys.stdin.read(), flags=re.S)
+regeln = re.findall(r'([^{}]+)\{([^}]*)\}', css)
+def hat(klassenname, eigenschaft):
+    return any(klassenname in s and eigenschaft in b for s, b in regeln)
+if not hat('.fg-event-card', 'border'):
+    sys.exit(1)
+if not hat('.fg-event-data', 'width'):
+    sys.exit(1)
+sys.exit(0)
+" "the card has no frame or the table has no width rule"
+else
+	bad "the list page brings the stylesheet with it" "no stylesheet with a version on the page"
+fi
+
 echo
 echo "== $pass passed, $fail failed =="
 [ "$fail" -eq 0 ]

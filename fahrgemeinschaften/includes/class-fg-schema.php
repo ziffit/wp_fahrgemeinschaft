@@ -20,7 +20,7 @@ final class FG_Schema {
 	 *
 	 * @var string
 	 */
-	const VERSION = '1.0.0';
+	const VERSION = '1.1.0';
 
 	/**
 	 * Option name holding the installed schema version.
@@ -28,6 +28,37 @@ final class FG_Schema {
 	 * @var string
 	 */
 	const OPTION = 'fg_schema_version';
+
+	/**
+	 * Longest group text, in characters.
+	 *
+	 * The limit is also the column width, so the two cannot drift apart. The
+	 * form carries the same number in `maxlength`, but that only binds a
+	 * browser; the server checks it again, because a post does not have to come
+	 * from the form.
+	 *
+	 * @var int
+	 */
+	const GROUP_MAX = 100;
+
+	/**
+	 * Longest description, in characters.
+	 *
+	 * @var int
+	 */
+	const DESCRIPTION_MAX = 500;
+
+	/**
+	 * Largest accepted head count and duration.
+	 *
+	 * The columns are `int unsigned`, which reaches far beyond any work duty.
+	 * The bound exists for the arithmetic: an unfiltered digit string that
+	 * overflows the column would be stored as something else without a word,
+	 * because WordPress removes the strict mode from the database session.
+	 *
+	 * @var int
+	 */
+	const COUNT_MAX = 99999;
 
 	/**
 	 * Fully qualified events table name.
@@ -81,7 +112,10 @@ final class FG_Schema {
 		$rides   = self::rides_table();
 
 		// dbDelta parses this statement; keep one column or key per line and
-		// two spaces after the primary key definition.
+		// two spaces after the primary key definition. The four columns behind
+		// created_at stand at the end of the list on purpose: an update appends
+		// missing columns at the end of the existing table, so this way a fresh
+		// installation and an upgrade end up in the same column order.
 		$statements = array(
 			"CREATE TABLE $events (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -93,6 +127,10 @@ final class FG_Schema {
 	public_ref char(32) NOT NULL DEFAULT '',
 	is_active tinyint(1) NOT NULL DEFAULT 0,
 	created_at datetime NOT NULL DEFAULT '1970-01-01 00:00:00',
+	group_name varchar(100) NOT NULL DEFAULT '',
+	demand int unsigned NOT NULL DEFAULT 0,
+	duration_hours int unsigned NOT NULL DEFAULT 0,
+	description text NULL,
 	PRIMARY KEY  (id),
 	UNIQUE KEY public_ref (public_ref),
 	KEY active_date (is_active,event_date)
