@@ -2,13 +2,17 @@
 /**
  * Plain-text transactional e-mails.
  *
- * @package Fahrgemeinschaften
+ * @package Arbeitsdienste
  */
 
 defined( 'ABSPATH' ) || exit;
 
 /**
  * Creates all e-mail messages used by the plugin.
+ *
+ * Every message of the plugin is built here and sent through send(), which is
+ * the only place that talks to wp_mail(). A new kind of message is a new method
+ * above that one and nothing else.
  */
 final class FG_Mailer {
 	/**
@@ -191,6 +195,67 @@ final class FG_Mailer {
 		return array(
 			'creator'   => $creator_sent,
 			'requester' => $requester_sent,
+		);
+	}
+
+	/**
+	 * Confirm a duty registration to the member and hand out the way back out.
+	 *
+	 * The message goes through the same path as every other one, so it carries
+	 * the same layout, the same logo and the same footer. There is no separate
+	 * template for a duty: what changes is only the text, and a second template
+	 * would be a second place where a club's logo or its contact data has to be
+	 * kept correct.
+	 *
+	 * The names are not in the message. The member knows who they are, and a name
+	 * in a forwarded message is a piece of personal data that has left the club.
+	 * The duty is named, because that is what the member has to recognise.
+	 *
+	 * @param int    $registration_id Registration ID.
+	 * @param string $unregister_url  Unregistration link.
+	 * @return bool
+	 */
+	public function send_duty_signup( $registration_id, $unregister_url ) {
+		$registration = $this->repository->get_registration( $registration_id );
+		$member       = $registration ? $this->repository->get_member( $registration->member_id ) : null;
+		$event        = $registration ? $this->repository->get_event( $registration->event_id ) : null;
+
+		if ( ! $member || ! $event ) {
+			return false;
+		}
+
+		$to = $this->repository->normalize_email( $member->email );
+		if ( ! $to ) {
+			return false;
+		}
+
+		$date = $this->repository->format_event_date_long( $event );
+		$body = array(
+			'Hallo,',
+			'',
+			'du bist für folgenden Arbeitsdienst angemeldet:',
+			'',
+			'Arbeitsdienst: ' . $event->title,
+			'Datum: ' . $date,
+		);
+
+		$time = $this->repository->format_event_time( $event );
+		if ( '' !== $time ) {
+			$body[] = 'Beginn: ' . $time;
+		}
+
+		$body[] = '';
+		$body[] = 'Bitte prüfe, ob der Termin passt. Wenn nicht, meldest du dich mit diesem Link wieder ab:';
+		$body[] = $unregister_url;
+		$body[] = '';
+		$body[] = 'Der Link führt zu einer Seite, auf der du das Löschen noch einmal bestätigen musst.';
+		$body[] = '';
+		$body[] = 'Wenn du dich für weitere Arbeitsdienste eintragen möchtest, findest du die Termine auf der Webseite.';
+
+		return $this->send(
+			$to,
+			'Angemeldet: ' . $event->title,
+			implode( "\n", $body )
 		);
 	}
 

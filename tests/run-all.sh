@@ -46,6 +46,9 @@ bash mail.sh 2>&1 | tail -3
 
 echo
 echo '### 4/5 admin HTTP suite'
+# No fixture is built for this one any more. The suite brings its own work duty
+# and finds the public page itself, so it does not depend on another suite
+# having run before it.
 bash admin.sh 2>&1 | tail -2
 
 # The suites above need the mail recorder: it short-circuits wp_mail() and

@@ -2,13 +2,20 @@
 /**
  * Public form and token action handlers.
  *
- * @package Fahrgemeinschaften
+ * @package Arbeitsdienste
  */
 
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Handles ride submission, confirmation, deletion and contact requests.
+ * Handles ride submission, confirmation, deletion and contact requests, and the
+ * registration of a member for a work service together with its reversal.
+ *
+ * The two flows are kept apart on purpose. A ride is a public entry that has to
+ * be confirmed and can be deleted again, so it carries status, two pending
+ * tokens and one deletion token. A registration is made against the club's
+ * member administration, so there is nothing left to confirm and only one way
+ * back out. They share the helpers below and nothing else.
  */
 final class FG_Actions {
 	/**
@@ -50,8 +57,13 @@ final class FG_Actions {
 		add_action( 'admin_post_fg_contact_ride', array( $this, 'contact_ride' ) );
 		add_action( 'admin_post_nopriv_fg_process_ride_token', array( $this, 'process_ride_token' ) );
 		add_action( 'admin_post_fg_process_ride_token', array( $this, 'process_ride_token' ) );
+		add_action( 'admin_post_nopriv_fg_register_member', array( $this, 'register_member' ) );
+		add_action( 'admin_post_fg_register_member', array( $this, 'register_member' ) );
+		add_action( 'admin_post_nopriv_fg_process_duty_token', array( $this, 'process_duty_token' ) );
+		add_action( 'admin_post_fg_process_duty_token', array( $this, 'process_duty_token' ) );
 		add_action( 'template_redirect', array( $this, 'maybe_require_https' ), -1 );
 		add_action( 'template_redirect', array( $this, 'maybe_render_action_page' ), 0 );
+		add_action( 'template_redirect', array( $this, 'maybe_render_duty_action_page' ), 0 );
 		add_action( 'fg_daily_cleanup', array( $this, 'daily_cleanup' ) );
 	}
 
@@ -222,6 +234,11 @@ final class FG_Actions {
 
 		$is_action_page = 'view' === $this->query_value( 'fg_ride_action' );
 		$post           = get_post();
+		// Only the ride list is upgraded. The duty list is a list first: a member
+		// reads it on a phone, and the club runs its site over HTTPS anyway, so
+		// an upgrade there would only cost somebody the page. A POST from the duty
+		// form is still upgraded, because a write belongs in a request nobody can
+		// read on the way.
 		$is_shortcode   = $post && has_shortcode( $post->post_content, 'fahrgemeinschaften' );
 
 		if ( ! $is_action_page && ! $is_shortcode ) {
@@ -269,39 +286,39 @@ final class FG_Actions {
 
 		if ( ! $ride || ! $this->valid_token_action( $ride, $intent, $token ) ) {
 			FG_Security::render_standalone_page(
-				__( 'Link nicht gültig', 'fahrgemeinschaften' ),
-				'<h1>' . esc_html__( 'Link nicht gültig', 'fahrgemeinschaften' ) . '</h1>'
-				. '<p>' . esc_html__( 'Dieser Link ist abgelaufen, wurde bereits verwendet oder ist nicht korrekt.', 'fahrgemeinschaften' ) . '</p>'
-				. '<p>' . esc_html__( 'Bitte kontaktiere uns, wenn du Unterstützung benötigst.', 'fahrgemeinschaften' ) . '</p>'
+				__( 'Link nicht gültig', 'arbeitsdienste' ),
+				'<h1>' . esc_html__( 'Link nicht gültig', 'arbeitsdienste' ) . '</h1>'
+				. '<p>' . esc_html__( 'Dieser Link ist abgelaufen, wurde bereits verwendet oder ist nicht korrekt.', 'arbeitsdienste' ) . '</p>'
+				. '<p>' . esc_html__( 'Bitte kontaktiere uns, wenn du Unterstützung benötigst.', 'arbeitsdienste' ) . '</p>'
 			);
 		}
 
 		$data      = $this->repository->get_ride_display_data( $ride );
-		$mode      = 'search' === $data['mode'] ? __( 'Ich suche', 'fahrgemeinschaften' ) : __( 'Ich biete', 'fahrgemeinschaften' );
+		$mode      = 'search' === $data['mode'] ? __( 'Ich suche', 'arbeitsdienste' ) : __( 'Ich biete', 'arbeitsdienste' );
 		$is_delete = 'delete' === $intent;
 		$heading   = $is_delete
-			? __( 'Veröffentlichte Fahrgemeinschaft löschen', 'fahrgemeinschaften' )
+			? __( 'Veröffentlichte Fahrgemeinschaft löschen', 'arbeitsdienste' )
 			: ( 'discard' === $intent
-				? __( 'Vorgemerkte Eintragung löschen', 'fahrgemeinschaften' )
-				: __( 'Veröffentlichung bestätigen', 'fahrgemeinschaften' ) );
+				? __( 'Vorgemerkte Eintragung löschen', 'arbeitsdienste' )
+				: __( 'Veröffentlichung bestätigen', 'arbeitsdienste' ) );
 		$button    = $is_delete
-			? __( 'Endgültig löschen', 'fahrgemeinschaften' )
+			? __( 'Endgültig löschen', 'arbeitsdienste' )
 			: ( 'discard' === $intent
-				? __( 'Eintragung löschen und nicht veröffentlichen', 'fahrgemeinschaften' )
-				: __( 'Veröffentlichung bestätigen', 'fahrgemeinschaften' ) );
+				? __( 'Eintragung löschen und nicht veröffentlichen', 'arbeitsdienste' )
+				: __( 'Veröffentlichung bestätigen', 'arbeitsdienste' ) );
 		$warning   = 'confirm' === $intent
-			? __( 'Mit der Bestätigung werden die unten stehenden Angaben öffentlich angezeigt. Bitte prüfe sie sorgfältig.', 'fahrgemeinschaften' )
-			: __( 'Achtung: Diese Aktion ist sofort und ohne weitere Rückfrage wirksam.', 'fahrgemeinschaften' );
+			? __( 'Mit der Bestätigung werden die unten stehenden Angaben öffentlich angezeigt. Bitte prüfe sie sorgfältig.', 'arbeitsdienste' )
+			: __( 'Achtung: Diese Aktion ist sofort und ohne weitere Rückfrage wirksam.', 'arbeitsdienste' );
 
 		$body  = '<h1>' . esc_html( $heading ) . '</h1>';
 		$body .= '<div class="warning"><p>' . esc_html( $warning ) . '</p></div>';
 		$body .= '<dl>';
-		$body .= '<dt>' . esc_html__( 'Art', 'fahrgemeinschaften' ) . '</dt><dd>' . esc_html( $mode ) . '</dd>';
-		$body .= '<dt>' . esc_html__( 'Vorname oder Spitzname', 'fahrgemeinschaften' ) . '</dt><dd>' . esc_html( $ride->alias ) . '</dd>';
-		$body .= '<dt>' . esc_html__( 'Arbeitsdienst', 'fahrgemeinschaften' ) . '</dt><dd>' . esc_html( $data['event_label'] . ( $data['event_date'] ? ' (' . $data['event_date'] . ')' : '' ) ) . '</dd>';
-		$body .= '<dt>' . esc_html__( 'Abfahrtsbereich', 'fahrgemeinschaften' ) . '</dt><dd>' . esc_html( $data['origin'] ) . '</dd>';
+		$body .= '<dt>' . esc_html__( 'Art', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $mode ) . '</dd>';
+		$body .= '<dt>' . esc_html__( 'Vorname oder Spitzname', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $ride->alias ) . '</dd>';
+		$body .= '<dt>' . esc_html__( 'Arbeitsdienst', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $data['event_label'] . ( $data['event_date'] ? ' (' . $data['event_date'] . ')' : '' ) ) . '</dd>';
+		$body .= '<dt>' . esc_html__( 'Abfahrtsbereich', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $data['origin'] ) . '</dd>';
 		$body .= '</dl>';
-		$body .= '<p><strong>' . esc_html__( 'Die E-Mail-Adresse wird nicht öffentlich angezeigt.', 'fahrgemeinschaften' ) . '</strong></p>';
+		$body .= '<p><strong>' . esc_html__( 'Die E-Mail-Adresse wird nicht öffentlich angezeigt.', 'arbeitsdienste' ) . '</strong></p>';
 		$body .= '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
 		$body .= '<input type="hidden" name="action" value="fg_process_ride_token">';
 		$body .= '<input type="hidden" name="ride_ref" value="' . esc_attr( $data['public_ref'] ) . '">';
@@ -329,8 +346,17 @@ final class FG_Actions {
 		$ride      = $this->repository->get_ride_by_reference( $reference );
 		$source    = $ride ? $this->repository->get_ride_source_url( $ride->id ) : home_url( '/' );
 
-		if ( ! $ride || ! $this->valid_token_action( $ride, $intent, $token ) || ! $this->valid_token_form_nonce( $intent, $token, $this->post_value( 'token_nonce' ) ) ) {
+		// Two different problems, two different answers. A link that no longer
+		// holds a valid token is dead, and only the club can help. A form whose
+		// nonce has gone stale is a page that was opened a while ago: reloading
+		// brings a new one, and telling the visitor to contact the club for that
+		// would be advice that is wrong and expensive.
+		if ( ! $ride || ! $this->valid_token_action( $ride, $intent, $token ) ) {
 			FG_Security::redirect_with_notice( 'invalid_token', $source );
+		}
+
+		if ( ! $this->valid_token_form_nonce( $intent, $token, $this->post_value( 'token_nonce' ) ) ) {
+			FG_Security::redirect_with_notice( 'form_expired', $source );
 		}
 
 		$pending_tokens = array(
@@ -397,6 +423,201 @@ final class FG_Actions {
 	}
 
 	/**
+	 * Register a member for a work service and send the confirmation e-mail.
+	 *
+	 * The form carries a member number and an e-mail address. Both are looked up
+	 * and have to belong to the same member of the club; a pair that does not is
+	 * refused without saying which of the two was wrong, because the page is
+	 * public and a hint about which half was right would tell a passer-by
+	 * whether a guessed number exists.
+	 *
+	 * The registration is written first and the e-mail afterwards. An e-mail that
+	 * cannot be delivered leaves the registration in place and says so, because
+	 * the member asked for a place and got one: silently dropping it would show
+	 * a free place that is already taken, and writing it and staying silent would
+	 * leave somebody in a duty who never saw the message with the way out of it.
+	 *
+	 * @return void
+	 */
+	public function register_member() {
+		$this->require_post_method();
+		$this->require_https_post( 'not_registered' );
+		$this->verify_nonce( 'fg_register_nonce', 'fg_register_member' );
+
+		$source = FG_Security::safe_source_url( $this->post_value( 'source_url' ) );
+		$this->record_speed_signal( absint( $this->post_value( 'form_started_at' ) ) );
+		$this->stats->increment( 'signup_total' );
+
+		if ( ! empty( $_POST['fg_website'] ) ) {
+			$this->stats->increment( 'bot_honeypot' );
+			FG_Security::redirect_with_notice( 'not_registered', $source );
+		}
+
+		$ref    = sanitize_key( $this->post_value( 'fg_event_ref' ) );
+		$event  = $this->repository->get_event_by_reference( $ref );
+		$member = $this->repository->find_member_for_registration(
+			$this->post_value( 'fg_member_no' ),
+			$this->post_value( 'fg_member_email' )
+		);
+
+		if ( ! $event || ! $this->repository->is_event_active( $event->id ) || ! $member ) {
+			$this->stats->increment( 'signup_invalid' );
+			FG_Security::redirect_with_notice( 'not_registered', $source );
+		}
+
+		// A member who is already in the list is told so and nothing is written.
+		// Sending the second confirmation as well would put two e-mails with two
+		// unregistration links in one inbox, and only the newer link would work.
+		if ( $this->repository->has_registration( $event->id, $member->id ) ) {
+			$this->stats->increment( 'signup_repeat' );
+			FG_Security::redirect_with_notice( 'already_registered', $source );
+		}
+
+		// The places are counted again here and not only on the page. Two members
+		// can press the button at the same moment, and the one who loses that race
+		// must be refused by the server, not by a button that was out of date.
+		if ( ! $this->repository->can_register( $event, $this->repository->count_event_registrations( $event->id ) ) ) {
+			$this->stats->increment( 'signup_refused_full' );
+			// Two different reasons lead here and they do not say the same thing
+			// about the duty. The card on the page draws that distinction too, and a
+			// refusal that contradicted the card would leave the member reading
+			// "vollständig belegt" about a duty nobody ever asked anybody for.
+			FG_Security::redirect_with_notice(
+				$event->demand > 0 ? 'duty_full' : 'no_demand',
+				$source
+			);
+		}
+
+		$this->stats->increment( 'signup_valid' );
+
+		$registration = $this->repository->create_registration( $event->id, $member->id, $source );
+		if ( ! $registration['id'] ) {
+			// Either the insert lost a race against the same member pressing the
+			// button twice, or the storage refused it. Both mean the same thing to
+			// the visitor, and neither has to be explained on a public page.
+			$this->stats->increment( 'signup_repeat' );
+			FG_Security::redirect_with_notice( 'already_registered', $source );
+		}
+
+		$unregister_url = $this->duty_action_url( $registration['public_ref'], $registration['unregister_token'] );
+
+		if ( ! $this->mailer->send_duty_signup( $registration['id'], $unregister_url ) ) {
+			// Without the mail there is no way out of the registration: the link
+			// that would remove it was in that mail. A place that is taken and
+			// cannot be given back is the one failure a member has to be saved
+			// from, and the retry after it would only answer "already
+			// registered" to somebody who never got a message.
+			$this->repository->delete_registration_by_pair( $event->id, $member->id );
+			$this->stats->increment( 'mail_send_failed' );
+			FG_Security::redirect_with_notice( 'email_failed', $source );
+		}
+
+		$this->stats->increment( 'signup_created' );
+		FG_Security::redirect_with_notice( 'registered', $source );
+	}
+
+	/**
+	 * Render the landing page of an unregistration link from the duty list.
+	 *
+	 * A mail program that follows every link it finds would otherwise sign a
+	 * member out of a duty nobody asked them to leave. The link therefore opens
+	 * a page that names the duty and asks, and only a deliberate click on the
+	 * button sends the POST that actually removes the entry.
+	 *
+	 * @return void
+	 */
+	public function maybe_render_duty_action_page() {
+		if ( 'view' !== $this->query_value( 'fg_duty_action' ) ) {
+			return;
+		}
+
+		$reference = sanitize_key( $this->query_value( 'signup_ref' ) );
+		$intent    = sanitize_key( $this->query_value( 'intent' ) );
+		$token     = sanitize_text_field( $this->query_value( 'token' ) );
+
+		$registration = $this->repository->get_registration_by_reference( $reference );
+		$member       = $registration ? $this->repository->get_member( $registration->member_id ) : null;
+		$event        = $registration ? $this->repository->get_event( $registration->event_id ) : null;
+
+		if (
+			'unregister' !== $intent
+			|| ! $registration
+			|| ! $member
+			|| ! $event
+			|| ! $this->repository->valid_unregister_token( $registration, $token )
+		) {
+			FG_Security::render_standalone_page(
+				__( 'Link nicht gültig', 'arbeitsdienste' ),
+				'<h1>' . esc_html__( 'Link nicht gültig', 'arbeitsdienste' ) . '</h1>'
+				. '<p>' . esc_html__( 'Dieser Link ist abgelaufen, wurde bereits verwendet oder ist nicht korrekt.', 'arbeitsdienste' ) . '</p>'
+				. '<p>' . esc_html__( 'Bitte kontaktiere uns, wenn du Unterstützung benötigst.', 'arbeitsdienste' ) . '</p>'
+			);
+		}
+
+		$heading = __( 'Anmeldung löschen', 'arbeitsdienste' );
+		$body   = '<h1>' . esc_html( $heading ) . '</h1>';
+		$body  .= '<div class="warning"><p>' . esc_html__( 'Achtung: Diese Aktion ist sofort und ohne weitere Rückfrage wirksam.', 'arbeitsdienste' ) . '</p></div>';
+		$body  .= '<dl>';
+		$body  .= '<dt>' . esc_html__( 'Arbeitsdienst', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $event->title ) . '</dd>';
+		$body  .= '<dt>' . esc_html__( 'Datum', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $this->repository->format_event_date_long( $event ) ) . '</dd>';
+		$body  .= '<dt>' . esc_html__( 'Mitgliedsnummer', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $member->member_no ) . '</dd>';
+		$body  .= '</dl>';
+		$body  .= '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
+		$body  .= '<input type="hidden" name="action" value="fg_process_duty_token">';
+		$body  .= '<input type="hidden" name="source_url" value="' . esc_attr( $this->repository->get_registration_source_url( $registration ) ) . '">';
+		$body  .= '<input type="hidden" name="signup_ref" value="' . esc_attr( $reference ) . '">';
+		$body  .= '<input type="hidden" name="intent" value="' . esc_attr( $intent ) . '">';
+		$body  .= '<input type="hidden" name="token" value="' . esc_attr( $token ) . '">';
+		$body  .= '<input type="hidden" name="token_nonce" value="' . esc_attr( $this->token_form_nonce( $intent, $token ) ) . '">';
+		$body  .= '<div class="actions"><button type="submit" class="secondary">' . esc_html__( 'Anmeldung löschen', 'arbeitsdienste' ) . '</button></div>';
+		$body  .= '</form>';
+
+		FG_Security::render_standalone_page( $heading, $body );
+	}
+
+	/**
+	 * Remove a registration after a deliberate confirmation.
+	 *
+	 * The removal is a single statement that matches the row and the token hash
+	 * together. A link that is opened a second time therefore matches nothing and
+	 * says the link is no longer valid, which is the truth: the entry is gone.
+	 *
+	 * @return void
+	 */
+	public function process_duty_token() {
+		$this->require_post_method();
+		$this->require_https_post( 'invalid_token' );
+
+		$source       = FG_Security::safe_source_url( $this->post_value( 'source_url' ) );
+		$reference    = sanitize_key( $this->post_value( 'signup_ref' ) );
+		$intent       = sanitize_key( $this->post_value( 'intent' ) );
+		$token        = sanitize_text_field( $this->post_value( 'token' ) );
+		$registration = $this->repository->get_registration_by_reference( $reference );
+
+		// The same two problems as on the ride page, answered the same way: a
+		// link without a valid token is dead, a form with a stale nonce is an
+		// old page and a reload brings a new one.
+		if (
+			'unregister' !== $intent
+			|| ! $registration
+			|| ! $this->repository->valid_unregister_token( $registration, $token )
+		) {
+			FG_Security::redirect_with_notice( 'invalid_token', $source );
+		}
+
+		if ( ! $this->valid_token_form_nonce( $intent, $token, $this->post_value( 'token_nonce' ) ) ) {
+			FG_Security::redirect_with_notice( 'form_expired', $source );
+		}
+
+		if ( ! $this->repository->delete_registration_with_token( $registration->id, $token ) ) {
+			FG_Security::redirect_with_notice( 'invalid_token', $source );
+		}
+
+		$this->stats->increment( 'signup_unregistered' );
+		FG_Security::redirect_with_notice( 'unregistered', $source );
+	}
+
+	/**
 	 * Undo a confirmation when the delete link could not be delivered.
 	 *
 	 * The pending tokens are restored so the same confirmation link still
@@ -447,6 +668,14 @@ final class FG_Actions {
 					'delete_expires' => 0,
 				)
 			);
+		}
+
+		// The registration itself stays; only the ability to undo it by mail ends.
+		// A duty that is over is a fact about the past, and who did it is part of
+		// that fact. What is removed is a token that could be replayed out of an
+		// inbox archive years later.
+		foreach ( $this->repository->get_expired_unregister_registration_ids() as $registration_id ) {
+			$this->repository->clear_unregister_token( $registration_id );
 		}
 
 		$this->stats->cleanup();
@@ -552,8 +781,8 @@ final class FG_Actions {
 		}
 
 		wp_die(
-			esc_html__( 'Diese Aktion ist nur per POST möglich.', 'fahrgemeinschaften' ),
-			esc_html__( 'Ungültige Anfrage', 'fahrgemeinschaften' ),
+			esc_html__( 'Diese Aktion ist nur per POST möglich.', 'arbeitsdienste' ),
+			esc_html__( 'Ungültige Anfrage', 'arbeitsdienste' ),
 			array( 'response' => 405 )
 		);
 	}
@@ -693,6 +922,29 @@ final class FG_Actions {
 				'fg_ride_action' => 'view',
 				'ride_ref'       => $reference,
 				'intent'         => $intent,
+				'token'          => $token,
+			),
+			home_url( '/' )
+		);
+	}
+
+	/**
+	 * Build the public unregistration URL of a duty registration.
+	 *
+	 * The name of the query argument is not the same as the one of a ride on
+	 * purpose: the two flows have their own handler, and a link meant for one can
+	 * never be replayed against the other.
+	 *
+	 * @param string $reference Public registration reference.
+	 * @param string $token     Raw unregistration token.
+	 * @return string
+	 */
+	private function duty_action_url( $reference, $token ) {
+		return add_query_arg(
+			array(
+				'fg_duty_action' => 'view',
+				'signup_ref'     => $reference,
+				'intent'         => 'unregister',
 				'token'          => $token,
 			),
 			home_url( '/' )

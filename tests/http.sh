@@ -28,6 +28,14 @@ has()  { if printf '%s' "$2" | grep -qF -- "$3"; then ok "$1"; else bad "$1" "mi
 hasnt(){ if printf '%s' "$2" | grep -qF -- "$3"; then bad "$1" "found: $3"; else ok "$1"; fi; }
 # A structural check: the given text is handed to python on stdin, the snippet decides.
 struct() { if python3 -c "$3" <<< "$1"; then ok "$2"; else bad "$2" "$4"; fi; }
+# The value of a hidden field, read out of the page. Every token this suite
+# sends is taken from a rendered page and never computed: a test that builds the
+# value itself proves only that the value it built is the value it sent.
+val() { python3 -c "
+import re,sys
+h=sys.stdin.read()
+m=re.search(r'name=\"$1\"[^>]*value=\"([^\"]*)\"',h) or re.search(r'value=\"([^\"]*)\"[^>]*name=\"$1\"',h)
+print(m.group(1) if m else '')"; }
 
 echo "== HTTP level tests =="
 
@@ -88,6 +96,28 @@ if [ "$pending_state" = "pending,published," ]; then ok "GET never changes a sta
 
 # --- 4. confirm over real HTTPS POST
 echo "[4] confirmation over POST"
+# The form on the token page carries a nonce of its own. Without it the
+# confirmation is refused with the sentence about a stale form, not with the one
+# about a dead link: a page that was opened a while ago is fixed by reloading
+# it, and that is what the visitor is told. The check happens while the entry is
+# still pending, so the refusal cannot come from the entry being gone already.
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_process_ride_token" \
+	--data-urlencode "ride_ref=$PENDING_REF" \
+	--data-urlencode "intent=confirm" \
+	--data-urlencode "token=$CONFIRM_TOKEN" \
+	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID")
+if printf '%s' "$loc" | grep -q "fg_notice=form_expired"; then ok "confirmation without the form nonce is refused"; else bad "confirmation without the form nonce is refused" "$loc"; fi
+if [ "$(s statuses)" = "pending,published," ]; then ok "and publishes nothing"; else bad "and publishes nothing" "$(s statuses)"; fi
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_process_ride_token" \
+	--data-urlencode "ride_ref=$PENDING_REF" \
+	--data-urlencode "intent=confirm" \
+	--data-urlencode "token=$CONFIRM_TOKEN" \
+	--data-urlencode "token_nonce=falsch" \
+	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID")
+if printf '%s' "$loc" | grep -q "fg_notice=form_expired"; then ok "a wrong form nonce is refused too"; else bad "a wrong form nonce is refused too" "$loc"; fi
+if [ "$(s statuses)" = "pending,published," ]; then ok "and publishes nothing there either"; else bad "and publishes nothing there either" "$(s statuses)"; fi
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_process_ride_token" \
 	--data-urlencode "ride_ref=$PENDING_REF" \
@@ -123,14 +153,68 @@ if [ "$still" = "2" ]; then ok "refused requests changed nothing ($still publish
 echo "[5] contact request"
 submit_nonce=$(curl -sk "$BASE/?page_id=$PAGE_ID" | grep -o 'name="fg_contact_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
 contact_nonce=$(curl -sk "$BASE/?page_id=$PAGE_ID&ride_ref=$PUBLISHED_REF" | grep -o 'name="fg_contact_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+# The answer of the contact form is the same whether the request was forwarded
+# or dropped — that is the point, and it is why the answer alone cannot be used
+# to tell the two apart in a check. What tells them apart is the counter: the
+# server counts an address it refused, and counts one it forwarded. So the cases
+# are read against those two counters, and the neutral answer is checked on top.
+# An earlier version of this block used the address of a member who is not signed
+# up for the duty and asserted only the answer; it passed either way, which is
+# how the mail suite came to be the first thing to notice that the rule had
+# changed underneath it.
+#
+# The published ride of the fixture belongs to a member who is not signed up
+# for that duty, and a request is dropped if the creator is not a participant
+# either. So this section signs that member up for the duty itself and takes the
+# registration off again afterwards. With three fixture members that yields the
+# four cases that matter: two members of the duty (forwarded), the creator
+# asking about the own entry (dropped silently), a member who did not sign up
+# (refused), and an address of no member at all (refused).
+ERSTELLER_NR=0043
+ERSTELLER_MAIL=berta@angeln.example.org
+s drop-registration "$(jq event_id)" "$ERSTELLER_NR" > /dev/null 2>&1
+s register "$(jq event_id)" "$ERSTELLER_NR" "$ERSTELLER_MAIL" > /dev/null
+NICHT_ANGEMELDET=$(jq member_free_mail)
+FRAGE=$(jq member_taken_mail)
+# One counter per name. Reading two counters into one pair of variables and then
+# comparing them with each other is a comparison of two different things, and it
+# answers the wrong question in both directions at once.
+ungueltig() { s stat contact_invalid_email; }
+gueltig() { s stat contact_valid_email; }
+vorher_u=$(ungueltig); vorher_g=$(gueltig)
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_contact_ride" \
 	--data-urlencode "ride_ref=$PUBLISHED_REF" \
-	--data-urlencode "fg_contact_email=cem@angeln.example.org" \
+	--data-urlencode "fg_contact_email=$FRAGE" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 	--data-urlencode "fg_contact_nonce=$contact_nonce")
-if printf '%s' "$loc" | grep -q "fg_notice=contact_received"; then ok "participant contact answered neutrally"; else bad "participant contact answered neutrally" "$loc"; fi
+if printf '%s' "$loc" | grep -q "fg_notice=contact_received"; then ok "a member of the duty is answered neutrally"; else bad "a member of the duty is answered neutrally" "$loc"; fi
+if [ "$(gueltig)" -gt "$vorher_g" ]; then ok "and that one was forwarded ($vorher_g -> $(gueltig))"; else bad "a contact between two members of the duty is forwarded" "$vorher_g -> $(gueltig)"; fi
+if [ "$(ungueltig)" = "$vorher_u" ]; then ok "and was not refused ($vorher_u)"; else bad "a contact between two members of the duty is not refused" "$vorher_u -> $(ungueltig)"; fi
+# The own entry: answered exactly the same way, and counted nowhere. There is no
+# counter for it, and there must not be one — a case that is only noticed by a
+# difference in the answer would tell a requester whether the entry is their own.
+vorher_u=$(ungueltig); vorher_g=$(gueltig)
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_contact_ride" \
+	--data-urlencode "ride_ref=$PUBLISHED_REF" \
+	--data-urlencode "fg_contact_email=$ERSTELLER_MAIL" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
+	--data-urlencode "fg_contact_nonce=$contact_nonce")
+if printf '%s' "$loc" | grep -q "fg_notice=contact_received"; then ok "the creator asking about the own entry is answered identically"; else bad "the creator asking about the own entry is answered identically" "$loc"; fi
+if [ "$(ungueltig)" = "$vorher_u" ] && [ "$(gueltig)" = "$vorher_g" ]; then ok "and is counted neither way ($vorher_u/$vorher_g)"; else bad "the own entry is counted nowhere" "$vorher_u/$vorher_g -> $(ungueltig)/$(gueltig)"; fi
+vorher_u=$(ungueltig); vorher_g=$(gueltig)
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_contact_ride" \
+	--data-urlencode "ride_ref=$PUBLISHED_REF" \
+	--data-urlencode "fg_contact_email=$NICHT_ANGEMELDET" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
+	--data-urlencode "fg_contact_nonce=$contact_nonce")
+if printf '%s' "$loc" | grep -q "fg_notice=contact_received"; then ok "a member who did not sign up is answered identically"; else bad "a member who did not sign up is answered identically" "$loc"; fi
+if [ "$(ungueltig)" -gt "$vorher_u" ]; then ok "and the server counted that one as refused ($vorher_u -> $(ungueltig))"; else bad "a member who did not sign up is refused" "$vorher_u -> $(ungueltig)"; fi
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_contact_ride" \
 	--data-urlencode "ride_ref=$PUBLISHED_REF" \
@@ -138,7 +222,8 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 	--data-urlencode "fg_contact_nonce=$contact_nonce")
-if printf '%s' "$loc" | grep -q "fg_notice=contact_received"; then ok "foreign address answered identically"; else bad "foreign address answered identically" "$loc"; fi
+if printf '%s' "$loc" | grep -q "fg_notice=contact_received"; then ok "a foreign address answered identically too"; else bad "a foreign address answered identically too" "$loc"; fi
+s drop-registration "$(jq event_id)" "$ERSTELLER_NR" > /dev/null 2>&1
 
 # --- 5a. after sending, the message is brought into view
 # The form stands at the bottom of the page. Without a fragment in the redirect
@@ -204,7 +289,7 @@ hasnt "the old wording is gone" "$body" "Kontakt aufnehmen"
 # markup, both appear and the control reads "KontaktierenSchließen". That is
 # not visible in the HTML and only shows up in the browser, so the file is
 # read at the address the page itself links to.
-css_url=$(printf '%s' "$body" | grep -o "href='[^']*fahrgemeinschaften\.css?ver=[^']*'" | head -1 | sed "s/^href='//;s/'$//")
+css_url=$(printf '%s' "$body" | grep -o "href='[^']*arbeitsdienste\.css?ver=[^']*'" | head -1 | sed "s/^href='//;s/'$//")
 if [ -n "$css_url" ]; then
 	has "the stylesheet is requested with a version" "$css_url" "?ver="
 	style=$(curl -sk "$css_url")
@@ -423,6 +508,8 @@ hasnt "the ambiguous wording in the consent is gone" "$body" "persönlichen Kont
 hasnt "the hint no longer asks for an unidentifying text" "$body" "nicht identifizierende"
 has "the hint names what the server refuses" "$body" "Telefonnummern und E-Mail-Adressen werden von der Serverseite zurückgewiesen"
 has "the area field carries its examples" "$body" "Abfahrtsort, Stadtteil, z. B. Langwasser, Nürnberg Nord, S-Bahnstation Ostring."
+hasnt "no address field of the form invites more than the column holds" "$body" 'maxlength="254"'
+has "the address of the form stops at the width of the column" "$body" 'name="fg_contact_email" maxlength="190"'
 
 event_ref=$(printf '%s' "$body" | grep -o '<option value="[0-9a-f]\{32\}"' | head -1 | sed 's/.*value="//;s/"//')
 offer_nonce=$(printf '%s' "$body" | grep -o 'name="fg_submit_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
@@ -494,12 +581,34 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "fg_mode=search" \
 	--data-urlencode "fg_alias=Testfahrt Curl" \
 	--data-urlencode "fg_origin=Weststadt" \
-	--data-urlencode "fg_contact_email=cem@angeln.example.org" \
+	--data-urlencode "fg_contact_email=$(jq member_taken_mail)" \
 	--data-urlencode "fg_consent=1" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 	--data-urlencode "fg_submit_nonce=$submit_nonce")
 if printf '%s' "$loc" | grep -q "fg_notice=pending"; then ok "submission is vorkereed ($loc)"; else bad "submission is vorkereed" "$loc"; fi
+
+# A ride is offered for one duty, and it may only be offered by somebody who is
+# in that duty. The address alone decides, and the member does not even have to
+# know it: whoever signs up for a duty can then find a ride, and whoever does
+# not cannot put their address into the list of a duty they are not part of.
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_submit_ride" \
+	--data-urlencode "fg_event_ref=$event_ref" \
+	--data-urlencode "fg_mode=search" \
+	--data-urlencode "fg_alias=Fremdfahrt" \
+	--data-urlencode "fg_origin=Weststadt" \
+	--data-urlencode "fg_contact_email=$(jq member_free_mail)" \
+	--data-urlencode "fg_consent=1" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
+	--data-urlencode "fg_submit_nonce=$submit_nonce")
+if printf '%s' "$loc" | grep -q "fg_notice=not_created"; then
+	ok "a member who is not in the duty cannot offer a ride"
+else
+	bad "a member who is not in the duty cannot offer a ride" "$loc"
+fi
+hasnt "and the ride is nowhere on the page" "$(curl -sk "$BASE/?page_id=$PAGE_ID")" "Fremdfahrt"
 hasnt "pending ride stays private" "$(curl -sk "$BASE/?page_id=$PAGE_ID")" "Testfahrt Curl"
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_submit_ride" \
@@ -521,6 +630,43 @@ if printf '%s' "$loc" | grep -q "fg_notice=form_expired"; then ok "manipulated n
 # work a visitor gets is the work the plugin says it did.
 echo "[8] the list of work duties"
 LIST_PATH=$(jq list_page_path)
+
+# The free places of every card on the page, as a title/number pair list, and
+# the two closed cards by title. Both are handed to the checks through the
+# environment, because a title is a sentence a member can write and a title
+# that lands in a python snippet inside the shell is a quoting problem waiting
+# for the first apostrophe in a name.
+#
+# The number is worked out here in the shell out of the two numbers in the
+# tables, and not read out of the fixture: the fixture asks the function of the
+# plugin what the answer is, and a check that compares the page with the
+# function would confirm any number the function ever prints, right and wrong
+# alike. Here the difference of two stored numbers is the expectation, so only
+# the page can be wrong.
+frei_von() {
+	bedarf=$(s event "$1" demand)
+	angemeldet=$(s count-registrations "$1")
+	if [ "$bedarf" -gt "$angemeldet" ]; then
+		echo $(( bedarf - angemeldet ))
+	else
+		echo 0
+	fi
+}
+FREI_HAUPT=$(frei_von "$(jq event_id)")
+FREI_VOLL=$(frei_von "$(jq full_event_id)")
+FREI_OHNE=$(frei_von "$(jq no_demand_event_id)")
+export FG_FREIE_PLATZE=$(python3 -c "
+import json
+d = json.load(open('$F'))
+paare = [
+    (d['event_title'], int('$FREI_HAUPT')),
+    (d['full_event_title'], int('$FREI_VOLL')),
+    (d['no_demand_title'], int('$FREI_OHNE')),
+]
+print(json.dumps(paare, ensure_ascii=False))
+")
+export FG_TITEL_VOLL=$(jq full_event_title)
+export FG_TITEL_OHNE=$(jq no_demand_title)
 list=$(curl -sk "$BASE$LIST_PATH")
 LIST_CODE=$(curl -sk -o /dev/null -w '%{http_code}' "$BASE$LIST_PATH")
 if [ "$LIST_CODE" = "200" ]; then ok "the list page answers ($LIST_CODE)"; else bad "the list page answers" "$LIST_CODE"; fi
@@ -530,7 +676,7 @@ has "the list stands in a section with an anchor" "$list" 'aria-labelledby="fg-d
 # comes from the tables, so a duty that is silently left out of the page, or
 # one that is on the page without being due, makes the two disagree.
 erwartet=$(s count-events)
-karten=$(printf '%s' "$list" | grep -c '<article class="fg-event-card">')
+karten=$(printf '%s' "$list" | grep -c '<article class="fg-event-card"')
 if [ "$erwartet" -gt 0 ] && [ "$karten" = "$erwartet" ]; then
 	ok "every due duty has exactly one card ($karten of $erwartet)"
 else
@@ -539,7 +685,7 @@ fi
 struct "$list" "every card holds a table of details" "
 import re, sys
 h = sys.stdin.read()
-karten = re.findall(r'<article class=\"fg-event-card\">.*?</article>', h, re.S)
+karten = re.findall(r'<article class=\"fg-event-card\".*?</article>', h, re.S)
 if not karten:
     sys.exit(1)
 for karte in karten:
@@ -558,7 +704,7 @@ if [ "$erste" -gt 0 ]; then
 	struct "$list" "the first card carries its own date with the weekday" "
 import re, sys
 h = sys.stdin.read()
-karte = re.search(r'<article class=\"fg-event-card\">.*?</article>', h, re.S)
+karte = re.search(r'<article class=\"fg-event-card\".*?</article>', h, re.S)
 if not karte:
     sys.exit(1)
 zelle = re.search(r'<th scope=\"row\">Datum</th>\s*<td>(.*?)</td>', karte.group(0), re.S)
@@ -568,11 +714,137 @@ text = re.sub(r'<[^>]+>', '', zelle.group(1)).strip()
 sys.exit(0 if text == '''$erwartetes_datum''' and ', den ' in text else 1)
 " "the date row of the first card is not \"Wochentag, den <Datum>\" of that duty"
 fi
-# A read-only list that hands out no form and needs no script of its own. The
-# theme and WordPress bring scripts of their own onto every page, so only what
-# the plugin puts into the page is looked at: nothing inside its own block, and
-# no file of the plugin loaded from anywhere.
-hasnt "the list carries no form" "$list" "<form"
+# Every card that has a place to give away carries exactly one signup form, and
+# every card that is closed carries none. A form on a full duty would be a
+# button that is guaranteed to fail, and no form on a duty that has a place
+# would make the club answer the phone for what the page could have done.
+#
+# Which card is open is read from the tables, not from the page: a check that
+# takes the state off the page itself cannot notice a page that shows a form
+# everywhere, because on such a page nothing looks closed. That is not a guess.
+# With can_register() forced to true this check stayed green while both closed
+# cards carried a button, because both of them then looked open.
+struct "$list" "one signup form per duty that can be signed up for" "
+import json, os, re, sys
+h = sys.stdin.read()
+erwartet = dict(json.loads(os.environ['FG_FREIE_PLATZE']))
+karten = re.findall(r'<article class=\"fg-event-card\".*?</article>', h, re.S)
+if not karten:
+    sys.exit(1)
+if len(karten) != len(erwartet):
+    print('%d cards on the page, %d duties in the tables' % (len(karten), len(erwartet)), file=sys.stderr)
+    sys.exit(1)
+for karte in karten:
+    titel = re.search(r'<h3 class=\"fg-event-title\">(.*?)</h3>', karte, re.S).group(1).strip()
+    if titel not in erwartet:
+        print('a card names a duty that is not in the fixture: %s' % titel, file=sys.stderr)
+        sys.exit(1)
+    formen = re.findall(r'<form class=\"fg-signup-form\"', karte)
+    zu = '<p class=\"fg-signup-closed\">' in karte
+    if erwartet[titel] > 0:
+        if len(formen) != 1 or zu:
+            print('%s has a place free and carries %d forms, closed note: %s' % (titel, len(formen), zu), file=sys.stderr)
+            sys.exit(1)
+    elif zu and not formen:
+        continue
+    else:
+        print('%s has no place free and carries %d forms, closed note: %s' % (titel, len(formen), zu), file=sys.stderr)
+        sys.exit(1)
+sys.exit(0)
+" "a card has a form although it is closed, or none although it is open, or more than one"
+
+# The row of free places is the number the club asks about on the phone, and it
+# is read from the tables rather than from the page, so a card that printed a
+# number of its own making cannot pass.
+struct "$list" "the free places row says what the tables say" "
+import json, os, re, sys
+h = sys.stdin.read()
+for titel, erwartet in json.loads(os.environ['FG_FREIE_PLATZE']):
+    karte = None
+    for k in re.findall(r'<article class=\"fg-event-card\".*?</article>', h, re.S):
+        if re.search(r'<h3 class=\"fg-event-title\">' + re.escape(titel) + r'</h3>', k):
+            karte = k
+            break
+    if karte is None:
+        print('no card for ' + titel, file=sys.stderr)
+        sys.exit(1)
+    zelle = re.search(r'<th scope=\"row\">Verfügbare freie Plätze</th>\s*<td[^>]*>(.*?)</td>', karte, re.S)
+    if not zelle:
+        print('no free places row on ' + titel, file=sys.stderr)
+        sys.exit(1)
+    text = re.sub(r'<[^>]+>', '', zelle.group(1)).strip()
+    if text != str(erwartet):
+        print('%s: page says %s, tables say %d' % (titel, text, erwartet), file=sys.stderr)
+        sys.exit(1)
+sys.exit(0)
+" "the free places of a card do not match the tables"
+
+# A card marks a zero and leaves a number unmarked, so that the two states are
+# told apart on sight. The class is what the stylesheet hangs the difference on,
+# and a card that printed both numbers the same way would look like a duty with
+# a place free.
+struct "$list" "only the card without a free place is marked" "
+import json, os, re, sys
+h = sys.stdin.read()
+paare = dict(json.loads(os.environ['FG_FREIE_PLATZE']))
+for k in re.findall(r'<article class=\"fg-event-card\".*?</article>', h, re.S):
+    titel = re.search(r'<h3 class=\"fg-event-title\">(.*?)</h3>', k, re.S).group(1).strip()
+    zelle = re.search(r'<th scope=\"row\">Verfügbare freie Plätze</th>\s*<td([^>]*)>', k, re.S)
+    if not zelle:
+        print('no free places row on ' + titel, file=sys.stderr)
+        sys.exit(1)
+    attribute = zelle.group(1)
+    if paare[titel] > 0:
+        if 'fg-places-none' in attribute:
+            print(titel + ' has a place free and is marked as full', file=sys.stderr)
+            sys.exit(1)
+    elif 'fg-places-none' not in attribute:
+        print(titel + ' has no place free and is not marked', file=sys.stderr)
+        sys.exit(1)
+sys.exit(0)
+" "the free places are marked on the wrong cards"
+
+# The two refusals on the closed cards are two different sentences. A duty that
+# asked for people and got them is full; a duty that never stated a demand was
+# never open, and calling that full would be a claim about the duty that is not
+# true. Which of the two a card shows is decided by the same two numbers.
+struct "$list" "a full duty and a duty without a demand say different things" "
+import json, os, re, sys
+h = sys.stdin.read()
+def geschlossen(titel):
+    for k in re.findall(r'<article class=\"fg-event-card\".*?</article>', h, re.S):
+        if re.search(r'<h3 class=\"fg-event-title\">' + re.escape(titel) + r'</h3>', k):
+            m = re.search(r'<p class=\"fg-signup-closed\">(.*?)</p>', k, re.S)
+            return re.sub(r'<[^>]+>', '', m.group(1)).strip() if m else ''
+    return ''
+voll = geschlossen(os.environ['FG_TITEL_VOLL'])
+ohne = geschlossen(os.environ['FG_TITEL_OHNE'])
+if not voll or not ohne or voll == ohne:
+    print('full: %r / ohne Bedarf: %r' % (voll, ohne), file=sys.stderr)
+    sys.exit(1)
+if 'kein Bedarf' not in ohne or 'kein Bedarf' in voll:
+    print('the duty without a demand is not named as such: %r' % ohne, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the two closed cards do not carry two different sentences"
+
+# The name of a member who signed up is not on the page. Only the number of
+# places is, because the club does not publish who is doing what.
+hasnt "the list shows no member name" "$list" "Angeln"
+hasnt "the list shows no member of the fixture" "$list" "Cemu"
+has "the signup form asks for the member number" "$list" 'name="fg_member_no"'
+has "and for the address" "$list" 'name="fg_member_email"'
+# Both address fields stop where the column stops. 254 characters are a legal
+# address length, so a field that offers them asks a visitor for something the
+# schema will refuse: the request comes back with a general error and no word
+# about the field that was too long.
+hasnt "no address field of the list invites more than the column holds" "$list" 'maxlength="254"'
+has "the address of the signup stops at the width of the column" "$list" 'name="fg_member_email" maxlength="190"'
+has "the button carries the promised wording" "$list" "verbindlich anmelden"
+has "the closed label says Eintragen" "$list" ">Eintragen<"
+# The theme and WordPress bring scripts of their own onto every page, so only
+# what the plugin puts into the page is looked at: nothing inside its own block,
+# and no file of the plugin loaded from anywhere.
 struct "$list" "the plugin puts no script into the block it writes" "
 import re, sys
 h = sys.stdin.read()
@@ -606,13 +878,24 @@ if nur_liste > 0:
     sys.exit(1)
 sys.exit(0)
 " "the list page carries a script of its own"
-# Nothing from the tables reaches the page.
-hasnt "the list hides internal ids" "$list" "fg_event"
+# Nothing from the tables reaches the page. The one identifier a duty is named
+# by in the form is its public reference, a 32 character name that says which
+# duty is meant and holds nothing else. The record number out of the table is
+# not on the page: with it, anyone could walk the duties that are not visible.
+hasnt "the list hides the record number of a duty" "$list" "fg_event=$erste"
+hasnt "the list hides internal ids" "$list" "fg_event="
+has "the form names the duty by its public reference" "$list" 'name="fg_event_ref" value="'
+gelesene_ref=$(printf '%s' "$list" | grep -o 'name="fg_event_ref" value="[0-9a-f]*"' | head -1 | sed 's/.*value="//;s/"//')
+if [ "$gelesene_ref" = "$(s event "$erste" public_ref)" ]; then
+	ok "and it is the public reference of the first duty"
+else
+	bad "and it is the public reference of the first duty" "page says $gelesene_ref, table says $(s event "$erste" public_ref)"
+fi
 hasnt "the list hides the work duty uuid" "$list" "$(s event "$erste" event_uuid)"
 hasnt "the list hides contact addresses" "$list" "@angeln.example.org"
 # The stylesheet has to come with the page, otherwise the cards arrive as an
 # unstyled pile of tables.
-list_css=$(printf '%s' "$list" | grep -o "href='[^']*fahrgemeinschaften\.css?ver=[^']*'" | head -1 | sed "s/^href='//;s/'$//")
+list_css=$(printf '%s' "$list" | grep -o "href='[^']*arbeitsdienste\.css?ver=[^']*'" | head -1 | sed "s/^href='//;s/'$//")
 if [ -n "$list_css" ]; then
 	ok "the list page brings the stylesheet with it"
 	has "the stylesheet is requested with a version" "$list_css" "?ver="
@@ -627,10 +910,353 @@ if not hat('.fg-event-card', 'border'):
     sys.exit(1)
 if not hat('.fg-event-data', 'width'):
     sys.exit(1)
+if not hat('details.fg-signup', 'cursor'):
+    sys.exit(1)
+if not hat('.fg-signup-closed', 'color'):
+    sys.exit(1)
+if not hat('.fg-places-none', 'color'):
+    sys.exit(1)
 sys.exit(0)
-" "the card has no frame or the table has no width rule"
+" "the card, the table, the signup block or the free places note has no rule"
 else
 	bad "the list page brings the stylesheet with it" "no stylesheet with a version on the page"
+fi
+
+# --- 9. a member signs up, gets a mail, and takes the place back out of it
+echo "[9] signing up for a work duty and leaving it again"
+# The recorder of the mail is a fixture of the site, not of this suite, and it
+# is off by default because a real mail plugin would swallow the message first.
+# It is switched on here for the same reason mail.sh switches it on, and
+# run-all.sh switches it off again afterwards.
+docker exec wpdev-wordpress-1 php -r "
+require '/var/www/html/wp-load.php';
+update_option( 'fg_test_mail_enabled', '1' );
+"
+clear_mails() { docker exec wpdev-wordpress-1 php -r "
+require '/var/www/html/wp-load.php';
+global \$wpdb;
+\$table = \$wpdb->prefix . 'fg_test_mail_log';
+if ( \$table === \$wpdb->get_var( \$wpdb->prepare( 'SHOW TABLES LIKE %s', \$table ) ) ) {
+	\$wpdb->query( \"DELETE FROM {\$table}\" );
+}
+"; }
+# The newest message, as recipient, subject and the plain text body.
+mail_body() { docker exec wpdev-wordpress-1 php -r "
+require '/var/www/html/wp-load.php';
+global \$wpdb;
+\$table = \$wpdb->prefix . 'fg_test_mail_log';
+\$row = \$wpdb->get_row( \$wpdb->prepare( 'SELECT mail_body FROM ' . \$table . ' ORDER BY id DESC LIMIT %d', 1 ), ARRAY_A );
+if ( ! \$row ) { exit( 1 ); }
+echo \$row['mail_body'];
+"; }
+mail_to() { docker exec wpdev-wordpress-1 php -r "
+require '/var/www/html/wp-load.php';
+global \$wpdb;
+\$table = \$wpdb->prefix . 'fg_test_mail_log';
+\$row = \$wpdb->get_row( \$wpdb->prepare( 'SELECT mail_to FROM ' . \$table . ' ORDER BY id DESC LIMIT %d', 1 ), ARRAY_A );
+if ( ! \$row ) { exit( 1 ); }
+echo \$row['mail_to'];
+"; }
+mail_subject() { docker exec wpdev-wordpress-1 php -r "
+require '/var/www/html/wp-load.php';
+global \$wpdb;
+\$table = \$wpdb->prefix . 'fg_test_mail_log';
+\$row = \$wpdb->get_row( \$wpdb->prepare( 'SELECT mail_subject FROM ' . \$table . ' ORDER BY id DESC LIMIT %d', 1 ), ARRAY_A );
+if ( ! \$row ) { exit( 1 ); }
+echo \$row['mail_subject'];
+"; }
+
+MITGLIED_NR=$(jq member_free_no)
+MITGLIED_MAIL=$(jq member_free_mail)
+DIENST=$(jq event_id)
+DIENST_TITEL=$(jq event_title)
+
+clear_mails
+list=$(curl -sk "$BASE$LIST_PATH")
+# The nonce is read out of the page and not computed: a check that builds the
+# value itself proves only that the value it built is the value it sent.
+SIGN_NONCE=$(printf '%s' "$list" | grep -o 'name="fg_register_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+SIGN_REF=$(printf '%s' "$list" | grep -o 'name="fg_event_ref" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+if [ -n "$SIGN_NONCE" ] && [ -n "$SIGN_REF" ]; then
+	ok "the page hands out a nonce and a reference for the duty"
+else
+	bad "the page hands out a nonce and a reference for the duty" "nonce: $SIGN_NONCE / reference: $SIGN_REF"
+fi
+
+VORHER=$(s count-registrations "$DIENST")
+PLATZE_VORHER=$(s free-places "$DIENST")
+loc=$(curl -sk -o "$DIR/anmeldung.html" -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SIGN_NONCE" \
+	--data-urlencode "fg_event_ref=$SIGN_REF" \
+	--data-urlencode "fg_member_no=$MITGLIED_NR" \
+	--data-urlencode "fg_member_email=$MITGLIED_MAIL" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+has "the registration is answered with the confirmation" "$loc" "fg_notice=registered"
+if [ "$(s count-registrations "$DIENST")" = "$((VORHER + 1))" ]; then
+	ok "and the member is in the duty"
+else
+	bad "and the member is in the duty" "was $VORHER, now $(s count-registrations "$DIENST")"
+fi
+if [ "$(s free-places "$DIENST")" = "$((PLATZE_VORHER - 1))" ]; then
+	ok "and one place less is free"
+else
+	bad "and one place less is free" "was $PLATZE_VORHER, now $(s free-places "$DIENST")"
+fi
+
+MAIL_TO=$(mail_to)
+MAIL_SUBJECT=$(mail_subject)
+MAIL_BODY=$(mail_body)
+if [ "$MAIL_TO" = "$MITGLIED_MAIL" ]; then
+	ok "the mail goes to the address of the member"
+else
+	bad "the mail goes to the address of the member" "$MAIL_TO"
+fi
+has "the subject names the duty" "$MAIL_SUBJECT" "$DIENST_TITEL"
+has "the body names the duty" "$MAIL_BODY" "$DIENST_TITEL"
+has "the body carries the unregister link" "$MAIL_BODY" "fg_duty_action=view"
+has "and the link is for removing the registration" "$MAIL_BODY" "intent=unregister"
+has "the body says that the deletion has to be confirmed" "$MAIL_BODY" "auf der du das Löschen noch einmal bestätigen musst"
+hasnt "the body carries no member name" "$MAIL_BODY" "Cem"
+hasnt "and no last name" "$MAIL_BODY" "Cemu"
+hasnt "and no record number of the member" "$MAIL_BODY" "member_id"
+ABMELDE_URL=$(printf '%s' "$MAIL_BODY" | grep -o "$BASE/?fg_duty_action=view[^ ]*" | head -1)
+if [ -n "$ABMELDE_URL" ]; then ok "the link out of the mail is extracted"; else bad "the link out of the mail is extracted" "none in the body"; fi
+# The reference out of that link, read once and used for every further request.
+# It is a 32 character name of one registration and not a number of a table: it
+# says which registration is meant and nothing else.
+ABMELDE_REF=$(printf '%s' "$ABMELDE_URL" | grep -o 'signup_ref=[^&]*' | sed 's/signup_ref=//')
+
+# A mail scanner follows every link in a message. A link that deleted the
+# registration on the first fetch would take the place away from a member who
+# never asked for it, so the link only opens the page that asks.
+head=$(curl -sk -D - -o "$DIR/abmelden.html" "$ABMELDE_URL")
+html=$(cat "$DIR/abmelden.html")
+has "the link opens the page that asks" "$html" "Anmeldung löschen"
+has "the page names the duty" "$html" "$DIENST_TITEL"
+has "the page names the member number" "$html" "$MITGLIED_NR"
+has "the page warns that it is immediate" "$html" "sofort und ohne weitere Rückfrage"
+has "the page offers a button and not a deletion" "$html" "<button"
+has "the form carries the token verifier" "$html" 'name="token_nonce"'
+# The link in the mail opens a page of its own and not the list: a mail reader
+# has to be able to show the page it opens. Behind that page the member has to
+# arrive on the list they signed up from, and which list that is comes from the
+# registration, not from the page that happens to forward the click.
+has "the page points back at the list the member came from" "$html" "page_id=$(jq list_page_id)"
+hasnt "the page is not the ride page" "$html" "fg_ride_action"
+hasnt "the page carries no theme stylesheet" "$html" "wp-content/themes"
+has "x-robots-tag header" "$head" "X-Robots-Tag: noindex"
+has "content security policy" "$head" "Content-Security-Policy"
+has "no-store cache header" "$head" "no-store"
+if [ "$(s count-registrations "$DIENST")" = "$((VORHER + 1))" ]; then
+	ok "the page itself removed nothing"
+else
+	bad "the page itself removed nothing" "$(s count-registrations "$DIENST")"
+fi
+
+TOKEN=$(printf '%s' "$html" | val token)
+TOKEN_NONCE=$(printf '%s' "$html" | val token_nonce)
+# A token that was never given out opens nothing, and a reference that names no
+# registration opens nothing. Both are checked here, while the registration is
+# still there: after the successful removal every link to this row leads to the
+# same page whether the token was right or wrong, and the check would pass even
+# with the token comparison taken out. The first run of that counter-probe
+# showed exactly that.
+html=$(curl -sk "$BASE/?fg_duty_action=view&signup_ref=$ABMELDE_REF&intent=unregister&token=falsch")
+has "a wrong token opens nothing" "$html" "Link nicht gültig"
+hasnt "and does not show the form for it" "$html" 'name="token_nonce"'
+html=$(curl -sk "$BASE/?fg_duty_action=view&signup_ref=0000000000000000000000000000&intent=unregister&token=$TOKEN")
+has "an unknown reference opens nothing" "$html" "Link nicht gültig"
+# The form carries a nonce of its own, and the confirmation is refused without
+# it. Otherwise anybody who saw a link — a member on the phone, a scanner with
+# the text of the mail — could answer for them by posting to the address. The
+# check happens while the registration is still there, so that the refusal
+# cannot come from the row already being gone.
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_process_duty_token" \
+	--data-urlencode "signup_ref=$ABMELDE_REF" \
+	--data-urlencode "intent=unregister" \
+	--data-urlencode "token=$TOKEN" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+has "the confirmation without the form nonce is refused" "$loc" "fg_notice=form_expired"
+if [ "$(s count-registrations "$DIENST")" = "$((VORHER + 1))" ]; then
+	ok "and deletes nothing"
+else
+	bad "and deletes nothing" "$(s count-registrations "$DIENST")"
+fi
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_process_duty_token" \
+	--data-urlencode "signup_ref=$ABMELDE_REF" \
+	--data-urlencode "intent=unregister" \
+	--data-urlencode "token=$TOKEN" \
+	--data-urlencode "token_nonce=falsch" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+has "a wrong form nonce is refused too" "$loc" "fg_notice=form_expired"
+if [ "$(s count-registrations "$DIENST")" = "$((VORHER + 1))" ]; then
+	ok "and deletes nothing there either"
+else
+	bad "and deletes nothing there either" "$(s count-registrations "$DIENST")"
+fi
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_process_duty_token" \
+	--data-urlencode "signup_ref=$ABMELDE_REF" \
+	--data-urlencode "intent=unregister" \
+	--data-urlencode "token=$TOKEN" \
+	--data-urlencode "token_nonce=$TOKEN_NONCE" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+has "the confirmation removes the registration" "$loc" "fg_notice=unregistered"
+has "and the member is put back onto the list" "$loc" "page_id=$(jq list_page_id)"
+if [ "$(s count-registrations "$DIENST")" = "$VORHER" ]; then
+	ok "and the member is out of the duty again"
+else
+	bad "and the member is out of the duty again" "$(s count-registrations "$DIENST")"
+fi
+if [ "$(s free-places "$DIENST")" = "$PLATZE_VORHER" ]; then
+	ok "and the place is free again"
+else
+	bad "and the place is free again" "$(s free-places "$DIENST")"
+fi
+# Signing out is signing out of one duty, not out of the club. The member
+# record belongs to the club and is not touched by anything a member does on
+# the list page.
+if [ "$(s member-by-no "$MITGLIED_NR" email)" = "$MITGLIED_MAIL" ]; then
+	ok "the member is still in the club"
+else
+	bad "the member is still in the club" "$(s member-by-no "$MITGLIED_NR" email)"
+fi
+# The same link a second time is dead. A member who clicks twice, or a scanner
+# that fetches the link again after the club deleted the row by hand, must not
+# delete a registration that has meanwhile been made by somebody else.
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_process_duty_token" \
+	--data-urlencode "signup_ref=$ABMELDE_REF" \
+	--data-urlencode "intent=unregister" \
+	--data-urlencode "token=$TOKEN" \
+	--data-urlencode "token_nonce=$TOKEN_NONCE" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+has "the same link a second time is refused" "$loc" "fg_notice=invalid_token"
+if [ "$(s count-registrations "$DIENST")" = "$VORHER" ]; then
+	ok "and removes nothing the second time"
+else
+	bad "and removes nothing the second time" "$(s count-registrations "$DIENST")"
+fi
+
+# The card of the duty offers the place again. The count on the page is read
+# from the tables, so a card that printed a number of its own making cannot
+# pass this.
+list=$(curl -sk "$BASE$LIST_PATH")
+has "the card offers the place again" "$list" ">Eintragen<"
+if [ "$(s free-places "$DIENST")" = "$PLATZE_VORHER" ]; then
+	ok "and the tables say the same number again"
+else
+	bad "and the tables say the same number again" "$(s free-places "$DIENST")"
+fi
+
+# One address belongs to one member, and one member can be in as many duties as
+# they like. A second duty of the same run takes the same member again, which
+# is the case a schema with one row per member could not answer.
+ZWEITER=$(s make-event "Zweiter Dienst aus dem HTTP-Test" "$(date -d '+40 days' +%Y-%m-%d)" 2)
+s register "$ZWEITER" "$MITGLIED_NR" "$MITGLIED_MAIL" >/dev/null
+if [ "$(s count-registrations "$ZWEITER")" = "1" ]; then
+	ok "the same member is in a second duty as well"
+else
+	bad "the same member is in a second duty as well" "$(s count-registrations "$ZWEITER")"
+fi
+s delete-event "$ZWEITER" >/dev/null
+
+# The number and the address have to belong to one and the same member, and
+# this is checked on the public path because that is the only way a member ever
+# enters them. A number that is right and an address that belongs to somebody
+# else would otherwise be a way to sign somebody else up.
+FREMDE_NR=$(jq member_taken_no)
+FREMDE_MAIL=$(jq member_taken_mail)
+loc=$(curl -sk -o "$DIR/falsches-paar.html" -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SIGN_NONCE" \
+	--data-urlencode "fg_event_ref=$SIGN_REF" \
+	--data-urlencode "fg_member_no=$FREMDE_NR" \
+	--data-urlencode "fg_member_email=$MITGLIED_MAIL" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+has "a number with the address of somebody else is refused" "$loc" "fg_notice=not_registered"
+if [ "$(s count-registrations "$DIENST")" = "$VORHER" ]; then
+	ok "and writes nothing"
+else
+	bad "and writes nothing" "$(s count-registrations "$DIENST")"
+fi
+# The refusal is one sentence for both halves, and it does not say which of the
+# two was wrong. The page is public: a hint would tell a passer-by whether a
+# guessed number exists in the club at all.
+hinweis=$(python3 -c "
+import re,html
+h=open('$DIR/falsches-paar.html',encoding='utf-8').read()
+m=re.search(r'<div id=\"fg-hinweis\"[^>]*>(.*?)</div>', h, re.S)
+print(html.unescape(re.sub(r'<[^>]+>','',m.group(1))).strip() if m else '')")
+hasnt "the refusal does not name the number as wrong" "$hinweis" "Nummer"
+hasnt "and does not name the address as wrong" "$hinweis" "Adresse"
+
+# A registration whose mail does not arrive is a place that is taken and cannot
+# be given back: the link that would free it was in that mail. So the row has to
+# go again, and the free place has to come back. Without the rollback the member
+# is left with a registration they never learned about, and a second attempt
+# answers "already registered" to somebody who received no message at all.
+mail_fail() { docker exec wpdev-wordpress-1 php -r "
+require '/var/www/html/wp-load.php';
+delete_option( 'fg_test_mail_fail' );
+if ( '1' === '$1' ) { update_option( 'fg_test_mail_fail', '1' ); }
+"; }
+mail_fail 1
+list=$(curl -sk "$BASE$LIST_PATH")
+SIGN_NONCE=$(printf '%s' "$list" | grep -o 'name="fg_register_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/\"//')
+SIGN_REF=$(printf '%s' "$list" | grep -o 'name="fg_event_ref" value="[^"]*"' | head -1 | sed 's/.*value="//;s/\"//')
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SIGN_NONCE" \
+	--data-urlencode "fg_event_ref=$SIGN_REF" \
+	--data-urlencode "fg_member_no=$MITGLIED_NR" \
+	--data-urlencode "fg_member_email=$MITGLIED_MAIL" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+has "an undelivered mail is reported" "$loc" "fg_notice=email_failed"
+if [ "$(s count-registrations "$DIENST")" = "$VORHER" ]; then
+	ok "and the registration is gone again"
+else
+	bad "and the registration is gone again" "$(s count-registrations "$DIENST")"
+fi
+if [ "$(s free-places "$DIENST")" = "$PLATZE_VORHER" ]; then
+	ok "and the place is free again"
+else
+	bad "and the place is free again" "$(s free-places "$DIENST")"
+fi
+# The failure leaves nothing behind that a second attempt would run into.
+mail_fail 0
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SIGN_NONCE" \
+	--data-urlencode "fg_event_ref=$SIGN_REF" \
+	--data-urlencode "fg_member_no=$MITGLIED_NR" \
+	--data-urlencode "fg_member_email=$MITGLIED_MAIL" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+has "a second attempt after the failure is a plain registration" "$loc" "fg_notice=registered"
+if [ "$(s count-registrations "$DIENST")" = "$((VORHER + 1))" ]; then
+	ok "and not a refusal of something that was still there"
+else
+	bad "and not a refusal of something that was still there" "$(s count-registrations "$DIENST")"
+fi
+# And the member takes it back out again, so the section leaves the fixture the
+# way it found it. The link cannot be used for that: its token is stored as a
+# hash and can therefore not be read back out of the database.
+s drop-registration "$DIENST" "$MITGLIED_NR" >/dev/null
+if [ "$(s count-registrations "$DIENST")" = "$VORHER" ]; then
+	ok "the section leaves the duty as it found it"
+else
+	bad "the section leaves the duty as it found it" "$(s count-registrations "$DIENST")"
 fi
 
 echo

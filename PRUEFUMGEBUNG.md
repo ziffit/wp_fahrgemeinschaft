@@ -4,24 +4,57 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter vollständiger Lauf: 26.09.2026 — **399 Prüfungen, 0 Fehler**
-(CLI 153, öffentliches HTTP 41, Mail-Ebene 66, Admin-Ebene 139).
+Letzter Lauf der vier Suiten: 27.09.2026 — **1.132 Prüfungen, 0 Fehler**
+(CLI 482, öffentliches HTTP 176, Mail-Ebene 86, Admin-Ebene 388).
 
-Seit diesem Lauf ist die Arbeitsdienstliste dazugekommen. Ein vollständiger Lauf
-`run-all.sh` ist bis heute nicht gefahren, weil er am Anfang alle Arbeitsdienste und
-Fahrgemeinschaften löscht und die Testdaten des Vereins damit nicht mehr da wären.
-Stattdessen sind die neuen Prüfungen einzeln gegen die laufende Installation gefahren
-worden, mit unverändertem Prüftext aus den eingecheckten Dateien:
+Der Lauf ist kein `run-all.sh`, und die CLI-Suite ist auch nicht über den normalen Weg
+gefahren: `smoke.php` kennt nur den Schritt `all`, und der löscht am Anfang alle
+Arbeitsdienste, Fahrgemeinschaften und Mitglieder. Das ist beim ersten Versuch dieser
+Reihe passiert und hat sieben von Hand eingetragene Arbeitsdienste und zwei Fahrten
+gekostet; seitdem wird das nur noch mit ausdrücklicher Zustimmung getan. Der CLI-Lauf
+vom 27.09.2026 ist mit Zustimmung gefahren, gegen den Stand, der auch die drei
+anderen Suiten gesehen haben. Vor diesem Lauf ist die Verwaltung aufgeräumt worden:
+142 veröffentlichte Seiten namens „Fahrgemeinschaften“ sowie „Arbeitsdienste“ (ID 106
+und 108) sind gelöscht, geblieben ist die Seite ID 98 mit dem Shortcode, weil
+`http.sh` und `mail.sh` sie brauchen. Das Aufräumen ist eine eigene Handlung gewesen
+und nicht Teil eines Laufs.
 
-| Was | Lauf | Ergebnis |
-| --- | --- | --- |
-| CLI-Abschnitte `[2a]` und `[3c]` | 63 | 0 Fehler |
-| Admin-Suite, vollständig | 195 | 0 Fehler |
-| HTTP-Abschnitt `[8]` | 15 | 0 Fehler |
+Reihenfolge und Zustand: `http.sh` und `mail.sh` lesen `tests/fixture.json` und
+verbrauchen es; die Datei wird deshalb vor ihrem Lauf neu gebaut. `admin.sh` liest sie
+nicht mehr. Es brauchte sie für zwei Dinge — den Arbeitsdienst, an dem es arbeitet, und
+den Pfad der öffentlichen Seite — und beides waren Tatsachen über die Installation, die
+es sich hätte selbst verschaffen können. Der Dienst entsteht jetzt im Testlauf mit
+`make-event`, die Seite mit dem neuen Befehl `state.php list-page-path`, der die
+veröffentlichte Seite mit dem Shortcode sucht. Der Test ist damit ohne die Fixture der
+HTTP-Suite lauffähig, was vorher nicht galt: Ein Lauf, der nur deshalb scheiterte, weil
+die andere Suite nicht vor ihm war, sagt nichts über den Adminbereich aus. Dieselbe
+Erkenntnis stand schon bei `[4b]`, wo der Filter „veröffentlicht“ vorher die Fahrt aus
+der fremden Fixture las; die HTTP-Suite beweist, dass sie genau diese Fahrt löschen
+kann. Die Reihenfolge Admin vor HTTP war damit keine Vorliebe, sondern eine
+Fehlerquelle, die sich als Fehlschlag zeigte.
 
-Die Zahlen der drei Läufe lassen sich nicht mit denen vom 26.09. verrechnen: Sie
-enthalten je Suite nur den Teil, der ohne den zerstörenden Aufbau zu fahren war. Ein
-Gesamtlauf steht noch aus.
+Der Test braucht für zwei Prüfungen weiterhin Zustand, den er selbst herstellt: Der
+Dienst in Abschnitt `[3]` trägt ein Mitglied aus demselben Lauf, weil der Satz über die
+belegten Plätze und die nur lesbare Liste der Angemeldeten nur für einen Dienst
+existieren, für den sich jemand eingetragen hat. Vorher saß dort die Anmeldung, die die
+HTTP-Suite dagelassen hatte, und die Prüfung las sie, ohne es zu wissen.
+
+Und eine Prüfung brauchte eine Karte, die es eindeutig zu lesen gilt. Sie suchte die
+Karte des geprüften Dienstes über dessen Titel, und zwei Dienste können denselben
+Titel tragen — sie standen nebeneinander, beide aus diesem Testlauf, und die Prüfung las
+die falsche. Der Fehlschlag fiel auf, weil der gelesene Dienst einen anderen Bedarf
+hatte als der gesuchte; bei zwei gleichnamigen Diensten mit gleichem Stand wäre die
+Prüfung grün gewesen und hätte die falsche Karte gemessen. Die Karte trägt jetzt die
+öffentliche Referenz des Dienstes als Sprungziel (`fg-dienst-<public_ref>`), und der
+Testhelfer `karte()` sucht danach. Das ist eine Änderung am Plugin, keine im Test: Ein
+Titel benennt keine Karte, während ein Link auf genau einen Dienst zeigen muss — und
+genau diese Unbestimmtheit ist der Grund, warum die Karte überhaupt einen Anker
+bekommt.
+
+Vor jedem Lauf: `arbeitsdienste/` nach `my-plugin/` spiegeln, `tests/*.sh` und
+`tests/*.php` nach `/tmp/fgtests/` kopieren, drei Sekunden warten (der Bytecode-Cache
+im Container ist nicht sofort neu). Ein Lauf gegen einen alten Stand ist grün und
+beweist nichts.
 
 
 ## Stack
@@ -40,7 +73,7 @@ Rechners beschreibt. Die Skripte erwarten es in der Umgebungsvariable `WPDEV`.
 - `wordpress:latest` (im letzten Lauf 7.1.2), `mariadb:10.6`, `phpmyadmin:latest`
 - `8080` HTTP, `8443` TLS, `8081` phpMyAdmin
 - `WORDPRESS_DEBUG=1`, damit PHP-Hinweise in den Antworten sichtbar bleiben
-- Der Plugin-Ordner `fahrgemeinschaften/` ist als `wp-content/plugins/my-plugin` eingebunden; Änderungen wirken sofort.
+- Der Plugin-Ordner `arbeitsdienste/` ist als `wp-content/plugins/my-plugin` eingebunden; Änderungen wirken sofort. Die Hauptdatei darin heißt `arbeitsdienste.php`; die Tests rechnen mit dieser Datei, wenn sie das Plugin aktivieren und deaktivieren.
 - Testadresse: `https://localhost:8443`, Administrator `fg_admin` / `Test1234!`
 - TLS ist ein selbstsigniertes Zertifikat, daher arbeiten alle Aufrufe mit `curl -k`.
 - Das Dateisystem des WordPress-Containers ist nicht persistent. Nach jedem `docker compose up -d`
@@ -80,7 +113,8 @@ Das Skript ist idempotent und in fünf Schritten aufgeteilt:
   Cron und den Mail-Recorder und meldet, was fehlt.
 
 Nach dem Setup ist die Umgebung in dem Zustand, den die Tests erwarten: Plugin aktiv,
-`fg_schema_version` gesetzt, beide Tabellen `wp_fg_events` und `wp_fg_rides` vorhanden,
+`fg_schema_version` auf `1.2.0`, die vier Tabellen `wp_fg_events`, `wp_fg_rides`,
+`wp_fg_members` und `wp_fg_event_members` vorhanden,
 `fg_daily_cleanup` geplant, keine Rollenberechtigung des Plugins, Mail-Log leer.
 
 ## Testlauf
@@ -90,17 +124,39 @@ bash tests/run-all.sh
 ```
 
 `run-all.sh` ruft zuerst `setup.sh` auf und startet dann vier Suiten. Jeder Lauf ist
-isoliert: `smoke.php` und `http_setup.php` löschen vorher alle Arbeitsdienste und
-Fahrgemeinschaften sowie die Statistik-Option, es gibt also keinen Zustand vom Vorlauf.
+isoliert: `smoke.php` und `http_setup.php` löschen vorher alle Arbeitsdienste,
+Fahrgemeinschaften und Mitglieder sowie die Statistik-Option, es gibt also keinen Zustand vom Vorlauf.
 
 | Suite | Datei | Vorgehen |
 | --- | --- | --- |
-| CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–16: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene; dazu die Abschnitte `[2a]` (die vier freiwilligen Angaben eines Arbeitsdienstes) und `[3c]` (die Liste der Arbeitsdienste) |
-| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data`, Verhalten der Schaltflächen im Stylesheet; dazu Abschnitt `[8]` für die Arbeitsdienstliste auf einer eigenen Seite |
+| CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–20: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene und die Mitgliederverwaltung; dazu die Abschnitte `[2a]` (die vier freiwilligen Angaben eines Arbeitsdienstes) und `[3c]` (die Liste der Arbeitsdienste) |
+| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data`, Verhalten der Schaltflächen im Stylesheet; dazu die Abschnitte `[8]` für die Arbeitsdienstliste auf einer eigenen Seite und `[9]` für den vollständigen Weg von der Anmeldung über die E-Mail bis zum Abmelden |
 | Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo` |
-| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der vier Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die vier freiwilligen Angaben im Formular, ihr Rundlauf durch die Tabelle und die Fälle, in denen das Speichern verweigert wird |
+| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der fünf Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die Abschnitte `[9]` (Mitgliederverwaltung), `[10]` (CSV-Import) und `[11]` (Anmeldung zu einem Dienst) |
 
-### Die Abschnitte `[2a]`, `[3c]` und `[8]`
+Zwei Eigenheiten der Suiten, die man kennen muss, bevor man einem Fehlschlag traut:
+
+- **Jede Suite baut ihre Fixture selbst auf.** `http_setup.php` liest und schreibt
+  `tests/fixture.json`; `http.sh` verbraucht es. Wird zwischen zwei Läufen keine neue
+  Fixture gebaut, laufen `[1]` bis `[6]` gegen Einmalwerte und schlagen mit
+  `invalid_token` fehl — nicht, weil das Plugin etwas kaputt gemacht hätte, sondern
+  weil die Werte schon verbraucht waren.
+- **Der Bericht eines Imports wird aus einem Rahmen gelesen, nicht aus der Seite.**
+  Auf dem Bildschirm der Mitglieder steht der Bericht *und* die Liste aller Mitglieder.
+  Eine Prüfung, die eine Mitgliedsnummer auf der ganzen Seite sucht, findet sie in
+  beiden Teilen und bleibt grün, auch wenn der Bericht sie nicht nennt. `admin.sh`
+  schneidet den Bericht deshalb mit einem eigenen Helfer heraus; genau daran ist eine
+  Gegenprobe der ersten Reihe rot geworden, siehe unten.
+- **Auf der öffentlichen Seite wird nach dem Anker einer Karte gesucht, nicht nach
+  ihrem Titel.** Die Liste trägt eine Karte je sichtbarem Dienst, und zwei Dienste
+  können denselben Titel haben. Eine Suche über die ganze Seite beantwortet die
+  Frage, ob ein Wort irgendwo steht; eine Suche nach dem Titel beantwortet sie für den
+  ersten der beiden. Der Testhelfer `karte()` in `admin.sh` schneidet die eine Karte
+  heraus, an der `id="fg-dienst-<public_ref>"` steht. Dieselbe Vorsicht gilt für den
+  Helfer `feld()` (ein Feldtype und `required` im selben `<input>`-Tag) und `notice()`
+  (nur der Meldungsrahmen, nie die ganze Seite).
+
+### Die Abschnitte `[2a]`, `[3c]`, `[8]`, `[9]`, `[10]` und `[11]`
 
 `[2a]` prüft die vier neuen Felder dort, wo sie hingehören: an der Tabelle. Der
 Nachweis steht am Anfang und heißt, dass die vier Spalten am **Ende** einer bereits
@@ -136,12 +192,107 @@ eigenen mit —, sondern die Differenz zur anderen Plugin-Seite, zusätzlich die
 Script-Elemente, weil ein Script ohne eigene Datei in einer Liste von Adressen
 unsichtbar wäre.
 
-Zwei Feinheiten der Prüftechnik, die sich hier bewährt haben: Die Wochentagsprüfung
+Die Zahl der freien Plätze wird in diesem Abschnitt **nicht** aus dem Plugin geholt.
+Sie ist die Differenz aus zwei Zahlen der Tabelle, und der Test rechnet sie selbst:
+
+```bash
+frei_von() {
+	bedarf=$(s event "$1" demand)
+	angemeldet=$(s count-registrations "$1")
+	...
+}
+```
+
+Das ist der einzige Weg, auf dem die Zahl unabhängig geprüft werden kann. Ein Test,
+der `free_places()` fragt und die Antwort mit dem vergleicht, was die Seite anzeigt,
+bestätigt auch eine falsche Zahl — beide kommen aus derselben Funktion, und sie
+stimmen dann überein. Genau das ist beim ersten Versuch passiert: `free_places()`
+wurde testweise auf `demand` umgestellt, die Seite zeigte 4 statt 3, und die Prüfung
+blieb grün. Mit der eigenen Rechnung wurde dieselbe Änderung sofort rot.
+
+`[9]` in `http.sh` ist der ganze Weg eines Mitglieds über HTTP, und zwar in der
+Reihenfolge, in der es stattfindet: Anmeldung abschicken, Meldung lesen, Tabellenstand
+prüfen, E-Mail öffnen, Link folgen, Seite lesen, Bestätigung abschicken, zweite
+Bestätigung schicken, nachsehen, dass nichts passiert. Der Abmeldelink wird aus dem
+Text der E-Mail gelesen und nicht zusammengebaut, und Token wie Nonce kommen
+aussehends von der gerenderten Seite, nie aus einer eigenen Rechnung: Ein Test, der
+den Wert selbst bildet, den er sendet, beweist nur, dass der gebildete Wert der
+gesendete war. Aus demselben Grund wird für die Anmeldung die Nummer eines Mitglieds
+genommen, das echt eingetragen ist, und nicht irgendeine — sonst prüft der Test einen
+Weg, den es im Betrieb nicht gibt.
+
+`[9]`, `[10]` und `[11]` in `admin.sh` decken die drei Seiten ab, die es vorher nicht
+gab: die Mitgliederverwaltung, den Import und die Anmeldung im Adminbereich. Für
+die Löschschaltflächen liest `admin.sh` den Link aus dem HTML und prüft, dass die
+Rückfrage im `onclick` steht — das ist der Nachweis dafür, dass
+`wp_kses_post()` hier nicht mehr benutzt wird, denn es wirft dieses Attribut weg und
+eine Schaltfläche ohne Rückfrage löscht, ohne zu fragen. Weil die Dienstseite jetzt
+für jede Anmeldung eine eigene Löschschaltfläche trägt, unterscheidet der Helfer
+`link <typ>` nach dem übergebenen Typ, statt die erste Löschschaltfläche der Seite
+zu nehmen.
+
+Eine Feinheit der Prüftechnik, die sich hier bewährt hat: Die Wochentagsprüfung
 vergleicht nicht mit einem festen Wort, sondern mit dem, was `format_event_date_long()`
 aus der Tabelle rechnet — sonst wäre sie eine zweite Implementierung derselben
-Regel. Und der Container hält den alten Bytecode eine Weile fest, nachdem eine Datei
-ersetzt wurde: Ein Gegenprobenlauf, der direkt nach dem Kopieren misst, prüft die
-vorige Fassung. Deshalb misst jede Gegenprobe zweimal.
+Regel.
+
+## Gegenproben
+
+Eine Prüfung, die nie rot wird, beweist nichts. Zu jeder neuen Prüfung gehört deshalb
+die Frage: *welche Änderung an der Datei müsste sie rot machen?* Die Antwort wird
+umgesetzt, das Ergebnis protokolliert und die Datei zurückgebaut. Das Werkzeug dafür
+liegt nicht im Repo, weil es Dateien verändert, die einem laufenden Test gehören; es
+läuft aus `/tmp/opencode/fg/`:
+
+| Datei | Zweck |
+| --- | --- |
+| `gegenproben.txt` | Eine Zeile je Gegenprobe: `Suite ~~~ Datei ~~~ alte Stelle ~~~ neue Stelle ~~~ Muster`. Der Trenner der Felder ist die Dreier-Tilde, weil in einer Bruchstelle auch Pipes vorkommen; `\n` steht für einen Zeilenumbruch |
+| `gegenprobe.sh` | Sichert die Datei, baut die Bruchstelle ein, kopiert das Plugin in den Container, lässt die Suite laufen, stellt die Datei wieder her |
+| `alle-gegenproben.sh` | Fährt die Liste der Reihe nach ab und schreibt ein Protokoll |
+
+Zwei Vorkehrungen, ohne die das Werkzeug sich selbst widerlegt: Es verlangt, dass die
+alte Stelle **genau einmal** in der Datei vorkommt, und bricht sonst ab, und es
+protokolliert die eingesetzte Zeile mit (`--- Gebrochen: …`). Ohne beides hat die erste
+Fassung dieser Reihe gemessen, was sie messen sollte, ohne es zu messen: Sie teilte die
+Zeilen mit `cut -d'~'`, obwohl der Trenner `~~~` ist, bekam also einen leeren Dateinamen,
+setzte nichts ein — und meldete ein Suite-Ergebnis. Das Ergebnis war echt, die
+Gegenprobe dazu war es nicht.
+
+Dasselbe Schema hat beim Auswerten des Ergebnisses den einen Fehlbefund dieser Reihe
+erzeugt, den es weiter unten als solchen gibt: Das Werkzeug erkennt eine Gegenprobe, die
+grün bleiben soll, an einem `!` vor dem Muster, und verglich die Zusammenfassungszeile
+mit einem Suchtext, der sie am Zeilenanfang festnagelte. Die Zeile lautet
+`== 166 passed, 0 failed ==`; der Suchtext fand sie nie, und das Werkzeug meldete zu
+richtig-grünen Läufen „die Suite wurde doch rot“. Die Prüfung war grün, die Auswertung
+nicht.
+
+Zwei Ergebnisse sind es wert, hier aufgeschrieben zu werden, weil beide eine Prüfung
+verändert haben und nicht nur einen Befund erzeugt haben:
+
+**Die freien Plätze prüften sich selbst.** Die Zahl auf der Karte wurde mit dem
+Fixture verglichen, und das Fixture hatte die Zahl aus `free_places()`. Die Gegenprobe
+setzte `free_places()` testweise auf `Bedarf` und die Seite zeigte daraufhin 4 statt 3
+freie Plätze — die Prüfung blieb grün. Zwei Stellen, die dasselbe aus derselben Funktion
+nehmen, können nicht voneinander abweichen. Seitdem rechnet `http.sh` die Erwartung
+selbst, aus `demand` und der Zahl der Anmeldungen in der Tabelle.
+
+**„Genau ein Formular je Karte“ prüfte die Karte gegen sich selbst.** Die Prüfung
+fragte die Seite, welche Karte geschlossen ist, und erwartete dann, dass eine geschlossene
+Karte kein Formular trägt. Mit `can_register()`, das immer `true` liefert, zeigten
+beide geschlossenen Karten eine Schaltfläche — und damit waren nach dieser Logik beide
+nicht geschlossen. Die Prüfung blieb grün. Seitdem kommt die erwartete Karte aus den
+Tabellen: Eine Karte mit einem freien Platz muss genau ein Formular tragen und darf den
+Schließsatz nicht führen, eine ohne freien Platz umgekehrt.
+
+Eine dritte Gegenprobe hat nichts gefunden, und das ist kein Fehlbefund: Der Abmeldevorgang
+prüft das Token zweimal, einmal vor dem Löschen und einmal im `DELETE … WHERE id AND
+unregister_hash`. Nimmt man nur eine der beiden Prüfungen weg, bleibt die andere, und das
+für den Besucher sichtbare Verhalten — ein zweiter Klick auf denselben Link tut nichts —
+bleibt unverändert. Dasselbe gilt für den Bestätigungslink der Fahrgemeinschaften. Was
+sich nicht testen lässt, ist der Gleichstand zweier Anfragen, und genau dafür ist die
+zweite Prüfung da. Sie ist damit nicht überflüssig, nur nicht von hier aus beweisbar;
+im Werkzeug ist dieser Fall mit einem `!` vor dem Muster als „muss grün bleiben“
+gekennzeichnet, damit er nicht als ausgefallene Gegenprobe gelesen wird.
 
 Die Mediathek-Auswahl des Logos wird nicht angeklickt, sondern über ihre Stellung im
 Dokument geprüft: Das Script hängt mit `wp_add_inline_script()` an `media-views` und wird
@@ -200,8 +351,8 @@ an einer nicht hinterlegten Adresse scheitert, antworten beide mit `not_created`
 Unterschied steht nur im Zähler `publish_personal_data`, den der Server selbst führt. Die
 Prüfung liest ihn vor dem Absenden und danach und verlangt, dass er bei „Peter“, „Käse“
 und „Amsel-Gruppe“ stehen bleibt, bei einer Telefonnummer aber steigt. Dafür nimmt sie
-bewusst eine Adresse, die auf keinem Dienst hinterlegt ist: Dann entsteht kein Eintrag,
-und die Probe hinterlässt nichts. Die sieben Textprüfungen desselben Abschnitts sind gegen
+bewusst eine Adresse, die zu keinem für den Dienst angemeldeten Mitglied gehört: Dann
+entsteht kein Eintrag, und die Probe hinterlässt nichts. Die sieben Textprüfungen desselben Abschnitts sind gegen
 den Stand von `HEAD` geprüft: Aus dem alten Plugin ausgeliefert schlagen alle sieben fehl,
 unter anderem die wegen der Dativform „persönliche**n** Kontaktdaten“ — mit der Endung `n`
 im Suchbegriff wäre sie auch an der alten Fassung vorbeigelaufen und hätte nichts geprüft.
@@ -321,6 +472,81 @@ eine von Hand gepflegte Fußzeile den Testlauf übersteht. Weil die Option dabei
 sein muss, vergleichen die Prüfungen des Speicherns jeweils den Zustand davor und danach, statt
 auf ein leeres Feld zu prüfen.
 
+### Zwei weitere Reihen von Gegenproben
+
+**Die zweite Reihe (19 Proben) fand drei Prüfungen, die nie rot werden konnten.** Alle drei
+sind umgestellt, und die drei Bruchstellen sind nachgelaufen:
+
+| Fundstelle | Was die Prüfung behauptete | Warum sie immer grün war |
+| --- | --- | --- |
+| `if ( false )` statt des Honigtopf-Zweigs in `register_member()` | Eine Anmeldung mit gefülltem Honigtopf-Feld schreibt nichts | Sie sandte die Nummer `0851`, und das ist ein Mitglied, das für den getesteten Dienst **schon** angemeldet war. Die Prüfung bekam `already_registered` und las das für die Honigtopf-Antwort. Sie prüfte nie die Honigtopf-Falle, sondern dass sich ein Mitglied nicht zweimal eintragen lässt. Auch richtig, aber etwas anderes. |
+| Suche nach `name="fg_first_name"` und die Aussage „alle vier Felder sind als Pflicht markiert“ | Das Formular führt vier Pflichtfelder | Zwei getrennte Behauptungen an einer ganzen Seite. Die erste findet den Feldnamen auch bei `type="hidden"`; die zweite findet `required` irgendwo im Dokument, und das `required` der Dateiauswahl im Import-Formular stand schon vorher darin. Beide blieben grün, als das Vornamefeld zum versteckten Feld gemacht wurde. |
+| Suche nach `0042` im ganzen Seitenquelltext | Der Bericht nennt ein Mitglied, das nicht in der Datei steht | Bericht und Mitgliederliste stehen auf **derselben** Seite, und `0042` steht in beiden. Die Prüfung fand die Nummer in der Liste und meldete den Bericht als geprüft. Sie blieb grün, als der Bericht niemanden mehr nannte. |
+
+Daraus sind drei Dinge entstanden, zwei im Plugin und eines in der Suite:
+
+- Der Bericht steht jetzt in einem eigenen Rahmen (`<div class="fg-import-report">`).
+  Das ist Markup in einem Adminbereich, also ohne Datenschutzfrage, und es gibt der
+  Liste und dem Bericht je eine Adresse, an der eine Prüfung sie einzeln lesen kann.
+  `admin.sh` schneidet den Rahmen mit dem Helfer `report()` heraus, der die zugehörige
+  Klammer zählt statt die nächste zu nehmen: Der Bericht enthält eine eigene Hinweisbox,
+  und ein Suchen nach der ersten schließenden `</div>` hätte genau den ersten Absatz
+  geliefert und die Tabelle darunter verschluckt.
+- Die Honigtopf-Probe sendet jetzt `0852 / zwei@example.org`, ein Mitglied, das für
+  keinen der getesteten Dienste eingetragen ist, und prüft zusätzlich die Meldung.
+- Die Formularprüfung liest je Feld ein einzelnes `<input>`-Element und verlangt
+  Feldtype und `required` **im selben Tag**; das Adressfeld wird als `type="email"`
+  verlangt, denn das ist es. Der alte zweite Satz („alle vier Felder sind als Pflicht
+  markiert“) ist entfallen — er war die Stelle, an der ein `required` irgendwo genügte.
+
+**Die dritte Reihe (6 Proben) prüfte die neuen Prüfungen selbst.** Sie fand keine leere
+Prüfung, aber einen echten Fehler im Plugin, einen in der Fixture und einen in einer
+Prüfung, die schon älter war:
+
+| Fundstelle | Wirkung | Behoben |
+| --- | --- | --- |
+| `strlen( $email ) > 254` statt der Spaltenbreite in `normalize_email()` | Eine Adresse von 200 Zeichen ist nach RFC 5321 gültig, besteht `is_email()` und wird dann von `$wpdb` **stillschweigend** abgelehnt, weil beide Adressspalten 190 Zeichen breit sind. Über HTTP sieht der Besucher „konnte nicht gespeichert werden“ bei einer Adresse, die er nach den Vorgaben des Formulars schreiben durfte. | Grenze auf `FG_Schema::CONTACT_EMAIL_MAX` (190) gesetzt und die vier Formularfelder auf dieselbe Zahl gebracht, damit der Browser nichts mehr einlädt, was der Server ablehnt. Geprüft in `admin.sh` am Mitglied und in `http.sh` an Fahrt und Liste, je mit der Feldangabe **und** mit dem Verhalten. |
+| `is_event_participant()` immer `true` | Die Kontaktaufnahme nimmt jede Adresse an, auch eine, die zu keinem für den Dienst angemeldeten Mitglied gehört. Die benannte Prüfung schlägt an — und zusätzlich die ältere Prüfung für den Angebotsweg, dieselbe Regel an einem anderen Eingang. | Kein Fehler: der Test bestätigt die Regel an beiden Eingängen. |
+| `$creator_email === $email` entfallen | Der eigene Eintrag würde gezählt, und ein Anfragender könnte an einem Zähler unterscheiden, ob ein Eintrag ihm gehört. | Kein Fehler. Die Prüfung trägt den Namen und schlägt an. |
+
+Zwei Nebenschauplätze, die dabei mitgefallen sind und beide dasselbe Muster haben — eine
+Prüfung, deren Name mehr behauptet als ihre Messung:
+
+- `http.sh` prüfte die Kontaktaufnahme nur an der Antwort. Die Antwort lautet
+  `contact_received`, egal ob weitergeleitet oder verworfen wurde; die Prüfung konnte
+  also nicht unterscheiden, ob der Anfragende im Dienst ist. Sie stand dazu auf einem
+  Adressenpaar, das gar nicht angemeldet war, und hieß „participant contact“. Jetzt liest
+  sie die beiden Zähler des Kontaktwegs (`contact_valid_email`,
+  `contact_invalid_email`) zusätzlich zur Antwort, und der eigene Eintrag wird gegen
+  **beide** geprüft.
+- Die Reihenfolge der Suiten ist eine Bedingung, keine Vorliebe: `admin.sh` liest in
+  `[4b]` eine veröffentlichte Fahrt und legt sich inzwischen selbst eine an. Vorher las
+  es die Fahrt aus der Fixture der HTTP-Suite, und die HTTP-Suite beweist, dass es
+  genau diese Fahrt löschen kann. Der Fehlschlag hing also an der Reihenfolge und sagte
+  nichts über den Filter aus.
+
+Und einer, der auf die Fixture zurückfällt: `http.sh` Abschnitt `[5]` prüft die
+Kontaktaufnahme, und die Fixture legt die veröffentlichte Fahrt auf ein Mitglied, das
+für diesen Dienst gar nicht angemeldet ist. Damit war **kein** erfolgreicher Kontaktfall
+herstellbar — die Regel deckte jeden Fall ab. Der Abschnitt trägt die Anmeldung des
+Erstellers jetzt selbst ein und nimmt sie am Ende wieder weg, so wie `mail.sh` es für
+seine zwei weiteren Mitglieder tut. Dieselbe Erkenntnis hat die Mail-Suite überhaupt erst
+zum Laufen gebracht: Sie war die erste, die an der neuen Regel scheiterte, weil sie als
+einzige zählt, ob Mails wirklich hinausgehen.
+
+Das Werkzeug hat in diesen beiden Reihen zweimal selbst gemessen statt gebrochen, und
+beide Male ist es erst beim Auswerten aufgefallen:
+
+- Eine Bruchstelle darf sich jetzt auf die *n-te* Fundstelle beziehen, geschrieben als
+  `3x|text`. Das ist nötig, weil `if ( ! empty( $_POST['fg_website'] ) ) {` in
+  `class-fg-actions.php` dreimal steht — Anmeldung, Angebot, Kontakt — und jede der drei
+  Stellen etwas anderes prüft. Ohne diese Schreibweise hätte man keine davon einzeln
+  treffen können und wäre auf eine Ersetzung ausgewichen, die alle drei trifft und damit
+  selbst keine Gegenprobe ist.
+- Der Auswerter nimmt den Pfad des Protokolls als Argument. Vorher las er fest
+  `gegenproben-lauf.log`, und beim Nachtragen einer Runde hätte er die alte gezeigt und
+  die neue als „nicht gefahren“ ausgelegt.
+
 ## Umstieg von den eigenen Beitragstypen
 
 Die Testinstanz lief ursprünglich mit einer Fassung, die eigene WordPress-Beitragstypen
@@ -334,6 +560,28 @@ Das Plugin macht das nicht selbst, weil es diese Daten nicht kennt; auf einer ec
 Installation sind die beiden Schritte vor dem Aktivieren der neuen Fassung manuell zu
 machen. `tests/bootstrap.php` meldet in Zeile `bootstrap: plugin capabilities`, falls
 solche Berechtigungen noch vorhanden sind.
+
+## Umstieg auf die Mitgliederverwaltung (Schema 1.2.0)
+
+Vor dieser Fassung lag die Teilnehmerliste eines Arbeitsdienstes als Textspalte
+`participants` in seiner Zeile: eine E-Mail-Adresse je Zeile, von Hand gepflegt. Seit
+`1.2.0` gibt es die Tabellen `wp_fg_members` und `wp_fg_event_members`, und die
+Migration leert diese Spalte **einmalig**:
+
+```php
+FG_Schema::clear_legacy_participants();
+```
+
+Der Inhalt wird nicht übernommen. Eine Adresse allein sagt nicht, wer das Mitglied ist,
+und die neue Anmeldung verlangt Nummer und Adresse zusammen; ein Versuch, die
+Adressen zuzuordnen, wäre Raten. Wer die alten Listen behalten will, hat sie vorher
+zu sichern, oder er pflegt die Mitgliedernummer nach — der Import nimmt eine
+Mitgliedsnummer auf, und ab dem zweiten Lauf findet er dieselbe Nummer wieder und
+aktualisiert sie.
+
+Die Spalte `participants` bleibt in der Tabelle stehen, damit eine ältere Fassung, die
+zurückgerollt wird, nicht an einem unbekannten Feld scheitert. Sie ist ab `1.2.0`
+immer leer.
 
 ## Mail-Auswertung
 
@@ -355,6 +603,13 @@ Escaping eines Besuchereingabewerts, die drei Fußzeilen und das eingebettete Lo
 Die Option `fg_test_mail_fail=1` lässt die Zustellung fehlschlagen. Damit werden die
 Fehlerpfade `email_failed` und `publish_failed` über echtes HTTP geprüft, inklusive
 Rücknahme der Veröffentlichung und der Wiederverwendbarkeit desselben Bestätigungslinks.
+Dieselbe Option prüft den dritten Fehlerpfad, den es erst mit der Mitgliederverwaltung
+gibt: Geht die E-Mail mit dem Abmeldelink nicht raus, nimmt `register_member()` die
+Anmeldung wieder aus der Tabelle (`delete_registration_by_pair()`), der Zähler
+`mail_send_failed` steigt und der Platz wird wieder frei. Geprüft wird beides getrennt,
+weil eine Anmeldung ohne Abmeldeweg nur noch über den Adminbereich zurückgenommen werden
+kann. Dass danach ein zweiter Versuch mit derselben Nummer eine ganz normale
+`registered`-Meldung liefert und nicht `already_registered`, steht in derselben Folge.
 
 ### Der Recorder ist abschaltbar
 
@@ -389,10 +644,15 @@ Der Zustand ist die Voraussetzung für:
 
 1. Eine echte Einreichung über das öffentliche Formular. Der Bestätigungslink steht dann
    im Mail-Log unter SureMails → Email Log, Spalte „Body“.
-2. Ein Kontaktaufruf zwischen zwei Teilnehmern. Erwartet werden zwei Einträge: einer an
-   den Ersteller, einer an den Anfragenden.
-3. Ein Klick auf den Bestätigungslink. Der Status `sent` erscheint, und die Meldung zur
-   Veröffentlichung mit dem Lösch-Link wird geloggt.
+2. Eine echte Anmeldung zu einem Arbeitsdienst auf der `[arbeitsdienste]`-Seite. Die
+   Nachricht mit dem Abmeldelink steht dort unter demselben Ersteller; sie nennt keinen
+   Namen, nur den Dienst und den Link.
+3. Ein Kontaktaufruf zwischen zwei Mitgliedern desselben Dienstes. Erwartet werden zwei
+   Einträge: einer an den Ersteller, einer an den Anfragenden.
+4. Ein Klick auf den Bestätigungslink einer Fahrgemeinschaft. Der Status `sent` erscheint,
+   und die Meldung zur Veröffentlichung mit dem Lösch-Link wird geloggt.
+5. Ein Klick auf den Abmeldelink einer Anmeldung. Erwartet wird zuerst die Rückfrage und
+   keine Löschung; gelöscht wird erst nach dem zweiten Klick.
 
 Der Recorder ist eine Einrichtung der Testumgebung. Am Plugin ist für SureMails nichts zu
 tun: `class-fg-mailer.php` ruft ausschließlich `wp_mail()` auf und setzt davor nur
@@ -401,15 +661,36 @@ wieder entfernt.
 
 ## Was die Umgebung nicht prüft
 
-- **Kein echter SMTP-Transport.** Es läuft kein Mailserver; die Zustellung wird nur
+- **Nicht den echten Export der Mitgliederverwaltung.** Der Import erwartet eine
+  CSV-Datei mit einer Kopfzeile und den vier Spalten für Mitgliedsnummer, E-Mail-Adresse,
+  Vorname und Nachname. Welche Überschriften eine Mitgliederverwaltung dafür schreibt,
+  ist eine Vermutung: `class-fg-member-import.php` trägt pro Feld eine Liste von
+  Alternativen, und der Test füttert sie mit Namen, die plausibel sind, nicht mit den
+  des Vereins. Geprüft ist damit der Importweg, nicht die Erkennung der Spalten des
+  Vereins. Bis eine echte Kopfzeile vorliegt, ist das eine Vermutung, und sie steht an
+  genau einer Stelle im Code.
+- **Keinen echten SMTP-Transport.** Es läuft kein Mailserver; die Zustellung wird nur
   simuliert. Geprüft wird, was das Plugin übergibt; die Zustellung selbst ist eine
   Betriebsvoraussetzung der Installation
-  (siehe `fahrgemeinschaften/README.md`, Abschnitt „Technische Voraussetzungen“).
+  (siehe `arbeitsdienste/README.md`, Abschnitt „Technische Voraussetzungen“).
 - **Keine Fremd-Plugins und Themes.** SureMails ist installiert, weil der Mailversand
   sonst nicht prüfbar wäre; es ist kein Teil der Lieferung und die Testläufe hängen
   nicht davon ab. Alle anderen Erweiterungen Dritter sind nicht installiert; das
   Zusammenspiel mit ihnen ist nicht Teil dieser Prüfung.
 - **Kein Lasttest.** Die Statistik schreibt ohne Sperre zurück; das ist als bekannte
-  Einschränkung dokumentiert und nicht als Test abgedeckt.
+  Einschränkung dokumentiert und nicht als Test abgedeckt. Dasselbe gilt für zwei
+  Mitglieder, die sich im selben Augenblick um den letzten Platz eines Dienstes bewerben:
+  `UNIQUE (event_id, member_id)` verhindert nur das doppelte Anmelden desselben
+  Mitglieds, nicht die doppelte Belegung des letzten Platzes durch zwei verschiedene.
+  Geprüft ist die Zählung hinterher, nicht das Verhalten im Gleichstand.
+- **Nicht die Arbeitsdienstliste über HTTP.** Die Testinstanz ist an beiden Ports
+  erreichbar, und `http.sh` prüft die Umleitung an der Fahrgemeinschaftenseite und an
+  der Handhabungsseite. Die Arbeitsdienstliste wird umgeleitet oder nicht, je nachdem ob
+  das Plugin es tut — und es tut es absichtlich nicht. Dieser Fall ist damit nicht
+  abgedeckt, und das ist eine Entscheidung und keine Lücke im Aufbau; siehe
+  `arbeitsdienste/README.md`, Abschnitt „Bewusste Abweichungen“.
 - **Keine Barrierefreiheits- und Browserprüfung.** Die HTML-Ausgabe wird auf Struktur und
-  Escaping geprüft, nicht auf Darstellung in verschiedenen Browsern.
+  Escaping geprüft, nicht auf Darstellung in verschiedenen Browsern. Für die beiden
+  `details`-Schaltflächen heißt das auch: Es wird geprüft, dass die offene und die
+  geschlossene Beschriftung im Stylesheet vorhanden sind, nicht, dass ein bestimmter
+  Browser den Marker des Elements wegräumt.

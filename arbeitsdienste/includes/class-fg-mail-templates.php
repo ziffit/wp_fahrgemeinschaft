@@ -2,7 +2,7 @@
 /**
  * HTML layout for the transactional e-mails.
  *
- * @package Fahrgemeinschaften
+ * @package Arbeitsdienste
  */
 
 defined( 'ABSPATH' ) || exit;

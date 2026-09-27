@@ -330,6 +330,92 @@ details.fg-contact[open] > summary.fg-contact-toggle > .fg-label-open {
 	font-weight: 600;
 }
 
+/* The number of free places. A place left is set in the weight of the demand
+   above it, and a zero is a note rather than a warning: a full duty is the
+   normal state of a duty whose people are all there, and the sentence under the
+   table already says why. */
+.fg-places {
+	font-weight: 600;
+}
+
+.fg-places-none {
+	color: var(--fg-muted);
+	font-weight: 400;
+}
+
+/* --- the registration of a work duty, closed until it is asked for --- */
+
+.fg-signup {
+	margin-top: 1rem;
+}
+
+/* The summary is the button, drawn here and not through .fg-button, because the
+   native marker of the element would sit in front of the label and a control
+   that looks like a button must not carry one. Appearance and marker are set on
+   the whole path to the element, so a theme rule on summaries cannot decide how
+   this control is drawn. */
+details.fg-signup > summary.fg-signup-toggle {
+	display: inline-block;
+	list-style: none;
+	cursor: pointer;
+}
+
+details.fg-signup > summary.fg-signup-toggle::-webkit-details-marker {
+	display: none;
+}
+
+/* One control, two labels, exactly as on the contact form of a ride: the one
+   that is not shown takes no space and is not read out, so the control is named
+   after the state it is in. */
+details.fg-signup > summary.fg-signup-toggle > .fg-label-open {
+	display: none;
+}
+
+details.fg-signup[open] > summary.fg-signup-toggle > .fg-label-closed {
+	display: none;
+}
+
+details.fg-signup[open] > summary.fg-signup-toggle > .fg-label-open {
+	display: inline;
+}
+
+.fg-signup-form {
+	margin-top: 0.9rem;
+	padding-top: 0.9rem;
+	border-top: 1px solid var(--fg-border);
+}
+
+/* The two fields side by side; on a narrow column the row wraps. They are the
+   whole form, and both are needed to find the member, so on a wide screen
+   neither of them takes a full line. */
+.fg-signup-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+
+.fg-signup-row .fg-field {
+	flex: 1 1 14rem;
+	min-width: 0;
+}
+
+.fg-signup-form .fg-hint {
+	margin: 0.6rem 0 0;
+}
+
+.fg-signup-form .fg-actions {
+	margin-top: 0.9rem;
+}
+
+/* The sentence under a card that cannot be signed up for. It is a note in the
+   muted colour of the other notes of the list, because there is nothing here for
+   the reader to do. */
+.fg-signup-closed {
+	margin: 0.9rem 0 0;
+	color: var(--fg-muted);
+	font-style: italic;
+}
+
 @media (max-width: 640px) {
 	.fg-form-grid {
 		grid-template-columns: 1fr;

@@ -1,8 +1,8 @@
 <?php
 /**
- * Plain data records for the two stored objects.
+ * Plain data records for the stored objects.
  *
- * @package Fahrgemeinschaften
+ * @package Arbeitsdienste
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -46,13 +46,6 @@ final class FG_Event {
 	 * @var string
 	 */
 	public $event_time = '';
-
-	/**
-	 * Pre-registered participant addresses.
-	 *
-	 * @var string[]
-	 */
-	public $participants = array();
 
 	/**
 	 * Stable non-public UUID.
@@ -243,6 +236,146 @@ final class FG_Ride {
 
 	/**
 	 * Validated URL of the public form the ride came from.
+	 *
+	 * @var string
+	 */
+	public $source_url = '';
+}
+
+/**
+ * A member of the club who may register for work services.
+ *
+ * The member number is the identity, not the row ID. A member is created by an
+ * import from the club's member administration, and the same person coming
+ * back with a changed name is the same row. The row ID is never shown to anyone
+ * outside the backend.
+ */
+final class FG_Member {
+	/**
+	 * Row ID.
+	 *
+	 * @var int
+	 */
+	public $id = 0;
+
+	/**
+	 * Member number as written in the club's member administration.
+	 *
+	 * Text, not a number, so a leading zero survives. Compared without regard to
+	 * case, which the column's collation does on its own.
+	 *
+	 * @var string
+	 */
+	public $member_no = '';
+
+	/**
+	 * E-mail address, unique across all members.
+	 *
+	 * @var string
+	 */
+	public $email = '';
+
+	/**
+	 * First name.
+	 *
+	 * @var string
+	 */
+	public $first_name = '';
+
+	/**
+	 * Last name.
+	 *
+	 * @var string
+	 */
+	public $last_name = '';
+
+	/**
+	 * Creation time as `Y-m-d H:i:s` in site time.
+	 *
+	 * @var string
+	 */
+	public $created_at = '';
+
+	/**
+	 * Time of the last change of name or address.
+	 *
+	 * @var string
+	 */
+	public $updated_at = '';
+}
+
+/**
+ * The registration of one member for one work service.
+ *
+ * There is at most one such row per pair of member and work service; the
+ * database holds a unique key on both columns, so a second registration is
+ * refused by the storage layer even if two visitors arrive at the same moment.
+ */
+final class FG_Event_Member {
+	/**
+	 * Row ID.
+	 *
+	 * @var int
+	 */
+	public $id = 0;
+
+	/**
+	 * Owning work service ID.
+	 *
+	 * @var int
+	 */
+	public $event_id = 0;
+
+	/**
+	 * Registered member ID.
+	 *
+	 * @var int
+	 */
+	public $member_id = 0;
+
+	/**
+	 * Time of the registration as `Y-m-d H:i:s` in site time.
+	 *
+	 * @var string
+	 */
+	public $registered_at = '';
+
+	/**
+	 * Hash of the unregistration token.
+	 *
+	 * Only the hash is stored. The raw token exists in the e-mail to the member
+	 * and nowhere else.
+	 *
+	 * @var string
+	 */
+	public $unregister_hash = '';
+
+	/**
+	 * Unregistration token expiry as unix timestamp.
+	 *
+	 * @var int
+	 */
+	public $unregister_expires = 0;
+
+	/**
+	 * Random public reference of this registration, used in the unregistration
+	 * link.
+	 *
+	 * The link in the mail carries this and the token together, so the internal
+	 * row ID is not part of any URL.
+	 *
+	 * @var string
+	 */
+	public $public_ref = '';
+
+	/**
+	 * Validated URL of the duty list the registration came from.
+	 *
+	 * The unregistration link opens a page of its own, on the site root, and a
+	 * member who presses the button there has to land back on the list of duties
+	 * where the confirmation can be seen. The list is not at a fixed address, so
+	 * the address the form was sent from is kept with the registration, exactly
+	 * as a ride keeps the page it was offered on.
 	 *
 	 * @var string
 	 */

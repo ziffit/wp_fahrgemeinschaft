@@ -8,6 +8,29 @@ BASE="https://localhost:8443"
 F="$DIR/fixture.json"
 PAGE_ID=$(python3 -c "import json;print(json.load(open('$F'))['page_id'])")
 EVENT_REF=$(python3 -c "import json;print(json.load(open('$F'))['event_ref'])")
+EVENT_ID=$(python3 -c "import json;print(json.load(open('$F'))['event_id'])")
+
+# Read or change plugin state from the table layer, the same way admin.sh does.
+s() { docker exec wpdev-wordpress-1 php /tmp/fgtests/state.php "$@"; }
+
+# A contact request is only answered if the requesting address belongs to a
+# member who is signed up for that duty. The fixture signs up one member, and
+# the published ride belongs to a second one who is not signed up at all — so
+# without help this suite can neither ask about somebody else's entry nor test
+# the own-entry rule, and both requests would be refused for a reason that has
+# nothing to do with what they are about. The suite therefore signs up the two
+# other fixture members itself and takes them off again at the end.
+ANFRAGER_NR=$(python3 -c "import json;print(json.load(open('$F'))['member_free_no'])")
+ANFRAGER_MAIL=$(python3 -c "import json;print(json.load(open('$F'))['member_free_mail'])")
+ERSTELLER_MAIL=berta@angeln.example.org
+ERSTELLER_NR=0043
+for paar in "$ANFRAGER_NR $ANFRAGER_MAIL" "$ERSTELLER_NR $ERSTELLER_MAIL"; do
+	# shellcheck disable=SC2086
+	set -- $paar
+	s drop-registration "$EVENT_ID" "$1" > /dev/null 2>&1
+	s register "$EVENT_ID" "$1" "$2" > /dev/null
+done
+trap 's drop-registration "$EVENT_ID" "$ANFRAGER_NR" > /dev/null 2>&1; s drop-registration "$EVENT_ID" "$ERSTELLER_NR" > /dev/null 2>&1' EXIT
 
 pass=0; fail=0
 ok()  { printf '  ok   %s\n' "$1"; pass=$((pass+1)); }

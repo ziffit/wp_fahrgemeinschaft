@@ -2,7 +2,7 @@
 /**
  * Settings screen: logo and footer of the e-mails.
  *
- * @package Fahrgemeinschaften
+ * @package Arbeitsdienste
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -36,7 +36,7 @@ final class FG_Admin_Settings {
 	 */
 	public function render() {
 		if ( ! current_user_can( 'edit_posts' ) ) {
-			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'fahrgemeinschaften' ) );
+			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'arbeitsdienste' ) );
 		}
 
 		$settings = FG_Mail_Templates::get_settings();
@@ -48,9 +48,9 @@ final class FG_Admin_Settings {
 		);
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Einstellungen', 'fahrgemeinschaften' ); ?></h1>
+			<h1><?php esc_html_e( 'Einstellungen', 'arbeitsdienste' ); ?></h1>
 
-			<p><?php esc_html_e( 'Diese Angaben stehen in allen E-Mails, die das Plugin verschickt. Das Layout selbst ist nicht einstellbar; es wird im Plugin mitgeliefert und hier nur mit Logo und Fußzeile versehen.', 'fahrgemeinschaften' ); ?></p>
+			<p><?php esc_html_e( 'Diese Angaben stehen in allen E-Mails, die das Plugin verschickt. Das Layout selbst ist nicht einstellbar; es wird im Plugin mitgeliefert und hier nur mit Logo und Fußzeile versehen.', 'arbeitsdienste' ); ?></p>
 
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="fg_save_settings">
@@ -58,7 +58,7 @@ final class FG_Admin_Settings {
 
 				<table class="form-table" role="presentation">
 					<tr>
-						<th scope="row"><?php esc_html_e( 'Logo', 'fahrgemeinschaften' ); ?></th>
+						<th scope="row"><?php esc_html_e( 'Logo', 'arbeitsdienste' ); ?></th>
 						<td>
 							<input type="hidden" id="fg-logo-id" name="fg_logo_attachment_id" value="<?php echo esc_attr( $logo_id ); ?>">
 							<p id="fg-logo-preview">
@@ -66,41 +66,41 @@ final class FG_Admin_Settings {
 									<img src="<?php echo esc_url( $logo_url ); ?>" alt="" style="max-height:64px;height:auto">
 								<?php endif; ?>
 							</p>
-							<button type="button" class="button" id="fg-logo-pick" disabled><?php esc_html_e( 'Logo auswählen', 'fahrgemeinschaften' ); ?></button>
-							<button type="button" class="button" id="fg-logo-clear" disabled<?php echo $logo_id ? '' : ' hidden'; ?>><?php esc_html_e( 'Logo entfernen', 'fahrgemeinschaften' ); ?></button>
-							<p class="description"><?php esc_html_e( 'Bild aus der Mediathek. Es wird in die E-Mail eingebettet und nicht von einer fremden Adresse nachgeladen. Ohne Logo wird die E-Mail ohne Bild versendet.', 'fahrgemeinschaften' ); ?></p>
+							<button type="button" class="button" id="fg-logo-pick" disabled><?php esc_html_e( 'Logo auswählen', 'arbeitsdienste' ); ?></button>
+							<button type="button" class="button" id="fg-logo-clear" disabled<?php echo $logo_id ? '' : ' hidden'; ?>><?php esc_html_e( 'Logo entfernen', 'arbeitsdienste' ); ?></button>
+							<p class="description"><?php esc_html_e( 'Bild aus der Mediathek. Es wird in die E-Mail eingebettet und nicht von einer fremden Adresse nachgeladen. Ohne Logo wird die E-Mail ohne Bild versendet.', 'arbeitsdienste' ); ?></p>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-footer-organisation"><?php esc_html_e( 'Absender', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-footer-organisation"><?php esc_html_e( 'Absender', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<textarea id="fg-footer-organisation" name="fg_footer_organisation" rows="3" class="large-text" required><?php echo esc_textarea( $settings['footer_organisation'] ); ?></textarea>
-							<span class="description"><?php esc_html_e( 'Vereinsname und Anschrift, eine Angabe pro Zeile. Pflichtangabe.', 'fahrgemeinschaften' ); ?></span>
+							<span class="description"><?php esc_html_e( 'Vereinsname und Anschrift, eine Angabe pro Zeile. Pflichtangabe.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-footer-contact"><?php esc_html_e( 'Kontakt', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-footer-contact"><?php esc_html_e( 'Kontakt', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<textarea id="fg-footer-contact" name="fg_footer_contact" rows="4" class="large-text" required><?php echo esc_textarea( $settings['footer_contact'] ); ?></textarea>
-							<span class="description"><?php esc_html_e( 'Telefon, E-Mail-Adresse und Website, eine Angabe pro Zeile. Pflichtangabe.', 'fahrgemeinschaften' ); ?></span>
+							<span class="description"><?php esc_html_e( 'Telefon, E-Mail-Adresse und Website, eine Angabe pro Zeile. Pflichtangabe.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-footer-legal"><?php esc_html_e( 'Rechtlicher Hinweis', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-footer-legal"><?php esc_html_e( 'Rechtlicher Hinweis', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<textarea id="fg-footer-legal" name="fg_footer_legal" rows="4" class="large-text" required><?php echo esc_textarea( $settings['footer_legal'] ); ?></textarea>
-							<span class="description"><?php esc_html_e( 'Die satzungsgemäß erforderlichen Pflichtangaben zu Anbieter, Kontakt und Datenschutz. Eine Angabe pro Zeile. Pflichtangabe.', 'fahrgemeinschaften' ); ?></span>
+							<span class="description"><?php esc_html_e( 'Die satzungsgemäß erforderlichen Pflichtangaben zu Anbieter, Kontakt und Datenschutz. Eine Angabe pro Zeile. Pflichtangabe.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 				</table>
 
-				<?php submit_button( __( 'Speichern', 'fahrgemeinschaften' ) ); ?>
+				<?php submit_button( __( 'Speichern', 'arbeitsdienste' ) ); ?>
 			</form>
 
-			<h2><?php esc_html_e( 'Vorschau', 'fahrgemeinschaften' ); ?></h2>
+			<h2><?php esc_html_e( 'Vorschau', 'arbeitsdienste' ); ?></h2>
 			<p>
-				<a class="button" id="fg-mail-preview" href="<?php echo esc_url( $preview ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'E-Mail ansehen', 'fahrgemeinschaften' ); ?></a>
-				<span class="description"><?php esc_html_e( 'Zeigt den HTML-Teil mit den gespeicherten Angaben und einem Beispieltext. Die Vorschau verwendet die gespeicherten Werte, also zuerst speichern.', 'fahrgemeinschaften' ); ?></span>
+				<a class="button" id="fg-mail-preview" href="<?php echo esc_url( $preview ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'E-Mail ansehen', 'arbeitsdienste' ); ?></a>
+				<span class="description"><?php esc_html_e( 'Zeigt den HTML-Teil mit den gespeicherten Angaben und einem Beispieltext. Die Vorschau verwendet die gespeicherten Werte, also zuerst speichern.', 'arbeitsdienste' ); ?></span>
 			</p>
 		</div>
 		<?php
@@ -113,7 +113,7 @@ final class FG_Admin_Settings {
 	 */
 	public function save() {
 		if ( ! current_user_can( 'edit_posts' ) ) {
-			wp_die( esc_html__( 'Du hast keine Berechtigung, die Einstellungen zu ändern.', 'fahrgemeinschaften' ) );
+			wp_die( esc_html__( 'Du hast keine Berechtigung, die Einstellungen zu ändern.', 'arbeitsdienste' ) );
 		}
 
 		check_admin_referer( 'fg_save_settings', 'fg_settings_nonce' );
@@ -129,9 +129,9 @@ final class FG_Admin_Settings {
 		);
 
 		$labels = array(
-			'footer_organisation' => __( 'Absender', 'fahrgemeinschaften' ),
-			'footer_contact'      => __( 'Kontakt', 'fahrgemeinschaften' ),
-			'footer_legal'        => __( 'Rechtlicher Hinweis', 'fahrgemeinschaften' ),
+			'footer_organisation' => __( 'Absender', 'arbeitsdienste' ),
+			'footer_contact'      => __( 'Kontakt', 'arbeitsdienste' ),
+			'footer_legal'        => __( 'Rechtlicher Hinweis', 'arbeitsdienste' ),
 		);
 
 		$missing = array();
@@ -146,7 +146,7 @@ final class FG_Admin_Settings {
 			FG_Admin::store_notice(
 				sprintf(
 					/* translators: %s: comma separated list of field names. */
-					__( 'Es wurde nichts gespeichert, weil %s fehlt. Diese Angaben stehen in jeder E-Mail des Plugins.', 'fahrgemeinschaften' ),
+					__( 'Es wurde nichts gespeichert, weil %s fehlt. Diese Angaben stehen in jeder E-Mail des Plugins.', 'arbeitsdienste' ),
 					implode( ', ', $missing )
 				),
 				'error'
@@ -157,7 +157,7 @@ final class FG_Admin_Settings {
 		// An attachment that is not an image is refused instead of being stored:
 		// the value is used to embed a file, and only an image may be embedded.
 		if ( $logo_id && ! wp_attachment_is_image( $logo_id ) ) {
-			FG_Admin::store_notice( __( 'Das gewählte Logo wurde nicht gespeichert, weil es kein Bild aus der Mediathek ist.', 'fahrgemeinschaften' ), 'error' );
+			FG_Admin::store_notice( __( 'Das gewählte Logo wurde nicht gespeichert, weil es kein Bild aus der Mediathek ist.', 'arbeitsdienste' ), 'error' );
 			$this->redirect_back();
 		}
 
@@ -168,7 +168,7 @@ final class FG_Admin_Settings {
 
 		update_option( FG_SETTINGS_OPTION, $settings, false );
 
-		FG_Admin::store_notice( __( 'Die Einstellungen wurden gespeichert.', 'fahrgemeinschaften' ) );
+		FG_Admin::store_notice( __( 'Die Einstellungen wurden gespeichert.', 'arbeitsdienste' ) );
 		$this->redirect_back();
 	}
 
@@ -183,7 +183,7 @@ final class FG_Admin_Settings {
 	 */
 	public function preview() {
 		if ( ! current_user_can( 'edit_posts' ) ) {
-			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'fahrgemeinschaften' ) );
+			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'arbeitsdienste' ) );
 		}
 
 		check_admin_referer( 'fg_mail_preview' );
@@ -201,16 +201,16 @@ final class FG_Admin_Settings {
 			array(
 				'Hallo Anton,',
 				'',
-				__( 'so sieht eine E-Mail des Plugins im HTML-Teil aus. Der Text steht unverändert als reiner Text in der ersten Alternative der Nachricht.', 'fahrgemeinschaften' ),
+				__( 'so sieht eine E-Mail des Plugins im HTML-Teil aus. Der Text steht unverändert als reiner Text in der ersten Alternative der Nachricht.', 'arbeitsdienste' ),
 				'',
-				__( 'Fahrgemeinschaft: Müller & Söhne aus Innenstadt', 'fahrgemeinschaften' ),
+				__( 'Fahrgemeinschaft: Müller & Söhne aus Innenstadt', 'arbeitsdienste' ),
 				'',
-				__( 'Mit freundlichen Grüßen', 'fahrgemeinschaften' ),
-				__( 'Fahrgemeinschaften', 'fahrgemeinschaften' ),
+				__( 'Mit freundlichen Grüßen', 'arbeitsdienste' ),
+				__( 'Fahrgemeinschaften', 'arbeitsdienste' ),
 			)
 		);
 
-		$subject = __( 'Fahrgemeinschaft bestätigen – Arbeitseinsatz', 'fahrgemeinschaften' );
+		$subject = __( 'Fahrgemeinschaft bestätigen – Arbeitseinsatz', 'arbeitsdienste' );
 
 		if ( ! headers_sent() ) {
 			header( 'Content-Type: text/html; charset=' . get_bloginfo( 'charset' ) );
@@ -242,8 +242,8 @@ final class FG_Admin_Settings {
 		wp_enqueue_media();
 
 		$strings = array(
-			'frameTitle'  => __( 'Logo auswählen', 'fahrgemeinschaften' ),
-			'frameButton' => __( 'Dieses Bild verwenden', 'fahrgemeinschaften' ),
+			'frameTitle'  => __( 'Logo auswählen', 'arbeitsdienste' ),
+			'frameButton' => __( 'Dieses Bild verwenden', 'arbeitsdienste' ),
 		);
 
 		wp_add_inline_script( 'media-views', $this->picker_script( $strings ) );
@@ -341,7 +341,7 @@ JS;
 		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
 
 		return $screen instanceof WP_Screen
-			&& FG_ADMIN_MENU_SLUG . '_page_' . FG_SETTINGS_PAGE_SLUG === $screen->id;
+			&& FG_Admin::screen_id( FG_SETTINGS_PAGE_SLUG ) === $screen->id;
 	}
 
 	/**

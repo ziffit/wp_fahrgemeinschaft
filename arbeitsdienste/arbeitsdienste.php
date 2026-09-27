@@ -1,14 +1,14 @@
 <?php
 /**
- * Plugin Name:       Fahrgemeinschaften
- * Description:       Öffentliche Fahrgemeinschaften für Vereinsarbeitsdienste mit sicherer E-Mail-Bestätigung.
- * Version:           1.7.0
+ * Plugin Name:       Arbeitsdienste
+ * Description:       Arbeitsdienste eines Vereins planen, Mitglieder eintragen und öffentlich anbieten, mit Anmeldung zum Dienst und zu den Fahrgemeinschaften je Dienst.
+ * Version:           1.9.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            Verein
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain:       fahrgemeinschaften
+ * Text Domain:       arbeitsdienste
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -24,7 +24,7 @@ defined( 'ABSPATH' ) || exit;
  * Mails oder Datenschutzerklärung: sie kennzeichnet die ausgelieferte Fassung,
  * und wer ein Archiv entpackt, soll an der Zahl erkennen, was darin ist.
  */
-define( 'FG_VERSION', '1.7.0' );
+define( 'FG_VERSION', '1.9.0' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
 /**
  * Name of the element that carries a message after a form was sent.
@@ -36,6 +36,7 @@ define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
  */
 define( 'FG_NOTICE_ANCHOR', 'fg-hinweis' );
 define( 'FG_EVENTS_PAGE_SLUG', 'fahrgemeinschaften-events' );
+define( 'FG_MEMBERS_PAGE_SLUG', 'fahrgemeinschaften-members' );
 define( 'FG_RIDES_PAGE_SLUG', 'fahrgemeinschaften-rides' );
 define( 'FG_SETTINGS_PAGE_SLUG', 'fahrgemeinschaften-settings' );
 define( 'FG_SETTINGS_OPTION', 'fg_settings' );
@@ -62,6 +63,7 @@ require_once __DIR__ . '/includes/class-fg-records.php';
 require_once __DIR__ . '/includes/class-fg-schema.php';
 require_once __DIR__ . '/includes/class-fg-store.php';
 require_once __DIR__ . '/includes/class-fg-repository.php';
+require_once __DIR__ . '/includes/class-fg-member-import.php';
 require_once __DIR__ . '/includes/class-fg-stats.php';
 require_once __DIR__ . '/includes/class-fg-mail-templates.php';
 require_once __DIR__ . '/includes/class-fg-mailer.php';
@@ -70,6 +72,7 @@ require_once __DIR__ . '/includes/class-fg-public-events.php';
 require_once __DIR__ . '/includes/class-fg-actions.php';
 require_once __DIR__ . '/includes/class-fg-admin.php';
 require_once __DIR__ . '/includes/class-fg-admin-events.php';
+require_once __DIR__ . '/includes/class-fg-admin-members.php';
 require_once __DIR__ . '/includes/class-fg-admin-rides.php';
 require_once __DIR__ . '/includes/class-fg-admin-settings.php';
 require_once __DIR__ . '/includes/class-fg-privacy.php';

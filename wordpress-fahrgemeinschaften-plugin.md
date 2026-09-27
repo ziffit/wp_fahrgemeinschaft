@@ -6,7 +6,18 @@
 > (`{prefix}fg_events`, `{prefix}fg_rides`) ersetzt worden; die Gründe, die betroffenen
 > Meta-Schlüssel und die abweichenden Entscheidungen stehen in
 > `~/.opencode/plan/fahrgemeinschaften-eigene-tabellen.md` und in
-> `fahrgemeinschaften/README.md` unter „Bewusste Abweichungen und Entscheidungen“.
+> `arbeitsdienste/README.md` unter „Bewusste Abweichungen und Entscheidungen“.
+>
+> **Hinweis (27.09.2026):** Der Auftrag ist um die Mitgliederverwaltung erweitert worden
+> (Plugin 1.9.0, Schema 1.2.0). Damit fällt die Entscheidung „gültige Teilnehmeradressen
+> werden vorab je Arbeitsdienst durch Administratoren eingetragen“ weg: Die Teilnehmer
+> tragen sich selbst ein, und die Adressen liegen in einer Mitgliedertabelle statt in
+> einer Textspalte am Arbeitsdienst. Zwei weitere Tabellen kommen dazu
+> (`{prefix}fg_members`, `{prefix}fg_event_members`), der Arbeitsdienst bekommt einen
+> Bedarf und damit eine Zahl freier Plätze, und der Kontaktweg verlangt zusätzlich die
+> Anmeldung für genau diesen Dienst. Die betroffenen Stellen sind an Ort und Stelle als
+> überholt markiert; was daraus geworden ist, steht unten unter
+> „Umsetzungsstand: Mitgliederverwaltung (1.9.0)“.
 
 ## Ziel
 
@@ -15,7 +26,7 @@ Ein schlankes WordPress-Plugin für Vereinsmitglieder, das öffentlich sichtbare
 ## Festgelegte Entscheidungen
 
 - Keine WordPress-Anmeldung für die öffentliche Nutzung.
-- Gültige Teilnehmeradressen werden vorab je Arbeitsdienst durch Administratoren eingetragen.
+- ~~Gültige Teilnehmeradressen werden vorab je Arbeitsdienst durch Administratoren eingetragen.~~ **Überholt seit 1.9.0:** Die Anmeldung macht das Mitglied selbst; siehe „Umsetzungsstand: Mitgliederverwaltung (1.9.0)“.
 - Eine Veröffentlichung wird nur nach Bestätigung des E-Mail-Links öffentlich angezeigt.
 - Die Kontaktaufnahme benötigt keine E-Mail-Bestätigung.
 - Keine Mengenbegrenzung und keine automatische Bot-Sperre.
@@ -180,7 +191,7 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 - Bestätigungs- und Löschen-Links funktionieren einmalig und laufen korrekt ab.
 - Eine Vormerkung kann gelöscht und anschließend neu erstellt werden.
 - Der Kontakt erzeugt unabhängig von der Adressgültigkeit dieselbe öffentliche Antwort.
-- Nur gültige Teilnehmeradressen lösen Kontakt-E-Mails aus.
+- ~~Nur gültige Teilnehmeradressen lösen Kontakt-E-Mails aus.~~ **Seit 1.9.0 verschärft:** Es genügt nicht, dass eine Adresse zu einem Mitglied gehört — das Mitglied muss für genau den Arbeitsdienst eingetragen sein, um dessen Eintrag zu kontaktieren. Auf beiden Seiten des Kontakts, Anfragender wie Ersteller.
 - Vergangene Arbeitsdienste verschwinden automatisch aus der öffentlichen Anzeige.
 - Das Löschen eines Arbeitsdienstes löscht auch alle zugehörigen Fahrgemeinschaften.
 - Formulareingaben können weder HTML-/JavaScript-Injection noch SQL-Injection auslösen. Im HTML-Teil der E-Mails werden sie escaped eingesetzt.
@@ -198,7 +209,7 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 
 ## Umsetzungsstand: Ergänzungen gegenüber dem Plan
 
-Die Umsetzung folgt dem Plan, ergänzt ihn aber an den folgenden Stellen. Die ausführliche Begründung steht in `fahrgemeinschaften/README.md` unter „Bewusste Abweichungen und Entscheidungen“.
+Die Umsetzung folgt dem Plan, ergänzt ihn aber an den folgenden Stellen. Die ausführliche Begründung steht in `arbeitsdienste/README.md` unter „Bewusste Abweichungen und Entscheidungen“.
 
 ### Eigene Beitragstypen
 
@@ -228,4 +239,83 @@ Die Umsetzung folgt dem Plan, ergänzt ihn aber an den folgenden Stellen. Die au
 
 - Die tägliche Bereinigung hängt an WP-Cron (`fg_daily_cleanup`). Weil WP-Cron nur bei Traffic läuft, führt der Adminbereich dieselbe Bereinigung als Rückfallebene einmal täglich aus; die Marker-Option `fg_last_cleanup` begrenzt das auf einen Lauf pro Tag.
 - Die Statistik schreibt ihre Tagesaggregate ohne Sperre zurück. Bei sehr gleichzeitigen Abläufen kann ein Zählerstand verloren gehen; betroffen sind nur aggregierte Werte ohne Personenbezug.
-- Die Deinstallation behält Arbeitsdienste und Fahrgemeinschaften, entfernt aber Statistik, Marker-Option und die vergebenen Capabilities.
+- ~~Die Deinstallation behält Arbeitsdienste und Fahrgemeinschaften, entfernt aber Statistik, Marker-Option und die vergebenen Capabilities.~~ **Seit 1.9.0 überholt:** Sie entfernt alle vier Tabellen und damit Arbeitsdienste, Fahrgemeinschaften, Mitglieder und Anmeldungen vollständig, dazu die Optionen. Vor dem Deinstallieren exportieren.
+
+## Umsetzungsstand: Mitgliederverwaltung (1.9.0)
+
+Ergänzt um das, was der Auftrag am 27.09.2026 verlangt hat: Das Mitglied trägt sich für
+einen Arbeitsdienst selbst ein, und der Verein verwaltet den Mitgliederkreis. Schema `1.2.0`.
+Die ausführliche Begründung steht in `arbeitsdienste/README.md` unter „Bewusste
+Abweichungen und Entscheidungen“, die Prüfungen in `PRUEFUMGEBUNG.md`.
+
+### Tabellen
+
+- `{prefix}fg_members` — der Mitgliedskreis: `member_no` (Text, eindeutig, ohne Beachtung
+  der Großschreibung), `email` (eindeutig), `first_name`, `last_name`, `created_at`,
+  `updated_at`.
+- `{prefix}fg_event_members` — die Anmeldung: `event_id`, `member_id`, `registered_at`,
+  `unregister_hash`, `unregister_expires`, `public_ref`, `source_url`; je Dienst und
+  Mitglied genau eine Zeile (`UNIQUE (event_id, member_id)`).
+- Die Spalte `participants` am Arbeitsdienst bleibt stehen und ist ab `1.2.0` leer. Der
+  Inhalt wird **nicht** übernommen: Eine E-Mail-Adresse allein sagt nicht, wer das Mitglied
+  ist, und die neue Anmeldung verlangt Nummer und Adresse zusammen. Wer die alten Listen
+  behalten will, sichert sie vorher und pflegt die Nummern nach — der Import nimmt sie ab
+  dem zweiten Lauf wieder auf.
+
+### Anmeldung durch das Mitglied
+
+- Der Arbeitsdienst bekommt **Bedarf** (`demand`, vorzeichenlose Ganzzahl, 0 = nicht
+  angegeben) und damit **freie Plätze** = `max(0, Bedarf − Anmeldungen)`. Die Zahl steht in
+  der Listenzeile „Verfügbare freie Plätze“; bei 0 ist die Zeile da und trägt den Satz
+  „kein freier Platz“, und die Schaltfläche „Eintragen“ führt zum geschlossenen Zustand.
+- Das Formular verlangt **Mitgliedsnummer und E-Mail-Adresse** und bestätigt mit
+  „verbindlich anmelden“. Es gibt keinen vorgemerkten Zustand: Die E-Mail ist die
+  Bestätigung. Sie trägt den Abmeldelink und **keinen** Namen — auf der Dienstseite steht
+  die Zahl der freien Plätze, nicht wer sie belegt.
+- Die Nummer ist Text, nicht Zahl: `0042` und `42` können zwei Mitglieder sein.
+- Ein glücklicher Fund genügt nicht: Nummer **und** passende Adresse müssen zusammen
+  gehören. Die Fehlermeldung sagt nicht, welche der beiden Hälften falsch war, weil die
+  Seite öffentlich ist und ein Hinweis einem Vorbeigehenden sagen würde, ob eine
+  geratene Nummer existiert.
+- Bei 0 freien Plätzen ist eine Anmeldung unmöglich, und bei einem Bedarf von 0 auch. Die
+  beiden Fälle tragen **verschiedene** Sätze, weil sie verschiedene Ursachen haben.
+- Der Abmeldelink öffnet erst eine Seite und löscht erst beim zweiten Klick, mit eigenem
+  Formular und Nonce. Ein Link, der beim ersten Abruf löscht, wird von jedem Mailscanner
+  ausgeführt.
+
+### Import
+
+- Schlüssel ist die Mitgliedsnummer: unbekannt → anlegen, bekannt → Namen und Adresse
+  aktualisieren, wenn sie sich unterscheiden. Sonst nichts anfassen, `updated_at` bleibt
+  stehen.
+- Die Kopfzeile ist Pflicht, die vier Spalten werden ohne Beachtung der Großschreibung
+  über eine Liste von Alternativen erkannt, und fehlt eine, bricht der Import ab und
+  nennt die fehlende Spalte. Nach Position zuzuordnen wäre bei einer unbekannten Datei
+  ein Zufall, der beim nächsten Export aufhört.
+- Die Datei wird **ganz** geprüft, bevor irgendetwas geschrieben wird; die Meldung nennt
+  Zeilennummer und Art des Fehlers. Ein halb importierter Mitgliederbestand sieht gepflegt
+  aus und ist es nicht.
+- Der Bericht beantwortet die drei Fragen des Vereins: was ist neu, was hat sich geändert,
+  und wer steht in der Datenbank, aber nicht in der Datei. Ein Import löscht nie jemanden —
+  die Datei ist ein Export, und ein Export ist die Sicht von heute.
+- Die Spaltenzuordnung ist eine Vermutung über fremde Exportformate. Sie ist an genau einer
+  Stelle zu berichtigen (`$header_aliases` in `class-fg-member-import.php`), sobald der
+  echte Export des Vereins vorliegt.
+
+### Verwaltung und Folge
+
+- Der Adminbereich bekommt fünf Unterseiten: Arbeitsdienste, **Mitglieder**,
+  Fahrgemeinschaften, Einstellungen, Statistik. Am Arbeitsdienst steht statt des
+  Textfelds eine nur lesbare Liste der Angemeldeten mit einer Löschschaltfläche je Zeile.
+- Die Kontaktvermittlung verlangt jetzt auf **beiden** Seiten die Anmeldung für genau
+  diesen Dienst: Der Anfragende muss eingetragen sein, und der Ersteller des Eintrags
+  ebenso. Ein Arbeitsdienst ohne Bedarf oder ohne freien Platz kann damit auch keine
+  Fahrtgemeinschaft anbieten — die Kehrseite derselben Regel, gewollt, weil die
+  Arbeitsdienstliste die einzige ist.
+- Adressen sind auf 190 Zeichen begrenzt, weil die Spalten so breit sind. Ohne diese Grenze
+  nimmt der Server eine nach RFC 5321 gültige Adresse von 200 Zeichen an und lehnt sie
+  beim Schreiben stillschweigend ab.
+- Das Löschen eines Mitglieds nimmt die Anmeldungen mit und die angebotenen
+  Fahrgemeinschaften nicht. Der Stammdatensatz selbst wird nur über die Mitgliederliste
+  geändert, nicht über die Datenschutz-Werkzeuge: Ein Löschantrag sagt, dass die
+  Anmeldungen hier weg sollen, nicht dass der Mensch aus dem Verein verschwindet.

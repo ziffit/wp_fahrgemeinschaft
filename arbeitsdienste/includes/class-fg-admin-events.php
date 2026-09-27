@@ -2,7 +2,7 @@
 /**
  * Admin screens for work-service events.
  *
- * @package Fahrgemeinschaften
+ * @package Arbeitsdienste
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -10,11 +10,14 @@ defined( 'ABSPATH' ) || exit;
 /**
  * List and form screen for work-service events.
  *
- * A work service is a small record: a title, a date, an optional start time,
- * the pre-registered participant addresses, a visibility flag, and four optional
- * details for the public list of work services: group, number of people needed,
- * length in hours and a description. There is no draft state: an event either
- * may be offered publicly or it may not.
+ * A work service is a small record: a title, a date, an optional start time, a
+ * visibility flag, and four optional details for the public list of work
+ * services: group, number of people needed, length in hours and a description.
+ * There is no draft state: an event either may be offered publicly or it may not.
+ *
+ * Who is in the duty is not a field of the duty. The members register themselves
+ * on the public page, so the duty screen shows the resulting list and offers to
+ * remove one entry, and it never shows a form that would type the list by hand.
  */
 final class FG_Admin_Events {
 	/**
@@ -42,7 +45,7 @@ final class FG_Admin_Events {
 	 */
 	public function render() {
 		if ( ! current_user_can( 'edit_posts' ) ) {
-			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'fahrgemeinschaften' ) );
+			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'arbeitsdienste' ) );
 		}
 
 		// `event` in the query means a form is wanted: an ID opens that record,
@@ -53,7 +56,7 @@ final class FG_Admin_Events {
 			$event     = $requested ? $this->repository->get_event( $requested ) : null;
 
 			if ( $requested && ! $event ) {
-				FG_Admin::store_notice( __( 'Dieser Arbeitsdienst wurde nicht gefunden.', 'fahrgemeinschaften' ), 'error' );
+				FG_Admin::store_notice( __( 'Dieser Arbeitsdienst wurde nicht gefunden.', 'arbeitsdienste' ), 'error' );
 			}
 
 			$this->render_form( $event );
@@ -79,30 +82,48 @@ final class FG_Admin_Events {
 			),
 			admin_url( 'admin.php' )
 		);
+
+		// One query for the whole page. Bedarf, Teilnehmer and freie Plätze are
+		// three numbers about the same duties, and asking per row would send three
+		// queries per row.
+		$ids    = array_map(
+			static function ( FG_Event $event ) {
+				return $event->id;
+			},
+			$events
+		);
+		$signed = $this->repository->get_registration_counts_for_events( $ids );
+		$rides  = $this->repository->get_ride_counts_for_events( $ids );
+
 		?>
 		<div class="wrap">
-			<h1 class="wp-heading-inline"><?php esc_html_e( 'Arbeitsdienste', 'fahrgemeinschaften' ); ?></h1>
-			<a href="<?php echo esc_url( $new_url ); ?>" class="page-title-action"><?php esc_html_e( 'Neuer Arbeitsdienst', 'fahrgemeinschaften' ); ?></a>
+			<h1 class="wp-heading-inline"><?php esc_html_e( 'Arbeitsdienste', 'arbeitsdienste' ); ?></h1>
+			<a href="<?php echo esc_url( $new_url ); ?>" class="page-title-action"><?php esc_html_e( 'Neuer Arbeitsdienst', 'arbeitsdienste' ); ?></a>
 			<hr class="wp-header-end">
 			<table class="widefat striped">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'Titel', 'fahrgemeinschaften' ); ?></th>
-						<th><?php esc_html_e( 'Datum', 'fahrgemeinschaften' ); ?></th>
-						<th><?php esc_html_e( 'Gruppe', 'fahrgemeinschaften' ); ?></th>
-						<th><?php esc_html_e( 'Bedarf', 'fahrgemeinschaften' ); ?></th>
-						<th><?php esc_html_e( 'Öffentlich sichtbar', 'fahrgemeinschaften' ); ?></th>
-						<th><?php esc_html_e( 'Teilnehmer', 'fahrgemeinschaften' ); ?></th>
-						<th><?php esc_html_e( 'Fahrgemeinschaften', 'fahrgemeinschaften' ); ?></th>
+						<th><?php esc_html_e( 'Titel', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Datum', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Gruppe', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Bedarf', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Teilnehmer', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Freie Plätze', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Öffentlich sichtbar', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Fahrgemeinschaften', 'arbeitsdienste' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
 					<?php if ( empty( $events ) ) : ?>
 						<tr>
-							<td colspan="7"><?php esc_html_e( 'Es wurde noch kein Arbeitsdienst angelegt.', 'fahrgemeinschaften' ); ?></td>
+							<td colspan="8"><?php esc_html_e( 'Es wurde noch kein Arbeitsdienst angelegt.', 'arbeitsdienste' ); ?></td>
 						</tr>
 					<?php endif; ?>
 					<?php foreach ( $events as $event ) : ?>
+						<?php
+						$registered = isset( $signed[ $event->id ] ) ? (int) $signed[ $event->id ] : 0;
+						$free       = $this->repository->free_places( $event, $registered );
+						?>
 						<tr>
 							<td>
 								<strong><a href="<?php echo esc_url( $this->edit_url( $event->id ) ); ?>"><?php echo esc_html( $event->title ); ?></a></strong>
@@ -110,15 +131,16 @@ final class FG_Admin_Events {
 							<td><?php echo esc_html( $this->repository->format_event_date( $event ) ); ?></td>
 							<td><?php echo esc_html( $event->group_name ); ?></td>
 							<td><?php echo esc_html( $event->demand > 0 ? (string) $event->demand : '—' ); ?></td>
+							<td><?php echo esc_html( (string) $registered ); ?></td>
+							<td><?php echo esc_html( (string) $free ); ?></td>
 							<td>
 								<?php
 								echo $event->is_active
-									? esc_html__( 'Ja', 'fahrgemeinschaften' )
-									: esc_html__( 'Nein', 'fahrgemeinschaften' );
+									? esc_html__( 'Ja', 'arbeitsdienste' )
+									: esc_html__( 'Nein', 'arbeitsdienste' );
 								?>
 							</td>
-							<td><?php echo esc_html( (string) count( $event->participants ) ); ?></td>
-							<td><?php echo esc_html( (string) $this->repository->count_event_rides( $event->id ) ); ?></td>
+							<td><?php echo esc_html( (string) ( isset( $rides[ $event->id ] ) ? (int) $rides[ $event->id ] : 0 ) ); ?></td>
 						</tr>
 					<?php endforeach; ?>
 				</tbody>
@@ -141,17 +163,17 @@ final class FG_Admin_Events {
 		$time     = $is_new ? '' : $event->event_time;
 		$active   = $is_new ? true : $event->is_active;
 		$uuid     = $is_new ? '' : $event->event_uuid;
-		$attendees = $is_new ? '' : implode( "\n", $event->participants );
 		$group    = $is_new ? '' : $event->group_name;
 		$demand   = $is_new ? '' : (string) $event->demand;
 		$duration = $is_new ? '' : (string) $event->duration_hours;
 		$text     = $is_new ? '' : $event->description;
 		$ride_count = $is_new ? 0 : $this->repository->count_event_rides( $event->id );
+		$registered = $is_new ? array() : $this->repository->get_event_registrations( $event->id );
 		?>
 		<div class="wrap">
 			<h1><?php echo $is_new
-				? esc_html__( 'Neuer Arbeitsdienst', 'fahrgemeinschaften' )
-				: esc_html__( 'Arbeitsdienst bearbeiten', 'fahrgemeinschaften' ); ?></h1>
+				? esc_html__( 'Neuer Arbeitsdienst', 'arbeitsdienste' )
+				: esc_html__( 'Arbeitsdienst bearbeiten', 'arbeitsdienste' ); ?></h1>
 
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="fg_save_event">
@@ -160,106 +182,188 @@ final class FG_Admin_Events {
 
 				<table class="form-table" role="presentation">
 					<tr>
-						<th scope="row"><label for="fg-title"><?php esc_html_e( 'Titel', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-title"><?php esc_html_e( 'Titel', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<input type="text" id="fg-title" name="fg_title" class="regular-text" maxlength="200" value="<?php echo esc_attr( $title ); ?>" required>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-date"><?php esc_html_e( 'Datum', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-date"><?php esc_html_e( 'Datum', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<input type="date" id="fg-date" name="fg_event_date" value="<?php echo esc_attr( $date ); ?>" required>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-time"><?php esc_html_e( 'Beginn (Uhrzeit, optional)', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-time"><?php esc_html_e( 'Beginn (Uhrzeit, optional)', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<input type="time" id="fg-time" name="fg_event_time" value="<?php echo esc_attr( $time ); ?>">
-							<span class="description"><?php esc_html_e( 'Ohne Uhrzeit gilt der ganze Tag. Mit Uhrzeit endet die Anmeldung zu Fahrgemeinschaften mit diesem Zeitpunkt, weil der Dienst dann beginnt.', 'fahrgemeinschaften' ); ?></span>
+							<span class="description"><?php esc_html_e( 'Ohne Uhrzeit gilt der ganze Tag. Mit Uhrzeit endet die Anmeldung zu Fahrgemeinschaften mit diesem Zeitpunkt, weil der Dienst dann beginnt.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-group"><?php esc_html_e( 'Gruppe', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-group"><?php esc_html_e( 'Gruppe', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<input type="text" id="fg-group" name="fg_group_name" class="regular-text" maxlength="<?php echo esc_attr( FG_Schema::GROUP_MAX ); ?>" value="<?php echo esc_attr( $group ); ?>">
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-demand"><?php esc_html_e( 'Bedarf an Personen', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-demand"><?php esc_html_e( 'Bedarf an Personen', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<input type="number" id="fg-demand" name="fg_demand" class="small-text" min="0" max="<?php echo esc_attr( FG_Schema::COUNT_MAX ); ?>" step="1" value="<?php echo esc_attr( $demand ); ?>">
-							<span class="description"><?php esc_html_e( 'Leer lassen, wenn der Verein keine Zahl angibt. Der Wert wird öffentlich als „8 Personen“ angezeigt.', 'fahrgemeinschaften' ); ?></span>
+							<span class="description"><?php esc_html_e( 'Leer lassen, wenn der Verein keine Zahl angibt. Der Wert wird öffentlich als „8 Personen“ angezeigt.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-duration"><?php esc_html_e( 'Dauer in Stunden', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-duration"><?php esc_html_e( 'Dauer in Stunden', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<input type="number" id="fg-duration" name="fg_duration_hours" class="small-text" min="0" max="<?php echo esc_attr( FG_Schema::COUNT_MAX ); ?>" step="1" value="<?php echo esc_attr( $duration ); ?>">
-							<span class="description"><?php esc_html_e( 'Ganze Stunden, leer lassen, wenn die Dauer nicht bekannt ist.', 'fahrgemeinschaften' ); ?></span>
+							<span class="description"><?php esc_html_e( 'Ganze Stunden, leer lassen, wenn die Dauer nicht bekannt ist.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-description"><?php esc_html_e( 'Beschreibung', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-description"><?php esc_html_e( 'Beschreibung', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<textarea id="fg-description" name="fg_description" rows="5" class="large-text" maxlength="<?php echo esc_attr( FG_Schema::DESCRIPTION_MAX ); ?>"><?php echo esc_textarea( $text ); ?></textarea>
-							<span class="description"><?php esc_html_e( 'Zeilenumbrüche bleiben auf der öffentlichen Seite erhalten. HTML ist hier nicht möglich; eine Angabe wie „<b>fett</b>“ erscheint genau so, wie sie eingegeben wurde.', 'fahrgemeinschaften' ); ?></span>
+							<span class="description"><?php esc_html_e( 'Zeilenumbrüche bleiben auf der öffentlichen Seite erhalten. HTML ist hier nicht möglich; eine Angabe wie „<b>fett</b>“ erscheint genau so, wie sie eingegeben wurde.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-active"><?php esc_html_e( 'Öffentlich sichtbar', 'fahrgemeinschaften' ); ?></label></th>
+						<th scope="row"><label for="fg-active"><?php esc_html_e( 'Öffentlich sichtbar', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<label>
 								<input type="checkbox" id="fg-active" name="fg_event_active" value="1" <?php checked( $active ); ?>>
-								<?php esc_html_e( 'Dieser Arbeitsdienst darf öffentlich angeboten werden.', 'fahrgemeinschaften' ); ?>
+								<?php esc_html_e( 'Dieser Arbeitsdienst darf öffentlich angeboten werden.', 'arbeitsdienste' ); ?>
 							</label>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-participants"><?php esc_html_e( 'Teilnehmer-E-Mails', 'fahrgemeinschaften' ); ?></label></th>
-						<td>
-							<textarea id="fg-participants" name="fg_event_participants" rows="12" class="large-text code"><?php echo esc_textarea( $attendees ); ?></textarea>
-							<span class="description"><?php esc_html_e( 'Eine Adresse pro Zeile; Komma und Semikolon werden ebenfalls unterstützt. Nur diese Adressen können Eintragungen veröffentlichen oder Kontakt aufnehmen.', 'fahrgemeinschaften' ); ?></span>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row"><?php esc_html_e( 'UUID', 'fahrgemeinschaften' ); ?></th>
+						<th scope="row"><?php esc_html_e( 'UUID', 'arbeitsdienste' ); ?></th>
 						<td>
 							<input type="text" class="regular-text" value="<?php echo esc_attr( $uuid ); ?>" readonly>
-							<span class="description"><?php esc_html_e( 'Wird beim Anlegen einmalig erzeugt, ist nicht öffentlich und kann nicht geändert werden.', 'fahrgemeinschaften' ); ?></span>
+							<span class="description"><?php esc_html_e( 'Wird beim Anlegen einmalig erzeugt, ist nicht öffentlich und kann nicht geändert werden.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 				</table>
 
-				<?php submit_button( $is_new ? __( 'Arbeitsdienst anlegen', 'fahrgemeinschaften' ) : __( 'Änderungen speichern', 'fahrgemeinschaften' ) ); ?>
+				<?php submit_button( $is_new ? __( 'Arbeitsdienst anlegen', 'arbeitsdienste' ) : __( 'Änderungen speichern', 'arbeitsdienste' ) ); ?>
 			</form>
 
 			<?php if ( ! $is_new ) : ?>
-				<h2><?php esc_html_e( 'Gefährliche Aktion', 'fahrgemeinschaften' ); ?></h2>
+				<?php $this->render_registrations( $event, $registered ); ?>
+
+				<h2><?php esc_html_e( 'Gefährliche Aktion', 'arbeitsdienste' ); ?></h2>
 				<p>
 					<?php
+					// Two counts, two nouns, and the two numbers have nothing to do
+					// with each other: a duty can have one member in it and five
+					// rides, or none and one. A single _n() on one of the two numbers
+					// would put "1 Anmeldungen" or "1 zugehörige Fahrgemeinschaften" in
+					// front of the person who has to read whether the click is safe.
 					printf(
-						/* translators: %d: number of associated rides. */
-						esc_html( _n( 'Diesen Arbeitsdienst und %d zugehörige Fahrgemeinschaft endgültig löschen?', 'Diesen Arbeitsdienst und %d zugehörige Fahrgemeinschaften endgültig löschen?', $ride_count, 'fahrgemeinschaften' ) ),
-						(int) $ride_count
-					);
-					?>
-				</p>
-				<p>
-					<?php
-					echo wp_kses_post( // phpcs:ignore WordPress.Security.EscapeOutput
-						FG_Admin::delete_link(
-							'event',
-							$event->id,
-							__( 'Diesen Arbeitsdienst und alle zugehörigen Fahrgemeinschaften endgültig löschen?', 'fahrgemeinschaften' )
+						/* translators: 1: the registrations and rides of this work service, each with its own singular and plural. */
+						esc_html__( 'Diesen Arbeitsdienst, %1$s und %2$s endgültig löschen?', 'arbeitsdienste' ),
+						sprintf(
+							/* translators: %d: number of registered members. */
+							esc_html( _n( '%d Anmeldung', '%d Anmeldungen', count( $registered ), 'arbeitsdienste' ) ),
+							count( $registered )
+						),
+						sprintf(
+							/* translators: %d: number of associated rides. */
+							esc_html( _n( '%d zugehörige Fahrgemeinschaft', '%d zugehörige Fahrgemeinschaften', $ride_count, 'arbeitsdienste' ) ),
+							(int) $ride_count
 						)
 					);
 					?>
 				</p>
 				<p>
-					<a href="<?php echo esc_url( $this->list_url() ); ?>"><?php esc_html_e( 'Zurück zur Übersicht', 'fahrgemeinschaften' ); ?></a>
+					<?php
+					FG_Admin::echo_delete_link(
+						'event',
+						$event->id,
+						__( 'Diesen Arbeitsdienst mit allen Anmeldungen und zugehörigen Fahrgemeinschaften endgültig löschen?', 'arbeitsdienste' )
+					);
+					?>
+				</p>
+				<p>
+					<a href="<?php echo esc_url( $this->list_url() ); ?>"><?php esc_html_e( 'Zurück zur Übersicht', 'arbeitsdienste' ); ?></a>
 				</p>
 			<?php endif; ?>
 		</div>
+		<?php
+	}
+
+	/**
+	 * Render the members registered for one work service.
+	 *
+	 * This list is the answer to the question the duty asks: how many people it
+	 * still needs. It is shown after the save button and not inside the form,
+	 * because it is not part of what the form writes. A member appears in it
+	 * because they registered themselves with their member number, and the only
+	 * thing that can be changed from here is the removal of one entry, which
+	 * leaves the member in the club and only frees the place in this duty.
+	 *
+	 * @param FG_Event $event         Work service.
+	 * @param array    $registrations Rows from the repository.
+	 * @return void
+	 */
+	private function render_registrations( FG_Event $event, array $registrations ) {
+		$count = count( $registrations );
+		?>
+		<h2><?php esc_html_e( 'Angemeldete Mitglieder', 'arbeitsdienste' ); ?></h2>
+		<?php if ( 0 === (int) $event->demand ) : ?>
+			<p class="description">
+				<?php esc_html_e( 'Für diesen Arbeitsdienst ist kein Bedarf eingetragen. Deshalb steht unter der öffentlichen Seite keine Anmeldung zur Verfügung, und diese Liste bleibt leer.', 'arbeitsdienste' ); ?>
+			</p>
+		<?php endif; ?>
+		<?php if ( 0 === $count ) : ?>
+			<p><?php esc_html_e( 'Für diesen Arbeitsdienst hat sich noch kein Mitglied eingetragen.', 'arbeitsdienste' ); ?></p>
+		<?php else : ?>
+			<p>
+				<?php
+				printf(
+					/* translators: 1: number of registered members, 2: number of free places. */
+					esc_html__( '%1$d von höchstens %2$d Plätzen belegt.', 'arbeitsdienste' ),
+					(int) $count,
+					(int) $event->demand
+				);
+				?>
+			</p>
+			<table class="widefat striped">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Name', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Angemeldet am', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Aktion', 'arbeitsdienste' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $registrations as $row ) : ?>
+						<tr>
+							<td><?php echo esc_html( $row['member']->member_no ); ?></td>
+							<td><?php echo esc_html( trim( $row['member']->first_name . ' ' . $row['member']->last_name ) ); ?></td>
+							<td><?php echo esc_html( $row['member']->email ); ?></td>
+							<td><?php echo esc_html( $row['registration']->registered_at ); ?></td>
+							<td>
+								<?php
+								FG_Admin::echo_delete_link(
+									'registration',
+									$row['registration']->id,
+									sprintf(
+										/* translators: %s: member number. */
+										__( 'Die Anmeldung von Mitglied %s für diesen Arbeitsdienst löschen?', 'arbeitsdienste' ),
+										$row['member']->member_no
+									)
+								);
+								?>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+			<p class="description"><?php esc_html_e( 'Das Löschen einer Anmeldung gibt nur den Platz in diesem Arbeitsdienst frei. Das Mitglied bleibt im Verein und für andere Arbeitsdienste angemeldet.', 'arbeitsdienste' ); ?></p>
+		<?php endif; ?>
 		<?php
 	}
 
@@ -274,7 +378,7 @@ final class FG_Admin_Events {
 	 */
 	public function save() {
 		if ( ! current_user_can( 'edit_posts' ) ) {
-			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'fahrgemeinschaften' ) );
+			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'arbeitsdienste' ) );
 		}
 
 		$event_id = isset( $_POST['fg_event_id'] ) && ! is_array( $_POST['fg_event_id'] )
@@ -286,7 +390,6 @@ final class FG_Admin_Events {
 		$title        = isset( $_POST['fg_title'] ) ? sanitize_text_field( wp_unslash( $_POST['fg_title'] ) ) : '';
 		$raw_date     = isset( $_POST['fg_event_date'] ) ? sanitize_text_field( wp_unslash( $_POST['fg_event_date'] ) ) : '';
 		$raw_time     = isset( $_POST['fg_event_time'] ) ? sanitize_text_field( wp_unslash( $_POST['fg_event_time'] ) ) : '';
-		$participants = isset( $_POST['fg_event_participants'] ) ? sanitize_textarea_field( wp_unslash( $_POST['fg_event_participants'] ) ) : '';
 		$active       = isset( $_POST['fg_event_active'] ) && '1' === (string) wp_unslash( $_POST['fg_event_active'] );
 		$group        = isset( $_POST['fg_group_name'] ) ? str_replace( "\n", ' ', $this->read_text( wp_unslash( $_POST['fg_group_name'] ) ) ) : '';
 		$raw_demand   = isset( $_POST['fg_demand'] ) ? sanitize_text_field( wp_unslash( $_POST['fg_demand'] ) ) : '';
@@ -294,17 +397,17 @@ final class FG_Admin_Events {
 		$text         = isset( $_POST['fg_description'] ) ? $this->read_text( wp_unslash( $_POST['fg_description'] ) ) : '';
 
 		if ( '' === $title ) {
-			FG_Admin::store_notice( __( 'Bitte einen Titel für den Arbeitsdienst eingeben.', 'fahrgemeinschaften' ), 'error' );
+			FG_Admin::store_notice( __( 'Bitte einen Titel für den Arbeitsdienst eingeben.', 'arbeitsdienste' ), 'error' );
 			$this->redirect_back( $event_id );
 		}
 
 		if ( ! FG_Repository::is_valid_date( $raw_date ) ) {
-			FG_Admin::store_notice( __( 'Bitte ein gültiges Datum für den Arbeitsdienst eingeben. Es wurde nichts gespeichert.', 'fahrgemeinschaften' ), 'error' );
+			FG_Admin::store_notice( __( 'Bitte ein gültiges Datum für den Arbeitsdienst eingeben. Es wurde nichts gespeichert.', 'arbeitsdienste' ), 'error' );
 			$this->redirect_back( $event_id );
 		}
 
 		if ( '' !== $raw_time && ! FG_Repository::is_valid_time( $raw_time ) ) {
-			FG_Admin::store_notice( __( 'Die Uhrzeit wurde nicht gespeichert, weil sie ungültig ist.', 'fahrgemeinschaften' ), 'error' );
+			FG_Admin::store_notice( __( 'Die Uhrzeit wurde nicht gespeichert, weil sie ungültig ist.', 'arbeitsdienste' ), 'error' );
 			$this->redirect_back( $event_id );
 		}
 
@@ -316,7 +419,7 @@ final class FG_Admin_Events {
 			FG_Admin::store_notice(
 				sprintf(
 					/* translators: 1: field label, 2: number of characters allowed. */
-					__( '%1$s ist zu lang, es sind höchstens %2$s Zeichen erlaubt. Es wurde nichts gespeichert.', 'fahrgemeinschaften' ),
+					__( '%1$s ist zu lang, es sind höchstens %2$s Zeichen erlaubt. Es wurde nichts gespeichert.', 'arbeitsdienste' ),
 					$too_long['label'],
 					$too_long['limit']
 				),
@@ -325,14 +428,13 @@ final class FG_Admin_Events {
 			$this->redirect_back( $event_id );
 		}
 
-		$demand   = $this->count_or_error( $raw_demand, __( 'Bedarf an Personen', 'fahrgemeinschaften' ), $event_id );
-		$duration = $this->count_or_error( $raw_duration, __( 'Dauer', 'fahrgemeinschaften' ), $event_id );
+		$demand   = $this->count_or_error( $raw_demand, __( 'Bedarf an Personen', 'arbeitsdienste' ), $event_id );
+		$duration = $this->count_or_error( $raw_duration, __( 'Dauer', 'arbeitsdienste' ), $event_id );
 
 		$fields = array(
 			'title'          => $title,
 			'event_date'     => $raw_date,
 			'event_time'     => $raw_time,
-			'participants'   => $participants,
 			'is_active'      => $active,
 			'group_name'     => $group,
 			'demand'         => $demand,
@@ -342,21 +444,21 @@ final class FG_Admin_Events {
 
 		if ( $event_id ) {
 			if ( ! $this->repository->update_event( $event_id, $fields ) ) {
-				FG_Admin::store_notice( __( 'Der Arbeitsdienst konnte nicht gespeichert werden.', 'fahrgemeinschaften' ), 'error' );
+				FG_Admin::store_notice( __( 'Der Arbeitsdienst konnte nicht gespeichert werden.', 'arbeitsdienste' ), 'error' );
 				$this->redirect_back( $event_id );
 			}
 
-			FG_Admin::store_notice( __( 'Der Arbeitsdienst wurde gespeichert.', 'fahrgemeinschaften' ) );
+			FG_Admin::store_notice( __( 'Der Arbeitsdienst wurde gespeichert.', 'arbeitsdienste' ) );
 			$this->redirect_back( $event_id );
 		}
 
 		$new_id = $this->repository->insert_event( $fields );
 		if ( ! $new_id ) {
-			FG_Admin::store_notice( __( 'Der Arbeitsdienst konnte nicht angelegt werden.', 'fahrgemeinschaften' ), 'error' );
+			FG_Admin::store_notice( __( 'Der Arbeitsdienst konnte nicht angelegt werden.', 'arbeitsdienste' ), 'error' );
 			$this->redirect_back( 0 );
 		}
 
-		FG_Admin::store_notice( __( 'Der Arbeitsdienst wurde angelegt.', 'fahrgemeinschaften' ) );
+		FG_Admin::store_notice( __( 'Der Arbeitsdienst wurde angelegt.', 'arbeitsdienste' ) );
 		$this->redirect_back( $new_id );
 	}
 
@@ -370,12 +472,12 @@ final class FG_Admin_Events {
 	private function text_fields_over_limit( $group, $text ) {
 		$felder = array(
 			array(
-				'label' => __( 'Gruppe', 'fahrgemeinschaften' ),
+				'label' => __( 'Gruppe', 'arbeitsdienste' ),
 				'wert'  => $group,
 				'limit' => FG_Schema::GROUP_MAX,
 			),
 			array(
-				'label' => __( 'Beschreibung', 'fahrgemeinschaften' ),
+				'label' => __( 'Beschreibung', 'arbeitsdienste' ),
 				'wert'  => $text,
 				'limit' => FG_Schema::DESCRIPTION_MAX,
 			),
@@ -417,7 +519,7 @@ final class FG_Admin_Events {
 			FG_Admin::store_notice(
 				sprintf(
 					/* translators: 1: field label, 2: largest accepted number. */
-					__( '%1$s muss eine ganze Zahl ohne Vorzeichen bis %2$s sein. Es wurde nichts gespeichert.', 'fahrgemeinschaften' ),
+					__( '%1$s muss eine ganze Zahl ohne Vorzeichen bis %2$s sein. Es wurde nichts gespeichert.', 'arbeitsdienste' ),
 					$label,
 					FG_Schema::COUNT_MAX
 				),
@@ -526,12 +628,12 @@ final class FG_Admin_Events {
 			printf(
 				'<a class="prev-page button" href="%s">%s</a> ',
 				esc_url( add_query_arg( 'paged', $page - 1, $this->list_url() ) ),
-				esc_html__( '‹ Zurück', 'fahrgemeinschaften' )
+				esc_html__( '‹ Zurück', 'arbeitsdienste' )
 			);
 		}
 		printf(
 			/* translators: 1: current page, 2: total pages. */
-			esc_html__( 'Seite %1$d von %2$d', 'fahrgemeinschaften' ),
+			esc_html__( 'Seite %1$d von %2$d', 'arbeitsdienste' ),
 			(int) $page,
 			(int) $pages
 		);
@@ -539,7 +641,7 @@ final class FG_Admin_Events {
 			printf(
 				' <a class="next-page button" href="%s">%s</a>',
 				esc_url( add_query_arg( 'paged', $page + 1, $this->list_url() ) ),
-				esc_html__( 'Weiter ›', 'fahrgemeinschaften' )
+				esc_html__( 'Weiter ›', 'arbeitsdienste' )
 			);
 		}
 		echo '</p>';

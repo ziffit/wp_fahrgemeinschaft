@@ -2,7 +2,7 @@
 /**
  * Admin screens for rides.
  *
- * @package Fahrgemeinschaften
+ * @package Arbeitsdienste
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -40,7 +40,7 @@ final class FG_Admin_Rides {
 	 */
 	public function render() {
 		if ( ! current_user_can( 'edit_posts' ) ) {
-			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'fahrgemeinschaften' ) );
+			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'arbeitsdienste' ) );
 		}
 
 		$ride = $this->repository->get_ride( FG_Admin::query_int( 'ride' ) );
@@ -65,44 +65,44 @@ final class FG_Admin_Rides {
 		$rides   = $this->repository->get_rides_page( $filters, ( $page - 1 ) * FG_Admin::PER_PAGE, FG_Admin::PER_PAGE );
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Fahrgemeinschaften', 'fahrgemeinschaften' ); ?></h1>
-			<p><?php esc_html_e( 'Eintragungen werden von den Beteiligten selbst bestätigt oder zurückgezogen. Hier lassen sie sich nur ansehen und löschen.', 'fahrgemeinschaften' ); ?></p>
+			<h1><?php esc_html_e( 'Fahrgemeinschaften', 'arbeitsdienste' ); ?></h1>
+			<p><?php esc_html_e( 'Eintragungen werden von den Beteiligten selbst bestätigt oder zurückgezogen. Hier lassen sie sich nur ansehen und löschen.', 'arbeitsdienste' ); ?></p>
 
 			<form method="get">
 				<input type="hidden" name="page" value="<?php echo esc_attr( FG_RIDES_PAGE_SLUG ); ?>">
-				<label class="screen-reader-text" for="fg-event-filter"><?php esc_html_e( 'Nach Arbeitsdienst filtern', 'fahrgemeinschaften' ); ?></label>
+				<label class="screen-reader-text" for="fg-event-filter"><?php esc_html_e( 'Nach Arbeitsdienst filtern', 'arbeitsdienste' ); ?></label>
 				<select name="fg_event_filter" id="fg-event-filter">
-					<option value="0"><?php esc_html_e( 'Alle Arbeitsdienste', 'fahrgemeinschaften' ); ?></option>
+					<option value="0"><?php esc_html_e( 'Alle Arbeitsdienste', 'arbeitsdienste' ); ?></option>
 					<?php foreach ( $this->repository->get_all_events() as $event ) : ?>
 						<option value="<?php echo esc_attr( (string) $event->id ); ?>" <?php selected( $filters['event_id'], $event->id ); ?>>
 							<?php echo esc_html( $event->title ); ?>
 						</option>
 					<?php endforeach; ?>
 				</select>
-				<label class="screen-reader-text" for="fg-status-filter"><?php esc_html_e( 'Nach Status filtern', 'fahrgemeinschaften' ); ?></label>
+				<label class="screen-reader-text" for="fg-status-filter"><?php esc_html_e( 'Nach Status filtern', 'arbeitsdienste' ); ?></label>
 				<select name="fg_status_filter" id="fg-status-filter">
-					<option value=""><?php esc_html_e( 'Alle Status', 'fahrgemeinschaften' ); ?></option>
-					<option value="<?php echo esc_attr( FG_RIDE_STATUS_PUBLISHED ); ?>" <?php selected( $filters['status'], FG_RIDE_STATUS_PUBLISHED ); ?>><?php esc_html_e( 'Veröffentlicht', 'fahrgemeinschaften' ); ?></option>
-					<option value="<?php echo esc_attr( FG_RIDE_STATUS_PENDING ); ?>" <?php selected( $filters['status'], FG_RIDE_STATUS_PENDING ); ?>><?php esc_html_e( 'Vorgemerkt', 'fahrgemeinschaften' ); ?></option>
+					<option value=""><?php esc_html_e( 'Alle Status', 'arbeitsdienste' ); ?></option>
+					<option value="<?php echo esc_attr( FG_RIDE_STATUS_PUBLISHED ); ?>" <?php selected( $filters['status'], FG_RIDE_STATUS_PUBLISHED ); ?>><?php esc_html_e( 'Veröffentlicht', 'arbeitsdienste' ); ?></option>
+					<option value="<?php echo esc_attr( FG_RIDE_STATUS_PENDING ); ?>" <?php selected( $filters['status'], FG_RIDE_STATUS_PENDING ); ?>><?php esc_html_e( 'Vorgemerkt', 'arbeitsdienste' ); ?></option>
 				</select>
-				<?php submit_button( __( 'Filtern', 'fahrgemeinschaften' ), 'secondary', '', false ); ?>
+				<?php submit_button( __( 'Filtern', 'arbeitsdienste' ), 'secondary', '', false ); ?>
 			</form>
 
 			<table class="widefat striped">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'Vorname oder Spitzname', 'fahrgemeinschaften' ); ?></th>
-						<th><?php esc_html_e( 'Art', 'fahrgemeinschaften' ); ?></th>
-						<th><?php esc_html_e( 'Arbeitsdienst', 'fahrgemeinschaften' ); ?></th>
-						<th><?php esc_html_e( 'Abfahrtsbereich', 'fahrgemeinschaften' ); ?></th>
-						<th><?php esc_html_e( 'Kontakt-E-Mail', 'fahrgemeinschaften' ); ?></th>
-						<th><?php esc_html_e( 'Status', 'fahrgemeinschaften' ); ?></th>
+						<th><?php esc_html_e( 'Vorname oder Spitzname', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Art', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Arbeitsdienst', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Abfahrtsbereich', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Kontakt-E-Mail', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Status', 'arbeitsdienste' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
 					<?php if ( empty( $rides ) ) : ?>
 						<tr>
-							<td colspan="6"><?php esc_html_e( 'Es liegen keine Eintragungen vor.', 'fahrgemeinschaften' ); ?></td>
+							<td colspan="6"><?php esc_html_e( 'Es liegen keine Eintragungen vor.', 'arbeitsdienste' ); ?></td>
 						</tr>
 					<?php endif; ?>
 					<?php foreach ( $rides as $ride ) : ?>
@@ -135,17 +135,17 @@ final class FG_Admin_Rides {
 		$data = $this->repository->get_ride_display_data( $ride );
 
 		$rows = array(
-			array( __( 'Status', 'fahrgemeinschaften' ), $this->status_label( $ride->status ) ),
-			array( __( 'Art', 'fahrgemeinschaften' ), $this->mode_label( $ride->mode ) ),
-			array( __( 'Vorname oder Spitzname', 'fahrgemeinschaften' ), $ride->alias ),
-			array( __( 'Arbeitsdienst', 'fahrgemeinschaften' ), $data['event_label'] ),
-			array( __( 'Datum', 'fahrgemeinschaften' ), $data['event_date'] ),
-			array( __( 'Abfahrtsbereich', 'fahrgemeinschaften' ), $ride->origin ),
-			array( __( 'Kontakt-E-Mail', 'fahrgemeinschaften' ), $ride->contact_email ),
-			array( __( 'Angemeldet am', 'fahrgemeinschaften' ), $ride->created_at ),
-			array( __( 'Bestätigt am', 'fahrgemeinschaften' ), '' !== $ride->confirmed_at ? $ride->confirmed_at : __( 'noch nicht', 'fahrgemeinschaften' ) ),
-			array( __( 'Einwilligung', 'fahrgemeinschaften' ), $ride->consent_version . ' (' . $ride->consented_at . ')' ),
-			array( __( 'Öffentliche Referenz', 'fahrgemeinschaften' ), $ride->public_ref ),
+			array( __( 'Status', 'arbeitsdienste' ), $this->status_label( $ride->status ) ),
+			array( __( 'Art', 'arbeitsdienste' ), $this->mode_label( $ride->mode ) ),
+			array( __( 'Vorname oder Spitzname', 'arbeitsdienste' ), $ride->alias ),
+			array( __( 'Arbeitsdienst', 'arbeitsdienste' ), $data['event_label'] ),
+			array( __( 'Datum', 'arbeitsdienste' ), $data['event_date'] ),
+			array( __( 'Abfahrtsbereich', 'arbeitsdienste' ), $ride->origin ),
+			array( __( 'Kontakt-E-Mail', 'arbeitsdienste' ), $ride->contact_email ),
+			array( __( 'Angemeldet am', 'arbeitsdienste' ), $ride->created_at ),
+			array( __( 'Bestätigt am', 'arbeitsdienste' ), '' !== $ride->confirmed_at ? $ride->confirmed_at : __( 'noch nicht', 'arbeitsdienste' ) ),
+			array( __( 'Einwilligung', 'arbeitsdienste' ), $ride->consent_version . ' (' . $ride->consented_at . ')' ),
+			array( __( 'Öffentliche Referenz', 'arbeitsdienste' ), $ride->public_ref ),
 		);
 		?>
 		<div class="wrap">
@@ -161,20 +161,18 @@ final class FG_Admin_Rides {
 				</tbody>
 			</table>
 
-			<h2><?php esc_html_e( 'Gefährliche Aktion', 'fahrgemeinschaften' ); ?></h2>
+			<h2><?php esc_html_e( 'Gefährliche Aktion', 'arbeitsdienste' ); ?></h2>
 			<p>
 				<?php
-				echo wp_kses_post( // phpcs:ignore WordPress.Security.EscapeOutput
-					FG_Admin::delete_link(
-						'ride',
-						$ride->id,
-						__( 'Diese Fahrgemeinschaft endgültig löschen?', 'fahrgemeinschaften' )
-					)
+				FG_Admin::echo_delete_link(
+					'ride',
+					$ride->id,
+					__( 'Diese Fahrgemeinschaft endgültig löschen?', 'arbeitsdienste' )
 				);
 				?>
 			</p>
 			<p>
-				<a href="<?php echo esc_url( $this->list_url() ); ?>"><?php esc_html_e( 'Zurück zur Übersicht', 'fahrgemeinschaften' ); ?></a>
+				<a href="<?php echo esc_url( $this->list_url() ); ?>"><?php esc_html_e( 'Zurück zur Übersicht', 'arbeitsdienste' ); ?></a>
 			</p>
 		</div>
 		<?php
@@ -202,11 +200,11 @@ final class FG_Admin_Rides {
 	 */
 	private function status_label( $status ) {
 		if ( FG_RIDE_STATUS_PUBLISHED === $status ) {
-			return __( 'Veröffentlicht', 'fahrgemeinschaften' );
+			return __( 'Veröffentlicht', 'arbeitsdienste' );
 		}
 
 		if ( FG_RIDE_STATUS_PENDING === $status ) {
-			return __( 'Vorgemerkt', 'fahrgemeinschaften' );
+			return __( 'Vorgemerkt', 'arbeitsdienste' );
 		}
 
 		return (string) $status;
@@ -220,8 +218,8 @@ final class FG_Admin_Rides {
 	 */
 	private function mode_label( $mode ) {
 		return FG_RIDE_MODE_SEARCH === $mode
-			? __( 'Ich suche', 'fahrgemeinschaften' )
-			: __( 'Ich biete', 'fahrgemeinschaften' );
+			? __( 'Ich suche', 'arbeitsdienste' )
+			: __( 'Ich biete', 'arbeitsdienste' );
 	}
 
 	/**
@@ -270,12 +268,12 @@ final class FG_Admin_Rides {
 			printf(
 				'<a class="prev-page button" href="%s">%s</a> ',
 				esc_url( add_query_arg( 'paged', $page - 1, $this->list_url() ) ),
-				esc_html__( '‹ Zurück', 'fahrgemeinschaften' )
+				esc_html__( '‹ Zurück', 'arbeitsdienste' )
 			);
 		}
 		printf(
 			/* translators: 1: current page, 2: total pages. */
-			esc_html__( 'Seite %1$d von %2$d', 'fahrgemeinschaften' ),
+			esc_html__( 'Seite %1$d von %2$d', 'arbeitsdienste' ),
 			(int) $page,
 			(int) $pages
 		);
@@ -283,7 +281,7 @@ final class FG_Admin_Rides {
 			printf(
 				' <a class="next-page button" href="%s">%s</a>',
 				esc_url( add_query_arg( 'paged', $page + 1, $this->list_url() ) ),
-				esc_html__( 'Weiter ›', 'fahrgemeinschaften' )
+				esc_html__( 'Weiter ›', 'arbeitsdienste' )
 			);
 		}
 		echo '</p>';

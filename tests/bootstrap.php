@@ -206,7 +206,7 @@ printf(
 	PHP_EOL
 );
 
-$plugin = 'my-plugin/fahrgemeinschaften.php';
+$plugin = 'my-plugin/arbeitsdienste.php';
 if ( ! file_exists( WP_PLUGIN_DIR . '/' . $plugin ) ) {
 	echo 'bootstrap: plugin file missing in ', WP_PLUGIN_DIR, PHP_EOL;
 	exit( 1 );

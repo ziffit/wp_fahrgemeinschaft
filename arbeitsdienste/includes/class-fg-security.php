@@ -2,7 +2,7 @@
 /**
  * Security helpers.
  *
- * @package Fahrgemeinschaften
+ * @package Arbeitsdienste
  */
 
 defined( 'ABSPATH' ) || exit;

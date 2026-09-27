@@ -43,7 +43,13 @@ final class FG_Repository {
 		}
 
 		$email = strtolower( trim( $email ) );
-		if ( '' === $email || strlen( $email ) > 254 || ! is_email( $email ) ) {
+
+		// The length is the width of the address columns, not the 254 characters
+		// RFC 5321 allows. An address of 200 characters passes every check below,
+		// reaches `fg_rides.contact_email` or `fg_members.email` and is refused
+		// there by the schema — silently, after the visitor has been told nothing
+		// went wrong. Both columns are 190, so both are checked against 190.
+		if ( '' === $email || strlen( $email ) > FG_Schema::CONTACT_EMAIL_MAX || ! is_email( $email ) ) {
 			return false;
 		}
 
@@ -85,7 +91,7 @@ final class FG_Repository {
 	 * The reference appears in public URLs and forms, so it must not be
 	 * guessable and must not be reused for another row.
 	 *
-	 * @param string $table_key `events` or `rides`.
+	 * @param string $table_key `events`, `rides` or `event_members`.
 	 * @return string
 	 */
 	public function create_public_reference( $table_key ) {
@@ -179,7 +185,7 @@ final class FG_Repository {
 	 * Reference, UUID and creation time are filled in here so no caller can
 	 * create an event that is unreachable or has no identity.
 	 *
-	 * @param array $fields Event fields: title, event_date, event_time, participants, is_active, and optionally group_name, demand, duration_hours, description.
+	 * @param array $fields Event fields: title, event_date, event_time, is_active, and optionally group_name, demand, duration_hours, description.
 	 * @return int New event ID, 0 on failure.
 	 */
 	public function insert_event( array $fields ) {
@@ -206,7 +212,6 @@ final class FG_Repository {
 					'title'        => $title,
 					'event_date'   => $date,
 					'event_time'   => '' === $time ? null : $time . ':00',
-					'participants' => $this->participants_to_text( isset( $fields['participants'] ) ? $fields['participants'] : array() ),
 					'event_uuid'   => $this->create_uuid(),
 					'public_ref'   => $this->create_public_reference( 'events' ),
 					'is_active'    => $active ? 1 : 0,
@@ -220,7 +225,7 @@ final class FG_Repository {
 	 * Update an existing event.
 	 *
 	 * @param int   $event_id Event ID.
-	 * @param array $fields   Event fields: title, event_date, event_time, participants, is_active, and optionally group_name, demand, duration_hours, description.
+	 * @param array $fields   Event fields: title, event_date, event_time, is_active, and optionally group_name, demand, duration_hours, description.
 	 * @return bool
 	 */
 	public function update_event( $event_id, array $fields ) {
@@ -267,72 +272,53 @@ final class FG_Repository {
 			)
 		);
 
-		if ( array_key_exists( 'participants', $fields ) ) {
-			$data['participants'] = $this->participants_to_text( $fields['participants'] );
-		}
-
 		return $this->store->update_event( $event->id, $data );
 	}
 
 	/**
-	 * Delete an event together with all of its rides.
+	 * Delete an event together with all of its rides and registrations.
 	 *
 	 * @param int $event_id Event ID.
-	 * @return array{deleted: bool, rides: int}
+	 * @return array{deleted: bool, rides: int, registrations: int}
 	 */
 	public function delete_event( $event_id ) {
 		$event = $this->get_event( $event_id );
 		if ( ! $event ) {
 			return array(
-				'deleted' => false,
-				'rides'   => 0,
+				'deleted'       => false,
+				'rides'         => 0,
+				'registrations' => 0,
 			);
 		}
 
-		// Rides go first: without database-level cascade rules the order is the
-		// only thing that keeps the tables consistent.
-		$rides    = $this->store->delete_rides_for_event( $event->id );
-		$deleted  = $this->store->delete_event( $event->id );
+		// The rows that point at the event go first: without database-level
+		// cascade rules the order is the only thing that keeps the tables
+		// consistent.
+		$registrations = $this->store->delete_event_members_for_event( $event->id );
+		$rides         = $this->store->delete_rides_for_event( $event->id );
+		$deleted       = $this->store->delete_event( $event->id );
 
 		return array(
-			'deleted' => $deleted,
-			'rides'   => $rides,
+			'deleted'       => $deleted,
+			'rides'         => $rides,
+			'registrations' => $registrations,
 		);
 	}
 
 	/**
-	 * Get the pre-registered participant addresses of an event.
+	 * Check whether an e-mail address belongs to a member registered for an event.
 	 *
-	 * @param int $event_id Event ID.
-	 * @return string[]
-	 */
-	public function get_event_participants( $event_id ) {
-		$event = $this->get_event( $event_id );
-
-		return $event ? $event->participants : array();
-	}
-
-	/**
-	 * Replace the participant addresses of an event.
+	 * This is the gate for the ride form. Only a person who actually does the
+	 * work service may organise a car to it, and only under the address that
+	 * belongs to them: the member number identifies the member in the member
+	 * administration, but on this page nothing but the address is asked for, so
+	 * the address is what has to be checked, and an address belongs to exactly
+	 * one member.
 	 *
-	 * @param int      $event_id Event ID.
-	 * @param string[] $emails   Addresses.
-	 * @return bool
-	 */
-	public function set_event_participants( $event_id, array $emails ) {
-		$event = $this->get_event( $event_id );
-		if ( ! $event ) {
-			return false;
-		}
-
-		return $this->store->update_event(
-			$event->id,
-			array( 'participants' => $this->participants_to_text( $emails ) )
-		);
-	}
-
-	/**
-	 * Check whether an e-mail address belongs to a specific event.
+	 * Until schema 1.2.0 this compared against a list of addresses the club typed
+	 * into the work service by hand. An address in that list could be anyone's,
+	 * and nobody could ride to a duty for which no list had been maintained. The
+	 * comparison is the same question, asked of data that is true by construction.
 	 *
 	 * @param int    $event_id Event ID.
 	 * @param string $email    E-mail address.
@@ -344,7 +330,9 @@ final class FG_Repository {
 			return false;
 		}
 
-		return in_array( $email, $this->get_event_participants( $event_id ), true );
+		$event_id = absint( $event_id );
+
+		return $event_id ? $this->store->event_has_participant_email( $event_id, $email ) : false;
 	}
 
 	/**
@@ -442,7 +430,7 @@ final class FG_Repository {
 
 		return sprintf(
 			/* translators: 1: weekday, 2: date, both in the language of the site. */
-			__( '%1$s, den %2$s', 'fahrgemeinschaften' ),
+			__( '%1$s, den %2$s', 'arbeitsdienste' ),
 			$wp_locale->get_weekday( (int) $local_date->format( 'w' ) ),
 			wp_date( get_option( 'date_format' ), $local_date->getTimestamp(), wp_timezone() )
 		);
@@ -693,6 +681,16 @@ final class FG_Repository {
 	}
 
 	/**
+	 * Count the rides of several work services at once.
+	 *
+	 * @param int[] $event_ids Work service IDs.
+	 * @return array<int, int> Ride count per event ID, absent for zero.
+	 */
+	public function get_ride_counts_for_events( array $event_ids ) {
+		return $this->store->count_rides_for_events( $event_ids );
+	}
+
+	/**
 	 * Get all ride IDs of an event.
 	 *
 	 * @param int $event_id Event ID.
@@ -788,6 +786,611 @@ final class FG_Repository {
 	}
 
 	/**
+	 * Get a member by internal ID.
+	 *
+	 * @param int $member_id Member ID.
+	 * @return FG_Member|null
+	 */
+	public function get_member( $member_id ) {
+		$member_id = absint( $member_id );
+
+		return $member_id ? $this->store->find_member( $member_id ) : null;
+	}
+
+	/**
+	 * Get a member by member number.
+	 *
+	 * @param string $member_no Member number.
+	 * @return FG_Member|null
+	 */
+	public function get_member_by_number( $member_no ) {
+		$member_no = $this->read_member_no( $member_no );
+
+		return '' === $member_no ? null : $this->store->find_member_by_no( $member_no );
+	}
+
+	/**
+	 * Get a member by e-mail address.
+	 *
+	 * @param string $email E-mail address.
+	 * @return FG_Member|null
+	 */
+	public function get_member_by_email( $email ) {
+		$email = $this->normalize_email( $email );
+
+		return false === $email ? null : $this->store->find_member_by_email( $email );
+	}
+
+	/**
+	 * Look up the member a public registration claims to be.
+	 *
+	 * Both values have to belong to the same member, and that member has to
+	 * exist. A number on its own is not enough and an address on its own is not
+	 * enough: the two together are what a person knows about themselves, and the
+	 * pair is checked against the club's member administration rather than
+	 * accepted on its own.
+	 *
+	 * @param string $member_no Member number.
+	 * @param string $email     E-mail address.
+	 * @return FG_Member|null The member, or null when the pair does not fit.
+	 */
+	public function find_member_for_registration( $member_no, $email ) {
+		$email = $this->normalize_email( $email );
+		$member = $this->get_member_by_number( $member_no );
+
+		if ( false === $email || ! $member || $member->email !== $email ) {
+			return null;
+		}
+
+		return $member;
+	}
+
+	/**
+	 * Get a page of members for the admin list.
+	 *
+	 * @param string $search Free text to look for, empty for all.
+	 * @param int    $offset Rows to skip.
+	 * @param int    $limit  Maximum rows.
+	 * @return FG_Member[]
+	 */
+	public function get_members_page( $search = '', $offset = 0, $limit = 0 ) {
+		return $this->store->query_members( $search, (int) $limit, (int) $offset );
+	}
+
+	/**
+	 * Count members matching the given text.
+	 *
+	 * @param string $search Free text to look for, empty for all.
+	 * @return int
+	 */
+	public function count_members( $search = '' ) {
+		return $this->store->count_members( $search );
+	}
+
+	/**
+	 * Count how many work services a set of members is registered for.
+	 *
+	 * @param FG_Member[] $members Members.
+	 * @return array<int, int> Count per member ID.
+	 */
+	public function get_registration_counts_for_members( array $members ) {
+		$ids = array();
+		foreach ( $members as $member ) {
+			if ( $member instanceof FG_Member ) {
+				$ids[] = $member->id;
+			}
+		}
+
+		return $this->store->count_member_registrations_for_members( $ids );
+	}
+
+	/**
+	 * Count how many work services one member is registered for.
+	 *
+	 * @param int $member_id Member ID.
+	 * @return int
+	 */
+	public function count_member_registrations( $member_id ) {
+		$member_id = absint( $member_id );
+
+		return $member_id ? $this->store->count_member_registrations( $member_id ) : 0;
+	}
+
+	/**
+	 * Store a new member.
+	 *
+	 * A number that is already taken and an address that is already taken are
+	 * both refused, and the caller is told which of the two it was. The check is
+	 * made here and not left to the unique keys, because a duplicate key would
+	 * arrive as a database error that names no field and no row.
+	 *
+	 * @param array $fields Member fields: member_no, email, first_name, last_name.
+	 * @return int Member ID, 0 on failure.
+	 */
+	public function insert_member( array $fields ) {
+		$prepared = $this->read_member_fields( $fields );
+		if ( null === $prepared ) {
+			return 0;
+		}
+
+		if ( $this->member_number_taken( $prepared['member_no'] )
+			|| $this->member_email_taken( $prepared['email'] ) ) {
+			return 0;
+		}
+
+		$now = current_time( 'mysql' );
+
+		return $this->store->insert_member(
+			array_merge(
+				$prepared,
+				array(
+					'created_at' => $now,
+					'updated_at' => $now,
+				)
+			)
+		);
+	}
+
+	/**
+	 * Update an existing member.
+	 *
+	 * All four fields have to be there. A partial set is refused rather than
+	 * completed from the stored row, because the one caller that could mean it
+	 * is the one that got a field name wrong, and a silent "keep the old value"
+	 * would hide that until somebody notices the wrong name in the list.
+	 *
+	 * The member number may be changed, because the club's member administration
+	 * does that too. It is checked against the other rows, so it cannot be moved
+	 * onto a number that already belongs to somebody else.
+	 *
+	 * @param int   $member_id Member ID.
+	 * @param array $fields    All four fields: member_no, email, first_name, last_name.
+	 * @return bool
+	 */
+	public function update_member( $member_id, array $fields ) {
+		$member = $this->get_member( $member_id );
+		if ( ! $member ) {
+			return false;
+		}
+
+		$prepared = $this->read_member_fields( $fields );
+		if ( null === $prepared ) {
+			return false;
+		}
+
+		$by_number = $this->store->find_member_by_no( $prepared['member_no'] );
+		$by_email  = $this->store->find_member_by_email( $prepared['email'] );
+
+		if ( ( $by_number && $by_number->id !== $member->id )
+			|| ( $by_email && $by_email->id !== $member->id ) ) {
+			return false;
+		}
+
+		if (
+			$prepared['member_no'] === $member->member_no
+			&& $prepared['email'] === $member->email
+			&& $prepared['first_name'] === $member->first_name
+			&& $prepared['last_name'] === $member->last_name
+		) {
+			// Nothing differs, so there is nothing to write. Returning true here
+			// keeps the caller from telling the club a change was saved when no
+			// column was touched.
+			return true;
+		}
+
+		$prepared['updated_at'] = current_time( 'mysql' );
+
+		return $this->store->update_member( $member->id, $prepared );
+	}
+
+	/**
+	 * Delete a member together with all of its registrations.
+	 *
+	 * Rides are not touched. A ride is its own public entry with its own contact
+	 * address and its own history, and it was never owned by the member record; a
+	 * member who also offered a car does not lose that record because the member
+	 * was deleted. Rides are removed by the privacy tool, which is where a
+	 * deletion request belongs.
+	 *
+	 * @param int $member_id Member ID.
+	 * @return array{deleted: bool, registrations: int}
+	 */
+	public function delete_member( $member_id ) {
+		$member = $this->get_member( $member_id );
+		if ( ! $member ) {
+			return array(
+				'deleted'       => false,
+				'registrations' => 0,
+			);
+		}
+
+		$registrations = $this->store->delete_event_members_for_member( $member->id );
+		$deleted       = $this->store->delete_member( $member->id );
+
+		return array(
+			'deleted'       => $deleted,
+			'registrations' => $registrations,
+		);
+	}
+
+	/**
+	 * Read and check the four fields of a member.
+	 *
+	 * Nothing is trimmed away beyond the surrounding whitespace of a form, and
+	 * nothing is repaired: a number that is too long is refused instead of cut
+	 * off, because a cut-off member number is a different member to everyone who
+	 * looks it up afterwards.
+	 *
+	 * @param array $fields Supplied fields.
+	 * @return array|null Prepared fields, or null when one of them is invalid.
+	 */
+	private function read_member_fields( array $fields ) {
+		$member_no   = $this->read_member_no( isset( $fields['member_no'] ) ? $fields['member_no'] : '' );
+		$email       = $this->normalize_email( isset( $fields['email'] ) ? $fields['email'] : '' );
+		$first_name  = isset( $fields['first_name'] ) ? trim( (string) $fields['first_name'] ) : '';
+		$last_name   = isset( $fields['last_name'] ) ? trim( (string) $fields['last_name'] ) : '';
+
+		if (
+			'' === $member_no
+			|| false === $email
+			|| '' === $first_name
+			|| '' === $last_name
+			|| $this->string_length( $member_no ) > FG_Schema::MEMBER_NO_MAX
+			|| $this->string_length( $first_name ) > FG_Schema::MEMBER_NAME_MAX
+			|| $this->string_length( $last_name ) > FG_Schema::MEMBER_NAME_MAX
+		) {
+			return null;
+		}
+
+		return array(
+			'member_no'  => $member_no,
+			'email'      => (string) $email,
+			'first_name' => $first_name,
+			'last_name'  => $last_name,
+		);
+	}
+
+	/**
+	 * Read a submitted member number as text.
+	 *
+	 * The value is never turned into a number. A club number is an identifier,
+	 * not a quantity, and a leading zero or a letter is part of it.
+	 *
+	 * @param mixed $value Submitted value.
+	 * @return string
+	 */
+	private function read_member_no( $value ) {
+		if ( ! is_scalar( $value ) ) {
+			return '';
+		}
+
+		// Whitespace inside the number is a typing slip, not part of the
+		// identifier, and it would keep the club from finding the member again.
+		return trim( preg_replace( '/\s+/u', ' ', (string) $value ) );
+	}
+
+	/**
+	 * Check whether a member number is already in use.
+	 *
+	 * @param string $member_no Member number.
+	 * @return bool
+	 */
+	private function member_number_taken( $member_no ) {
+		return null !== $this->store->find_member_by_no( $member_no );
+	}
+
+	/**
+	 * Check whether an e-mail address is already in use.
+	 *
+	 * @param string $email E-mail address.
+	 * @return bool
+	 */
+	private function member_email_taken( $email ) {
+		return null !== $this->store->find_member_by_email( $email );
+	}
+
+	/**
+	 * Free places of a work service.
+	 *
+	 * The number is what the club asked for, less what is already registered,
+	 * and never below zero: a duty can be oversubscribed, because the check that
+	 * refuses the last registration is a race between two visitors and one of
+	 * them may get in first. What the public page shows is the truth, so it says
+	 * zero and not a negative number.
+	 *
+	 * A duty without a demand has zero free places. The club states no number
+	 * then, and an open registration that cannot be counted against anything is
+	 * not something this plugin offers. The page says why in a sentence of its
+	 * own, because "ausgebucht" would be a claim about the duty that is not
+	 * true.
+	 *
+	 * @param FG_Event $event         Work service.
+	 * @param int      $registrations Registrations already held.
+	 * @return int
+	 */
+	public function free_places( FG_Event $event, $registrations = 0 ) {
+		return max( 0, (int) $event->demand - (int) $registrations );
+	}
+
+	/**
+	 * Determine whether one more member may register for a work service.
+	 *
+	 * @param FG_Event $event         Work service.
+	 * @param int      $registrations Registrations already held.
+	 * @return bool
+	 */
+	public function can_register( FG_Event $event, $registrations = 0 ) {
+		return $this->free_places( $event, $registrations ) > 0;
+	}
+
+	/**
+	 * Count the registrations of several work services at once.
+	 *
+	 * @param int[] $event_ids Work service IDs.
+	 * @return array<int, int>
+	 */
+	public function get_registration_counts_for_events( array $event_ids ) {
+		return $this->store->count_event_members_for_events( $event_ids );
+	}
+
+	/**
+	 * Count the registrations of one work service.
+	 *
+	 * @param int $event_id Work service ID.
+	 * @return int
+	 */
+	public function count_event_registrations( $event_id ) {
+		$event_id = absint( $event_id );
+
+		return $event_id ? $this->store->count_event_members( $event_id ) : 0;
+	}
+
+	/**
+	 * Get the registered members of a work service, with their member data.
+	 *
+	 * @param int $event_id Work service ID.
+	 * @return array<int, array{registration: FG_Event_Member, member: FG_Member}>
+	 */
+	public function get_event_registrations( $event_id ) {
+		$event_id = absint( $event_id );
+
+		return $event_id ? $this->store->query_event_member_rows( $event_id ) : array();
+	}
+
+	/**
+	 * Check whether a member is already registered for a work service.
+	 *
+	 * @param int $event_id  Work service ID.
+	 * @param int $member_id Member ID.
+	 * @return bool
+	 */
+	public function has_registration( $event_id, $member_id ) {
+		$event_id  = absint( $event_id );
+		$member_id = absint( $member_id );
+
+		if ( ! $event_id || ! $member_id ) {
+			return false;
+		}
+
+		return null !== $this->store->find_event_member_pair( $event_id, $member_id );
+	}
+
+	/**
+	 * Register a member for a work service and return the unregistration token.
+	 *
+	 * The registration is made at once, with no pending state and no second
+	 * confirmation. The two values the visitor typed are checked against the
+	 * member administration before this is reached, so there is nothing left to
+	 * confirm; the e-mail to the member confirms it and carries the way back out.
+	 *
+	 * The token is returned once so the caller can put it into that e-mail. Only
+	 * its hash is stored.
+	 *
+	 * @param int    $event_id   Work service ID.
+	 * @param int    $member_id  Member ID.
+	 * @param string $source_url Page the registration was made from.
+	 * @return array{id: int, public_ref: string, unregister_token: string}
+	 */
+	public function create_registration( $event_id, $member_id, $source_url = '' ) {
+		$failed = array(
+			'id'               => 0,
+			'public_ref'       => '',
+			'unregister_token' => '',
+		);
+
+		$event_id  = absint( $event_id );
+		$member_id = absint( $member_id );
+
+		if ( ! $event_id || ! $member_id || $this->has_registration( $event_id, $member_id ) ) {
+			return $failed;
+		}
+
+		$token = FG_Security::create_token();
+		$ref   = $this->create_public_reference( 'event_members' );
+
+		$id = $this->store->insert_event_member(
+			array(
+				'event_id'           => $event_id,
+				'member_id'          => $member_id,
+				'registered_at'      => current_time( 'mysql' ),
+				'unregister_hash'    => FG_Security::hash_token( $token ),
+				'unregister_expires' => $this->unregister_expiry( $event_id ),
+				'public_ref'         => $ref,
+				'source_url'         => FG_Security::safe_source_url( $source_url ),
+			)
+		);
+
+		if ( ! $id ) {
+			return $failed;
+		}
+
+		return array(
+			'id'               => $id,
+			'public_ref'       => $ref,
+			'unregister_token' => $token,
+		);
+	}
+
+	/**
+	 * Get a registration by its public reference.
+	 *
+	 * @param string $reference Public reference.
+	 * @return FG_Event_Member|null
+	 */
+	public function get_registration_by_reference( $reference ) {
+		$reference = sanitize_key( $reference );
+
+		return '' === $reference ? null : $this->store->find_event_member_by_ref( $reference );
+	}
+
+	/**
+	 * Get a registration by its row ID.
+	 *
+	 * @param int $registration_id Registration ID.
+	 * @return FG_Event_Member|null
+	 */
+	public function get_registration( $registration_id ) {
+		$registration_id = absint( $registration_id );
+
+		return $registration_id ? $this->store->find_event_member( $registration_id ) : null;
+	}
+
+	/**
+	 * The duty list a registration was made from, for the way back out.
+	 *
+	 * The unregistration link opens its own page on the site root, so without
+	 * this the member would be sent to a front page after removing their entry
+	 * and would never learn that it worked. An address that is not on the site
+	 * yields the empty string, and the caller falls back to the site root.
+	 *
+	 * @param FG_Event_Member $registration Registration.
+	 * @return string
+	 */
+	public function get_registration_source_url( FG_Event_Member $registration ) {
+		return FG_Security::safe_source_url( $registration->source_url );
+	}
+
+	/**
+	 * Check whether a token still entitles to undo a registration.
+	 *
+	 * @param FG_Event_Member $registration Registration.
+	 * @param string          $token        Raw token from a request.
+	 * @return bool
+	 */
+	public function valid_unregister_token( FG_Event_Member $registration, $token ) {
+		return $registration->unregister_expires >= time()
+			&& FG_Security::token_valid( $registration->unregister_hash, $token );
+	}
+
+	/**
+	 * Remove a registration while the given token is still the stored one.
+	 *
+	 * @param int    $registration_id Registration ID.
+	 * @param string $token          Raw token.
+	 * @return bool True when this call removed the row.
+	 */
+	public function delete_registration_with_token( $registration_id, $token ) {
+		$registration = $this->get_registration( $registration_id );
+		if ( ! $registration ) {
+			return false;
+		}
+
+		return $this->store->delete_event_member_with_token(
+			$registration->id,
+			FG_Security::hash_token( $token )
+		);
+	}
+
+	/**
+	 * Remove a registration without a token, for the backend.
+	 *
+	 * @param int $registration_id Registration ID.
+	 * @return bool
+	 */
+	public function delete_registration( $registration_id ) {
+		$registration = $this->get_registration( $registration_id );
+		if ( ! $registration ) {
+			return false;
+		}
+
+		return $this->store->delete_event_member( $registration->id );
+	}
+
+	/**
+	 * Remove the registration of one member for one work service.
+	 *
+	 * Used by the privacy eraser, which knows a person by an e-mail address and
+	 * not by a registration ID. The pair is the key of the table, so a second
+	 * call finds nothing and returns false instead of removing a second time.
+	 *
+	 * @param int $event_id  Work service ID.
+	 * @param int $member_id Member ID.
+	 * @return bool True when this call removed the row.
+	 */
+	public function delete_registration_by_pair( $event_id, $member_id ) {
+		$pair = $this->store->find_event_member_pair( absint( $event_id ), absint( $member_id ) );
+
+		return $pair ? $this->store->delete_event_member( $pair->id ) : false;
+	}
+
+	/**
+	 * Find registrations whose unregistration link has expired.
+	 *
+	 * @return int[]
+	 */
+	public function get_expired_unregister_registration_ids() {
+		return $this->store->expired_unregister_ids( time() );
+	}
+
+	/**
+	 * Drop the expired unregistration token of a registration.
+	 *
+	 * @param int $registration_id Registration ID.
+	 * @return bool
+	 */
+	public function clear_unregister_token( $registration_id ) {
+		$registration_id = absint( $registration_id );
+
+		return $registration_id
+			&& $this->store->update_event_member(
+				$registration_id,
+				array(
+					'unregister_hash'    => '',
+					'unregister_expires' => 0,
+				)
+			);
+	}
+
+	/**
+	 * Expiry of an unregistration token.
+	 *
+	 * The same rule the published delete link of a ride uses: the link lives
+	 * until thirty days after the work service is over, and at least until
+	 * tomorrow, so that a member who registers for a duty only a few hours away
+	 * does not receive a link that is already dead.
+	 *
+	 * @param int $event_id Work service ID.
+	 * @return int
+	 */
+	private function unregister_expiry( $event_id ) {
+		$event = $this->get_event( $event_id );
+		$now   = time() + DAY_IN_SECONDS;
+
+		if ( ! $event || ! self::is_valid_date( $event->event_date ) ) {
+			return $now + FG_PUBLISHED_DELETE_TOKEN_TTL;
+		}
+
+		$time      = self::is_valid_time( $event->event_time ) ? $event->event_time : '23:59';
+		$zone      = wp_timezone();
+		$date_time = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $event->event_date . ' ' . $time, $zone );
+		if ( ! $date_time instanceof DateTimeImmutable ) {
+			return $now + FG_PUBLISHED_DELETE_TOKEN_TTL;
+		}
+
+		return max( $now, $date_time->getTimestamp() + FG_PUBLISHED_DELETE_TOKEN_TTL );
+	}
+
+	/**
 	 * Accept an event record or an event ID.
 	 *
 	 * @param FG_Event|int $event Event or event ID.
@@ -799,28 +1402,6 @@ final class FG_Repository {
 		}
 
 		return $this->get_event( $event );
-	}
-
-	/**
-	 * Store a participant list as one address per line.
-	 *
-	 * @param mixed $emails Addresses as string, list or newline separated text.
-	 * @return string
-	 */
-	private function participants_to_text( $emails ) {
-		if ( is_string( $emails ) ) {
-			$emails = preg_split( '/[\r\n,;]+/u', $emails );
-		}
-
-		$clean = array();
-		foreach ( (array) $emails as $email ) {
-			$email = $this->normalize_email( $email );
-			if ( false !== $email ) {
-				$clean[ $email ] = $email;
-			}
-		}
-
-		return implode( "\n", array_values( $clean ) );
 	}
 
 	/**

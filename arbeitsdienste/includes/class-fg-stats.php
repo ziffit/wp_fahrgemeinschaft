@@ -2,7 +2,7 @@
 /**
  * Aggregate, non-identifying usage statistics.
  *
- * @package Fahrgemeinschaften
+ * @package Arbeitsdienste
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -33,6 +33,13 @@ final class FG_Stats {
 			'bot_honeypot'           => 'Honeypot-Treffer',
 			'bot_fast_submit'        => 'Auffällig schnelle Absendungen',
 			'mail_send_failed'       => 'Fehlgeschlagene E-Mail-Übermittlungen',
+			'signup_total'           => 'Anmeldeformulare für Arbeitsdienste gesamt',
+			'signup_valid'           => 'Anmeldungen mit passender Mitgliedsnummer und E-Mail',
+			'signup_invalid'         => 'Anmeldungen ohne passendes Mitglied',
+			'signup_created'         => 'Angelegte Anmeldungen',
+			'signup_repeat'          => 'Anmeldungen ohne neuen Eintrag (bereits angemeldet)',
+			'signup_refused_full'    => 'Anmeldungen wegen voller Belegung abgelehnt',
+			'signup_unregistered'    => 'Gelöschte Anmeldungen',
 		);
 	}
 

@@ -4,12 +4,18 @@ set -u
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE="https://localhost:8443"
 JAR="$DIR/cookies.txt"
-F="$DIR/fixture.json"
 STATE="php /tmp/fgtests/state.php"
 rm -f "$JAR"
 
 # Read or change plugin state from the table layer.
 s() { docker exec wpdev-wordpress-1 $STATE "$@"; }
+
+# Build a member for the run, first clearing any member that already holds the
+# number. A refused insert is a zero, and a zero is a value every later step
+# would use without complaining, so a number left over from an earlier run of
+# the suite would turn into a chain of silent wrong answers. A refusal is only
+# allowed to reach the assertions when the value itself is the problem.
+neu() { s delete-member "$(s member-by-no "$1" id)" > /dev/null 2>&1; s make-member "$@"; }
 
 pass=0; fail=0
 ok()  { printf '  ok   %s\n' "$1"; pass=$((pass+1)); }
@@ -24,15 +30,136 @@ import re,sys
 h=open('$1').read()
 m=re.search(r'name=\"$2\"[^>]*value=\"([^\"]*)\"',h) or re.search(r'value=\"([^\"]*)\"[^>]*name=\"$2\"',h)
 print(m.group(1) if m else '')"; }
+# The one notice the shortcode prints, without the rest of the page. A refusal
+# has to be read here and not over the whole document: the list page also prints
+# a sentence per duty card, and one of those can hold the very words a notice
+# must not hold. Reading the whole page would let a check pass on the card and
+# say nothing about what the server answered.
+notice() { python3 -c "
+import re,sys,html
+h=sys.stdin.read()
+m=re.search(r'<div id=\"fg-hinweis\"[^>]*>(.*?)</div>', h, re.S)
+print(html.unescape(re.sub(r'<[^>]+>','',m.group(1))).strip() if m else '')"; }
+# The report of an import, without the rest of the screen. The screen carries the
+# list of every member as well, so a number that a check looks for over the whole
+# page is found in the list even when the report says nothing about it: the three
+# fixture members are in the database, the import file holds two others, and both
+# are on the page twice. Reading the report alone is the difference between a
+# check on the report and a check on the page.
+report() { python3 -c "
+import re,sys,html
+h=sys.stdin.read()
+m=re.search(r'<div class=\"fg-import-report\">', h)
+if not m:
+    print('')
+else:
+    # The closing tag is found by counting, not by the next '</div>': the report
+    # holds a notice of its own, and a search for the first closing tag would
+    # hand back the first paragraph of the report and drop the table below it.
+    # The count starts at 1 because the opening tag of the report itself is
+    # already behind the search position.
+    tiefe, i = 1, m.end()
+    while i < len(h):
+        naechste = re.compile(r'<div\b|</div>').search(h, i)
+        if not naechste:
+            break
+        if naechste.group(0) == '</div>':
+            tiefe -= 1
+            if tiefe == 0:
+                i = naechste.start()
+                break
+        else:
+            tiefe += 1
+        i = naechste.end()
+    print(html.unescape(re.sub(r'<[^>]+>',' ', h[m.end():i])).replace('  ',' '))"; }
 link() { python3 -c "
 import re,sys
 h=sys.stdin.read()
-m=re.search(r'href=\"([^\"]*action=fg_delete_record[^\"]*)\"',h)
+# The argument narrows the search to one kind of record. The screen of a work
+# duty carries a delete link for the duty and one for every registration in it,
+# and taking the first one found would click the wrong button: the first is a
+# registration as soon as anybody has signed up, and the count of rides and
+# registrations after it would then answer for a registration.
+m=re.search(r'href=\"([^\"]*action=fg_delete_record[^\"]*type=$1[^\"]*)\"',h)
 print(m.group(1).replace('&#038;','&').replace('&amp;','&') if m else '')"; }
+# Reads one cell of the work duty overview for a given record. The record is
+# named, because the numbers of the other columns are numbers too and a search
+# over the whole screen would be measuring the wrong thing. The row is cut out
+# of the list of rows first: a single non-greedy match from the first <tr> in
+# the document would run across rows and answer with the cells of the first
+# one, which is a record of its own.
+cell() { python3 -c "
+import re,sys
+h=sys.stdin.read()
+rows=re.findall(r'<tr[^>]*>.*?</tr>', h, re.S)
+row=next((r for r in rows if 'event=$1' in r), '')
+if not row:
+    print('no-row')
+else:
+    c=re.findall(r'<td[^>]*>(.*?)</td>', row, re.S)
+    print(re.sub(r'<[^>]+>','',c[$2]).strip() if len(c) > $2 else 'too-few-cells:%d' % len(c))"; }
+# What a named field must be: an input tag carrying all the given attributes. A
+# check that only asks whether a name appears somewhere on the page is answered
+# just as well by a hidden field, and a hidden field cannot be typed into — the
+# check would say the form asks for something while the form asks for nothing.
+# Every attribute has to stand in the same tag, otherwise a form could satisfy
+# this with the name in one place and the type in another.
+feld() { python3 -c "
+import re,sys
+h=sys.stdin.read()
+tags=[t for t in re.findall(r'<input[^>]*>', h, re.S) if 'name=\"$1\"' in t]
+if not tags:
+    print('kein feld')
+else:
+    fehlt=[a for a in $2 if not any(a in t for t in tags)]
+    print('ok' if not fehlt else 'fehlt: ' + ','.join(fehlt))"; }
+
+# The card of one work duty on the public list, as text. The list shows every
+# visible duty, so a check that asks the whole page whether a word appears is
+# answered by whichever duty happens to carry it — and on an installation with
+# a second duty, by the wrong one. The card is named by the public reference in
+# its anchor and not by its title: two duties can carry the same title, and a
+# search by title then reads the first of them. Cards do not nest, so a non-greedy
+# match is enough to get exactly one.
+karte() { python3 -c "
+import html,re,sys
+h=sys.stdin.read()
+m=re.search(r'<article class=\"fg-event-card\" id=\"fg-dienst-$1\">.*?</article>', h, re.S)
+print(re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',m.group(0)))).strip() if m else 'no-card')"; }
+# The same card, cut at its signup form. A duty that cannot be signed up for has
+# no form and therefore no reference, and the reason for it has to stay readable.
+formular() { python3 -c "
+import html,re,sys
+h=sys.stdin.read()
+m=re.search(r'<article class=\"fg-event-card\" id=\"fg-dienst-$1\">.*?</article>', h, re.S)
+a=m.group(0) if m else ''
+f=re.search(r'<form class=\"fg-signup-form\".*?</form>', a, re.S)
+print(re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',f.group(0)))).strip() if f else 'kein-formular')"; }
 
 echo "== Admin level tests =="
 
-EVENT_ID=$(python3 -c "import json;print(json.load(open('$F'))['event_id'])")
+# The work duty this suite works on belongs to this suite. It used to be read
+# out of tests/fixture.json, which is the fixture of the HTTP suite — and that
+# suite builds its own duty and consumes it. So the admin suite could only run
+# when the HTTP suite had just run, and a green run said nothing about the admin
+# screen if the other suite had not been before it. The same reasoning that made
+# [4b] build its own published ride applies here.
+EVENT_TITEL="Arbeitsdienst aus der Admin-Suite"
+EVENT_ID=$(s make-event "$EVENT_TITEL" "$(date -d '+30 days' +%Y-%m-%d)" 4 "08:00")
+if [ "$EVENT_ID" -gt 0 ]; then ok "the work duty of this suite exists ($EVENT_ID)"; else bad "the work duty of this suite exists" "$EVENT_ID"; exit 1; fi
+
+# One of this suite's own members sits on this suite's own duty, because the
+# sentence about the taken places and the read-only list of the members only
+# exist for a duty somebody has registered for. It used to be somebody else's
+# registration, left behind by the HTTP suite: the check passed only because
+# another suite had filled the duty it was reading.
+EVENTMITGLIED=$(neu "0842" "verwalter@example.org" "Verwalter" "Test")
+if [ "$EVENTMITGLIED" -gt 0 ]; then
+	s register "$EVENT_ID" "0842" "verwalter@example.org" > /dev/null
+	if [ "$(s count-registrations "$EVENT_ID")" = "1" ]; then ok "one member of this suite is on the duty"; else bad "one member of this suite is on the duty" "$(s count-registrations "$EVENT_ID")"; fi
+else
+	bad "one member of this suite is on the duty" "member $EVENTMITGLIED was refused"
+fi
 
 # --- login
 login=$(curl -sk -c "$JAR" -d "log=fg_admin&pwd=Test1234!&wp-submit=Anmelden&redirect_to=$BASE/wp-admin/&testcookie=1" "$BASE/wp-login.php")
@@ -42,15 +169,16 @@ if grep -q "wordpress_logged_in" "$JAR"; then ok "login works"; else bad "login 
 echo "[1] statistics screen"
 stats=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften")
 has "menu page renders" "$stats" "Statistik"
-# The top level entry carries the plugin name. Its own page is the statistics
-# screen, which is listed last, so the name of the top level entry and the name
-# of its page are deliberately not the same word.
+# The top level entry carries the name of the tool and links to whatever the
+# first submenu is, so a click on it lands on the work duty list. The name
+# therefore stands twice, once in the top level and once as the first submenu.
+# The collapsed submenu head takes its text from the same label, so both are
+# read here.
 nav=$(printf '%s' "$stats" | python3 -c "
 import re, sys
 html = sys.stdin.read()
-# Both the collapsed entry and the hidden submenu head take their text from the
-# menu label passed to add_menu_page(). The search is anchored on the list item
-# id, because the slug also occurs in inline scripts.
+# The search is anchored on the list item id, because the slug also occurs in
+# inline scripts.
 m = re.search(r'id=\"toplevel_page_fahrgemeinschaften\">(.*?)</ul>', html, re.S)
 if not m:
     print('')
@@ -58,16 +186,23 @@ else:
     block = m.group(1)
     name = re.search(r\"<div class='wp-menu-name'>([^<]*)</div>\", block)
     head = re.search(r\"<li class='wp-submenu-head'[^>]*>([^<]*)</li>\", block)
-    print((name.group(1).strip() if name else '') + '|' + (head.group(1).strip() if head else ''))")
-if [ "$nav" = "Fahrgemeinschaften|Fahrgemeinschaften" ]; then
+    top = re.search(r\"<a href='([^']*)'\", block)
+    print((name.group(1).strip() if name else '') + '|' + (head.group(1).strip() if head else '') + '|' + (top.group(1) if top else ''))")
+if [ "${nav%%|*}" = "Arbeitsdienste" ] && [ "$(printf '%s' "$nav" | cut -d'|' -f2)" = "Arbeitsdienste" ]; then
 	ok "top level entry keeps the plugin name"
 else
 	bad "top level entry keeps the plugin name" "found: ${nav:-<no menu block>}"
 fi
+# The label promises the work duty list, so the entry has to lead there.
+if [ "$(printf '%s' "$nav" | cut -d'|' -f3)" = "admin.php?page=fahrgemeinschaften-events" ]; then
+	ok "top level entry leads to the work duties"
+else
+	bad "top level entry leads to the work duties" "found: $(printf '%s' "$nav" | cut -d'|' -f3)"
+fi
 has "page heading matches" "$stats" "<h1>Statistik</h1>"
 
-# The submenu order is part of the interface: Arbeitsdienste, Fahrgemeinschaften,
-# Statistik. WordPress links the top level entry to whatever is first, so this
+# The submenu order is part of the interface: Arbeitsdienste, Mitglieder,
+# Fahrgemeinschaften, Einstellungen, Statistik. WordPress links the top level entry to whatever is first, so this
 # also decides where a click on the plugin name lands.
 order=$(printf '%s' "$stats" | python3 -c "
 import re, sys
@@ -81,7 +216,7 @@ else:
     block = m.group(1)
     block = block[block.find(\"<ul class='wp-submenu\"):]
     print(' > '.join(label.strip() for _, label in re.findall(r\"admin\.php\?page=(fahrgemeinschaften[a-z\-]*)'[^>]*>([^<]*)<\", block)))")
-if [ "$order" = "Arbeitsdienste > Fahrgemeinschaften > Einstellungen > Statistik" ]; then
+if [ "$order" = "Arbeitsdienste > Mitglieder > Fahrgemeinschaften > Einstellungen > Statistik" ]; then
 	ok "submenu shows the screens in the intended order"
 else
 	bad "submenu shows the screens in the intended order" "found: ${order:-<no menu block>}"
@@ -91,13 +226,14 @@ has "shows the three periods" "$stats" "Letzte 30 Tage"
 has "shows counter labels" "$stats" "Vorgemerkte Einträge"
 hasnt "statistics show no address" "$stats" "@example"
 has "work duty screen is linked" "$stats" "page=fahrgemeinschaften-events"
+has "member screen is linked" "$stats" "page=fahrgemeinschaften-members"
 has "ride screen is linked" "$stats" "page=fahrgemeinschaften-rides"
 has "settings screen is linked" "$stats" "page=fahrgemeinschaften-settings"
 clean "$stats" "statistics screen"
 
 # The same order has to be visible from every screen of the plugin, and the
 # entry of the screen that is open has to be the marked one.
-for pair in "fahrgemeinschaften-events:Arbeitsdienste" "fahrgemeinschaften-rides:Fahrgemeinschaften" "fahrgemeinschaften-settings:Einstellungen"; do
+for pair in "fahrgemeinschaften-events:Arbeitsdienste" "fahrgemeinschaften-members:Mitglieder" "fahrgemeinschaften-rides:Fahrgemeinschaften" "fahrgemeinschaften-settings:Einstellungen"; do
 	page="${pair%%:*}"
 	label="${pair##*:}"
 	body=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=$page")
@@ -124,7 +260,7 @@ else:
 	else
 		bad "on $label that entry is marked as current" "found: ${here:-none}"
 	fi
-	if [ "$there" = "Arbeitsdienste > Fahrgemeinschaften > Einstellungen > Statistik" ]; then
+	if [ "$there" = "Arbeitsdienste > Mitglieder > Fahrgemeinschaften > Einstellungen > Statistik" ]; then
 		ok "order holds on the $label screen"
 	else
 		bad "order holds on the $label screen" "found: ${there:-<no menu block>}"
@@ -135,33 +271,20 @@ done
 # --- event list
 echo "[2] work duty list"
 events=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events")
-has "event is listed" "$events" "Arbeitsdienst Laber"
+has "event is listed" "$events" "$EVENT_TITEL"
 has "date column exists" "$events" ">Datum<"
 has "group column exists" "$events" ">Gruppe<"
 has "demand column exists" "$events" ">Bedarf<"
 has "visibility column exists" "$events" "Öffentlich sichtbar"
-has "participant column exists" "$events" ">Teilnehmer<"
+has "registration column exists" "$events" ">Teilnehmer<"
+has "free places column exists" "$events" ">Freie Plätze<"
 has "edit link exists" "$events" "event=$EVENT_ID"
 hasnt "no trash column" "$events" ">Papierkorb<"
 # The four fields are optional, so the list has to be able to say "nothing
-# stated" without inventing a number for it. The cell of one known record is
-# read on its own: the counts of the other columns are numbers too, so a search
-# over the whole screen would be measuring the wrong thing. The cell of the
-# demand is the fourth, after title, date and group.
-demand_cell=$(printf '%s' "$events" | python3 -c "
-import re, sys
-html = sys.stdin.read()
-m = re.search(r'<tr[^>]*>.*?event=$EVENT_ID.*?</tr>', html, re.S)
-if not m:
-    print('no-row')
-else:
-    cells = re.findall(r'<td[^>]*>(.*?)</td>', m.group(0), re.S)
-    print(re.sub(r'<[^>]+>', '', cells[3]).strip() if len(cells) > 3 else 'too-few-cells:%d' % len(cells))")
-if [ "$demand_cell" = "—" ]; then
-	ok "a duty with no demand shows a dash, not a zero"
-else
-	bad "a duty with no demand shows a dash, not a zero" "cell reads: $demand_cell"
-fi
+# stated" without inventing a number for it. That is checked further down, on
+# a record of this run: the club keeps its own entries on its own duties, and
+# those carry real numbers. Reading a cell of a foreign record would only prove
+# what somebody else typed in.
 clean "$events" "event list"
 
 # --- event form
@@ -169,7 +292,16 @@ echo "[3] work duty form"
 screen=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$EVENT_ID")
 has "date field present" "$screen" 'name="fg_event_date"'
 has "time field present" "$screen" 'name="fg_event_time"'
-has "participants field present" "$screen" 'name="fg_event_participants"'
+# The list of addresses the club used to type in by hand is gone. What stands
+# in its place is a read-only list of the members who registered themselves, so
+# the form must not offer a field to write into any more.
+hasnt "no field writes the participants by hand" "$screen" 'name="fg_event_participants"'
+has "the registered members are listed" "$screen" "Angemeldete Mitglieder"
+# Both of these read the duty of this run, which carries the member of this
+# run. Reading only the heading would hold for every duty, including one
+# nobody has signed up for.
+has "and the member of this run is named in it" "$screen" "Verwalter"
+has "it says how many of the places are taken" "$screen" "1 von höchstens 4 Plätzen belegt"
 has "visibility checkbox present" "$screen" 'name="fg_event_active"'
 has "group field present" "$screen" 'name="fg_group_name"'
 has "demand field present" "$screen" 'name="fg_demand"'
@@ -216,12 +348,18 @@ has "detail offers the permanent delete" "$detail" "action=fg_delete_record"
 hasnt "detail has no save button" "$detail" 'name="fg_alias"'
 clean "$detail" "ride detail screen"
 
+# The published ride of this section belongs to this run. It used to be read out
+# of the fixture, which is the fixture of the HTTP suite — and that suite proves
+# it can delete that ride. The filter check then failed whenever the two suites
+# ran in the wrong order, which says nothing about the filter.
+PUBLISHED_RIDE=$(s make-ride "$EVENT_ID" search "Elster-Gruppe" Suedstadt anton@angeln.example.org published)
+
 echo "[4b] filtering the ride list"
 filtered=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&fg_status_filter=pending&fg_event_filter=$EVENT_ID")
 has "pending filter keeps the pending ride" "$filtered" "Wartende Fahrt"
-hasnt "pending filter hides the published ride" "$filtered" "Amsel-Gruppe"
+hasnt "pending filter hides the published ride" "$filtered" "Elster-Gruppe"
 other=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&fg_status_filter=published")
-has "published filter keeps the published ride" "$other" "Amsel-Gruppe"
+has "published filter keeps the published ride" "$other" "Elster-Gruppe"
 hasnt "published filter hides the pending ride" "$other" "Wartende Fahrt"
 clean "$other" "filtered ride list"
 
@@ -241,15 +379,13 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/saved.html" -w '%{url_effective}'
 	--data-urlencode "fg_duration_hours=4" \
 	--data-urlencode "fg_description=Bitte festes Schuhwerk mitbringen.
 Handschuhe sind vorhanden." \
-	--data-urlencode "fg_event_participants=neu@example.org
-zweite@example.org")
+	)
 saved=$(cat "$DIR/saved.html")
 has "save confirms the new record" "$saved" "Der Arbeitsdienst wurde angelegt."
 has "save opens the new record" "$out" "event="
 NEW_ID=$(s find-event "Neuer Dienst aus dem Admin")
 if [ "$NEW_ID" -gt 0 ]; then ok "new work duty is stored ($NEW_ID)"; else bad "new work duty is stored" "$NEW_ID"; fi
 if [ "$(s event "$NEW_ID" event_date)" = "2027-03-04" ]; then ok "date stored"; else bad "date stored" "$(s event "$NEW_ID" event_date)"; fi
-if [ "$(s event "$NEW_ID" participants)" = "neu@example.org,zweite@example.org" ]; then ok "participants stored"; else bad "participants stored" "$(s event "$NEW_ID" participants)"; fi
 if [ "$(s event "$NEW_ID" is_active)" = "1" ]; then ok "visibility stored"; else bad "visibility stored" "$(s event "$NEW_ID" is_active)"; fi
 if [ -n "$(s event "$NEW_ID" event_uuid)" ]; then ok "uuid generated on insert"; else bad "uuid generated on insert" "empty"; fi
 if [ "$(s event "$NEW_ID" group_name)" = "Gartenpflege Nord" ]; then ok "group stored"; else bad "group stored" "$(s event "$NEW_ID" group_name)"; fi
@@ -284,7 +420,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/edited.html" -w '%{url_effective}
 	--data-urlencode "fg_demand=1" \
 	--data-urlencode "fg_duration_hours=" \
 	--data-urlencode "fg_description=Neu: nur noch drei Personen gebraucht." \
-	--data-urlencode "fg_event_participants=neu@example.org")
+	)
 edited=$(cat "$DIR/edited.html")
 has "save confirms the change" "$edited" "Der Arbeitsdienst wurde gespeichert."
 if [ "$(s event "$NEW_ID" title)" = "Geänderter Dienst" ]; then ok "title stored"; else bad "title stored" "$(s event "$NEW_ID" title)"; fi
@@ -308,7 +444,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/toolong.html" -w '%{url_effective
 	--data-urlencode "fg_event_date=2027-03-05" \
 	--data-urlencode "fg_group_name=$LANG_GRUPPE" \
 	--data-urlencode "fg_demand=2" \
-	--data-urlencode "fg_event_participants=neu@example.org")
+	)
 toolong=$(cat "$DIR/toolong.html")
 has "the too long group is named" "$toolong" "Gruppe ist zu lang"
 has "the limit is named" "$toolong" "höchstens 100 Zeichen"
@@ -325,7 +461,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/toolong2.html" -w '%{url_effectiv
 	--data-urlencode "fg_title=Geänderter Dienst" \
 	--data-urlencode "fg_event_date=2027-03-05" \
 	--data-urlencode "fg_description=$LANG_TEXT" \
-	--data-urlencode "fg_event_participants=neu@example.org")
+	)
 toolong2=$(cat "$DIR/toolong2.html")
 has "the too long description is named" "$toolong2" "Beschreibung ist zu lang"
 has "the description limit is named" "$toolong2" "höchstens 500 Zeichen"
@@ -340,7 +476,7 @@ for raw in -3 2.5 acht 1e3; do
 		--data-urlencode "fg_title=Geänderter Dienst" \
 		--data-urlencode "fg_event_date=2027-03-05" \
 		--data-urlencode "fg_demand=$raw" \
-		--data-urlencode "fg_event_participants=neu@example.org")
+		)
 	count_bad=$(cat "$DIR/count.html")
 	has "the demand \"$raw\" is refused by name" "$count_bad" "Bedarf an Personen muss eine ganze Zahl"
 	if [ "$(s event "$NEW_ID" demand)" = "1" ]; then ok "the previous demand is kept after \"$raw\""; else bad "the previous demand is kept after \"$raw\"" "$(s event "$NEW_ID" demand)"; fi
@@ -358,10 +494,39 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/exact.html" -w '%{url_effective}'
 	--data-urlencode "fg_group_name=$(python3 -c "print('ä' * 100)")" \
 	--data-urlencode "fg_demand=0" \
 	--data-urlencode "fg_description=$(python3 -c "print('ö' * 500)")" \
-	--data-urlencode "fg_event_participants=neu@example.org")
+	)
 exact=$(cat "$DIR/exact.html")
 hasnt "a text exactly on the limit is not refused" "$exact" "Es wurde nichts gespeichert."
 if [ "$(s event "$NEW_ID" demand)" = "0" ]; then ok "a demand of zero is stored as no statement"; else bad "a demand of zero is stored as no statement" "$(s event "$NEW_ID" demand)"; fi
+# In the overview the two cells of that same record now have to say what the
+# state says: a demand of zero is no statement and reads as a dash, while the
+# group of 100 characters is a statement and has to appear. The cells are read
+# for this record only, because the other rows carry numbers of their own.
+overview=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events")
+if [ "$(printf '%s' "$overview" | cell "$NEW_ID" 3)" = "—" ]; then
+	ok "a duty with no demand shows a dash, not a zero"
+else
+	bad "a duty with no demand shows a dash, not a zero" "cell reads: $(printf '%s' "$overview" | cell "$NEW_ID" 3)"
+fi
+if [ "$(printf '%s' "$overview" | cell "$NEW_ID" 2)" = "$(python3 -c "print('ä' * 100)")" ]; then
+	ok "a stated group of 100 characters shows all of them"
+else
+	bad "a stated group of 100 characters shows all of them" "cell reads: $(printf '%s' "$overview" | cell "$NEW_ID" 2)"
+fi
+# The two count columns are read from the same row. The demand of this record
+# is 0 and nobody is registered for it, so both cells are a zero; that is the
+# only case in which a zero is a true statement rather than a missing value.
+if [ "$(printf '%s' "$overview" | cell "$NEW_ID" 4)" = "0" ]; then
+	ok "a duty nobody signed up for counts zero registered"
+else
+	bad "a duty nobody signed up for counts zero registered" "cell reads: $(printf '%s' "$overview" | cell "$NEW_ID" 4)"
+fi
+if [ "$(printf '%s' "$overview" | cell "$NEW_ID" 5)" = "0" ]; then
+	ok "and has no free place to give away"
+else
+	bad "and has no free place to give away" "cell reads: $(printf '%s' "$overview" | cell "$NEW_ID" 5)"
+fi
+clean "$overview" "work duty overview with a dash and a full group"
 if [ "$(s event "$NEW_ID" group_name | wc -m)" = "101" ]; then ok "a group of exactly 100 characters is stored whole"; else bad "a group of exactly 100 characters is stored whole" "$(s event "$NEW_ID" group_name | wc -m)"; fi
 if [ "$(s event "$NEW_ID" description | wc -m)" = "501" ]; then ok "a description of exactly 500 characters is stored whole"; else bad "a description of exactly 500 characters is stored whole" "$(s event "$NEW_ID" description | wc -m)"; fi
 clean "$exact" "work duty save exactly on the limit"
@@ -376,7 +541,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/plain.html" -w '%{url_effective}'
 	--data-urlencode "fg_event_date=2027-03-05" \
 	--data-urlencode "fg_group_name=Gruppe < Nord" \
 	--data-urlencode "fg_description=Motive < 2 m, <b>fett</b>" \
-	--data-urlencode "fg_event_participants=neu@example.org")
+	)
 if [ "$(s event "$NEW_ID" group_name)" = "Gruppe < Nord" ]; then ok "an angle bracket in the group survives"; else bad "an angle bracket in the group survives" "$(s event "$NEW_ID" group_name)"; fi
 if [ "$(s event "$NEW_ID" description)" = "Motive < 2 m, <b>fett</b>" ]; then ok "a typed description is stored exactly as written"; else bad "a typed description is stored exactly as written" "$(s event "$NEW_ID" description)"; fi
 plainform=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$NEW_ID")
@@ -393,7 +558,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/bad.html" -w '%{url_effective}' -
 	--data-urlencode "fg_event_date=2027-02-31" \
 	--data-urlencode "fg_event_time=" \
 	--data-urlencode "fg_event_active=1" \
-	--data-urlencode "fg_event_participants=neu@example.org")
+	)
 bad_html=$(cat "$DIR/bad.html")
 has "invalid date is reported" "$bad_html" "Bitte ein gültiges Datum"
 has "nothing was saved" "$bad_html" "Es wurde nichts gespeichert."
@@ -407,24 +572,15 @@ out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/wp-admin/
 	--data-urlencode "fg_event_nonce=manipuliert" \
 	--data-urlencode "fg_title=Ohne Erlaubnis" \
 	--data-urlencode "fg_event_date=2027-03-05" \
-	--data-urlencode "fg_event_participants=neu@example.org")
+	)
 if [ "$out" = "403" ]; then ok "a wrong nonce is refused ($out)"; else bad "a wrong nonce is refused" "$out"; fi
 if [ "$(s event "$NEW_ID" title)" = "Geänderter Dienst" ]; then ok "title unchanged after a refused save"; else bad "title unchanged after a refused save" "$(s event "$NEW_ID" title)"; fi
 
-echo "[5e] an invalid participant address is dropped, the rest is stored"
-out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/people.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
-	--data-urlencode "action=fg_save_event" \
-	--data-urlencode "fg_event_id=$NEW_ID" \
-	--data-urlencode "fg_event_nonce=$ENONCE" \
-	--data-urlencode "fg_title=Geänderter Dienst" \
-	--data-urlencode "fg_event_date=2027-03-05" \
-	--data-urlencode "fg_event_time=" \
-	--data-urlencode "fg_event_active=1" \
-	--data-urlencode "fg_event_participants=anton@angeln.example.org
-kaputt")
-people=$(s event "$NEW_ID" participants)
-if [ "$people" = "anton@angeln.example.org" ]; then ok "invalid participant dropped ($people)"; else bad "invalid participant dropped" "$people"; fi
-clean "$(cat "$DIR/people.html")" "work duty save with an invalid participant"
+echo "[5e] the registration list of the duty is read-only"
+people=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$NEW_ID")
+hasnt "the form offers no field for the registered members" "$people" 'name="fg_event_participants"'
+hasnt "and no field for a list of addresses under another name" "$people" 'name="fg_participants"'
+clean "$people" "work duty with its registration list"
 
 echo "[5f] a new record is not reachable without a nonce"
 out=$(curl -sk -b "$JAR" -o "$DIR/anon.html" -w '%{http_code}' -X POST "$BASE/wp-admin/admin-post.php" \
@@ -432,14 +588,20 @@ out=$(curl -sk -b "$JAR" -o "$DIR/anon.html" -w '%{http_code}' -X POST "$BASE/wp
 	--data-urlencode "fg_event_id=0" \
 	--data-urlencode "fg_title=Ohne Sitzung" \
 	--data-urlencode "fg_event_date=2027-03-05" \
-	--data-urlencode "fg_event_participants=neu@example.org")
+	)
 if [ "$out" = "302" ] || [ "$out" = "403" ]; then ok "an anonymous save does not succeed ($out)"; else bad "an anonymous save does not succeed" "$out"; fi
 if [ "$(s find-event "Ohne Sitzung")" = "0" ]; then ok "no record was created anonymously"; else bad "no record was created anonymously" "created"; fi
 
 # --- permanent deletion of a ride
 echo "[6] permanent deletion of a ride"
 ridedel=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&ride=$RIDE_ID")
-del_url=$(printf '%s' "$ridedel" | link "action=fg_delete_record")
+# The question is part of the link, not a paragraph above it, so it has to
+# survive whatever the link is filtered through. A link whose question is
+# stripped is a button that deletes without asking, and nothing on the screen
+# says what it deletes.
+has "the delete link asks what it deletes" "$ridedel" "return confirm("
+has "and the question names the record" "$ridedel" "Diese Fahrgemeinschaft endgültig löschen?"
+del_url=$(printf '%s' "$ridedel" | link "ride")
 if [ -n "$del_url" ]; then ok "delete link found"; else bad "delete link found" "no link on the screen"; fi
 out=$(curl -sk -b "$JAR" -L "$del_url")
 has "delete notice shown" "$out" "endgültig gelöscht"
@@ -452,19 +614,41 @@ if [ "$out" = "403" ] || [ "$out" = "500" ]; then ok "replayed delete link is re
 
 # --- permanent deletion with cascade
 echo "[7] permanent deletion of a work duty"
-CASCADE=$(s make-event "Kaskade" "$(date -d '+30 days' +%Y-%m-%d)" "kette@example.org")
+CASCADE=$(s make-event "Kaskade" "$(date -d '+30 days' +%Y-%m-%d)" 3)
+# One member is signed in for the duty, so the delete question has to count a
+# registration next to the two rides.
+KASKADE_MEMBER=$(neu "0900" "kette@example.org" "Kette" "Probe")
+s register "$CASCADE" "0900" "kette@example.org" >/dev/null
 s make-ride "$CASCADE" offer "Kaskadenfahrt" Innenstadt kette@example.org published >/dev/null
 s make-ride "$CASCADE" search "Kaskadenfahrt zwei" Suedstadt kette@example.org >/dev/null
 if [ "$(s count-event-rides "$CASCADE")" = "2" ]; then ok "cascade source has two rides"; else bad "cascade source has two rides" "$(s count-event-rides "$CASCADE")"; fi
 form=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$CASCADE")
+has "the delete link itself asks what it takes" "$form" "return confirm("
 has "delete question counts the rides" "$form" "2 zugehörige Fahrgemeinschaften"
-del_url=$(printf '%s' "$form" | link "action=fg_delete_record")
+# Both nouns have to agree with their own number. A duty with one member in it
+# and two rides reads "1 Anmeldung und 2 zugehörige Fahrgemeinschaften"; the
+# same sentence with the two numbers the other way round is what a single
+# plural rule on one of them produces.
+has "delete question counts the registrations" "$form" "Diesen Arbeitsdienst, 1 Anmeldung und 2 zugehörige Fahrgemeinschaften endgültig löschen?"
+del_url=$(printf '%s' "$form" | link "event")
 if [ -n "$del_url" ]; then ok "delete link found"; else bad "delete link found" "no link on the screen"; fi
 out=$(curl -sk -b "$JAR" -L "$del_url")
 has "delete notice mentions the cascade" "$out" "zugehörige"
 clean "$out" "cascade deletion"
 if [ "$(s count-event-rides "$CASCADE")" = "0" ]; then ok "rides of the deleted work duty are gone"; else bad "rides of the deleted work duty are gone" "$(s count-event-rides "$CASCADE")"; fi
+if [ "$(s count-registrations "$CASCADE")" = "0" ]; then ok "registrations of the deleted work duty are gone"; else bad "registrations of the deleted work duty are gone" "$(s count-registrations "$CASCADE")"; fi
 if [ "$(s exists-event "$CASCADE")" = "0" ]; then ok "work duty is gone"; else bad "work duty is gone" "still there"; fi
+# A duty goes, the member does not. The registration is what belonged to the
+# duty; the person it was made for belongs to the club.
+if [ -n "$KASKADE_MEMBER" ] && [ "$KASKADE_MEMBER" -gt 0 ]; then
+	if [ "$(s member "$KASKADE_MEMBER" member_no)" = "0900" ]; then
+		ok "the member who was signed in is still in the club"
+	else
+		bad "the member who was signed in is still in the club" "$(s member "$KASKADE_MEMBER" member_no)"
+	fi
+else
+	bad "the member who was signed in is still in the club" "the member was not created"
+fi
 
 # --- settings of the e-mails
 echo "[8] settings screen"
@@ -577,15 +761,731 @@ echo "[8f] the preview needs a nonce"
 out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' "$BASE/wp-admin/admin-post.php?action=fg_mail_preview")
 if [ "$out" = "403" ]; then ok "the preview is refused without a nonce ($out)"; else bad "the preview is refused without a nonce" "$out"; fi
 
-# The work duty from [5] is an active record dated 2027 and would sit in the
-# offer form of a manual test afterwards. Removing it keeps the suite from
-# leaving a row behind on every run; the cascade count of [6c] stays untouched
-# because that section deletes its own record.
-if [ -n "$NEW_ID" ] && [ "$NEW_ID" -gt 0 ]; then
-	s delete-event "$NEW_ID" > /dev/null
-	if [ "$(s exists-event "$NEW_ID")" = "0" ]; then ok "the work duty of this run is gone again"; else bad "the work duty of this run is gone again" "id $NEW_ID still there"; fi
+# --- the member administration
+echo "[9] the member administration"
+MEMBERS="$BASE/wp-admin/admin.php?page=fahrgemeinschaften-members"
+members=$(curl -sk -b "$JAR" "$MEMBERS")
+has "screen renders" "$members" ">Mitglieder</h1>"
+has "a member can be added" "$members" "Neues Mitglied"
+has "the list has a column for the number" "$members" ">Mitgliedsnummer<"
+has "the list has a column for the address" "$members" ">E-Mail-Adresse<"
+has "the list says how many duties a member is in" "$members" ">Angemeldete Dienste<"
+has "the import form is on the same screen" "$members" 'name="fg_member_file"'
+has "the import form carries a nonce" "$members" 'name="fg_import_nonce"'
+has "the search field is there" "$members" 'name="fg_member_search"'
+clean "$members" "member list"
+
+# A member has four fields and nothing else. A fifth column in the form would
+# be a fifth thing the club has to keep in step with its own administration.
+#
+# Each field is asked for as what it has to be: a text input, and a required
+# one. Looking for the name alone would be answered by a hidden field, and
+# "required" somewhere on the page says nothing about which field it belongs to.
+s delete-member "$(s member-by-no "0700" id)" > /dev/null 2>&1
+form=$(curl -sk -b "$JAR" "$MEMBERS&member=0")
+for feldangabe in 'fg_member_no:text' 'fg_member_email:email' 'fg_first_name:text' 'fg_last_name:text'; do
+	feldname=${feldangabe%%:*}
+	feldart=${feldangabe##*:}
+	if [ "$(printf '%s' "$form" | feld "$feldname" "['type=\"$feldart\"', 'required']")" = "ok" ]; then
+		ok "the form has a required $feldart field $feldname"
+	else
+		bad "the form has a required $feldart field $feldname" "$(printf '%s' "$form" | feld "$feldname" "['type=\"$feldart\"', 'required']")"
+	fi
+done
+# The browser is told the same length the column has. An address field that
+# offers 254 characters while the column holds 190 invites a visitor to type
+# something that is checked, accepted and then dropped by the schema.
+if [ "$(printf '%s' "$form" | feld fg_member_email "['maxlength=\"190\"']")" = "ok" ]; then
+	ok "the address field stops where the column does"
 else
-	bad "the work duty of this run is gone again" "no id to remove"
+	bad "the address field stops where the column does" "$(printf '%s' "$form" | feld fg_member_email "['maxlength=\"190\"']")"
+fi
+for unerwartet in fg_member_address fg_member_street fg_member_birthday fg_member_phone fg_member_name; do
+	hasnt "the form has no field named $unerwartet" "$form" "name=\"$unerwartet\""
+done
+has "the form carries a nonce" "$form" 'name="fg_member_nonce"'
+clean "$form" "member form"
+
+MNONCE=$(val /dev/stdin fg_member_nonce <<< "$form")
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-new.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_member" \
+	--data-urlencode "fg_member_id=0" \
+	--data-urlencode "fg_member_nonce=$MNONCE" \
+	--data-urlencode "fg_member_no=0700" \
+	--data-urlencode "fg_member_email=neu@example.org" \
+	--data-urlencode "fg_first_name=Neu" \
+	--data-urlencode "fg_last_name=Probe")
+neu=$(cat "$DIR/member-new.html")
+has "save confirms the new member" "$neu" "Das Mitglied wurde angelegt."
+NEU_ID=$(s member-by-no "0700" id)
+if [ "$NEU_ID" -gt 0 ]; then ok "the new member is stored ($NEU_ID)"; else bad "the new member is stored" "$NEU_ID"; fi
+if [ "$(s member "$NEU_ID" email)" = "neu@example.org" ]; then ok "the address is stored"; else bad "the address is stored" "$(s member "$NEU_ID" email)"; fi
+# The number is a text, not a count, so a leading zero has to survive the round
+# trip. A club whose numbers are 700 and 0700 has two members.
+if [ "$(s member "$NEU_ID" member_no)" = "0700" ]; then ok "the leading zero of the number survives"; else bad "the leading zero of the number survives" "$(s member "$NEU_ID" member_no)"; fi
+has "the new member is in the list" "$(curl -sk -b "$JAR" "$MEMBERS")" "0700"
+clean "$neu" "member create"
+
+# The two keys are unique, and a refusal says which of the two it was. A
+# message that only says "not saved" leaves the club guessing which field to
+# change.
+newform=$(curl -sk -b "$JAR" "$MEMBERS&member=0")
+MNONCE=$(val /dev/stdin fg_member_nonce <<< "$newform")
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-dup.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_member" \
+	--data-urlencode "fg_member_id=0" \
+	--data-urlencode "fg_member_nonce=$MNONCE" \
+	--data-urlencode "fg_member_no=0700" \
+	--data-urlencode "fg_member_email=anders@example.org" \
+	--data-urlencode "fg_first_name=Doppelt" \
+	--data-urlencode "fg_last_name=Probe")
+dup=$(cat "$DIR/member-dup.html")
+has "a taken number is named" "$dup" "Die Mitgliedsnummer 0700 ist bereits vergeben"
+has "and it says nothing was saved" "$dup" "Bitte wähle eine andere"
+if [ "$(s member-by-no "0700" email)" = "neu@example.org" ]; then ok "the member that holds the number is untouched"; else bad "the member that holds the number is untouched" "$(s member-by-no "0700" email)"; fi
+clean "$dup" "member with a taken number"
+
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-mail.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_member" \
+	--data-urlencode "fg_member_id=0" \
+	--data-urlencode "fg_member_nonce=$MNONCE" \
+	--data-urlencode "fg_member_no=0701" \
+	--data-urlencode "fg_member_email=neu@example.org" \
+	--data-urlencode "fg_first_name=Doppelt" \
+	--data-urlencode "fg_last_name=Probe")
+mail=$(cat "$DIR/member-mail.html")
+# The address is the key of the registration, so it has to belong to exactly one
+# member. The message names the member that holds it, because the person at the
+# keyboard usually knows that and does not know the numbers.
+has "a taken address names the member that holds it" "$mail" "gehört bereits zu Mitglied 0700"
+has "and it says why" "$mail" "Jede E-Mail-Adresse gehört zu genau einem Mitglied"
+if [ "$(s member-by-no "0701" id)" = "missing" ]; then ok "no second member was written"; else bad "no second member was written" "$(s member-by-no "0701" id)"; fi
+clean "$mail" "member with a taken address"
+
+# The four fields are required, and the form marks them as such; a request that
+# leaves one out anyway has to be refused on the server, not only in the
+# browser.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-leer.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_member" \
+	--data-urlencode "fg_member_id=0" \
+	--data-urlencode "fg_member_nonce=$MNONCE" \
+	--data-urlencode "fg_member_no=0702" \
+	--data-urlencode "fg_member_email=leer@example.org" \
+	--data-urlencode "fg_first_name=" \
+	--data-urlencode "fg_last_name=Probe")
+leer=$(cat "$DIR/member-leer.html")
+has "a missing name is named" "$leer" "Bitte Vor- und Nachnamen eingeben"
+if [ "$(s member-by-no "0702" id)" = "missing" ]; then ok "nothing was written"; else bad "nothing was written" "$(s member-by-no "0702" id)"; fi
+clean "$leer" "member without a name"
+
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-uns.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_member" \
+	--data-urlencode "fg_member_id=0" \
+	--data-urlencode "fg_member_nonce=$MNONCE" \
+	--data-urlencode "fg_member_no=0703" \
+	--data-urlencode "fg_member_email=keine-mail" \
+	--data-urlencode "fg_first_name=Ohne" \
+	--data-urlencode "fg_last_name=Mail")
+uns=$(cat "$DIR/member-uns.html")
+has "an address that is not one is named" "$uns" "Bitte eine gültige E-Mail-Adresse eingeben"
+if [ "$(s member-by-no "0703" id)" = "missing" ]; then ok "nothing was written"; else bad "nothing was written" "$(s member-by-no "0703" id)"; fi
+clean "$uns" "member with an address that is not one"
+
+# An address can be a proper address and still be too long for the column. It is
+# 200 characters here, and 254 characters are legal, so a check that only asks
+# "is it an address" lets it through to a column of 190 — where the insert is
+# refused by the schema and the club is told nothing more than "could not be
+# created". The message has to be the one that names the field.
+LANGE_MAIL=$(python3 -c "print('a' * 185 + '@' + 'b' * 10 + '.org')")
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-lang.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_member" \
+	--data-urlencode "fg_member_id=0" \
+	--data-urlencode "fg_member_nonce=$MNONCE" \
+	--data-urlencode "fg_member_no=0705" \
+	--data-urlencode "fg_member_email=$LANGE_MAIL" \
+	--data-urlencode "fg_first_name=Lang" \
+	--data-urlencode "fg_last_name=Adresse")
+lang=$(cat "$DIR/member-lang.html")
+has "an address longer than the column is named as the address" "$lang" "Bitte eine gültige E-Mail-Adresse eingeben"
+hasnt "and it is not the vague message" "$lang" "Das Mitglied konnte nicht angelegt werden"
+if [ "$(s member-by-no "0705" id)" = "missing" ]; then ok "and no member was written for it"; else bad "and no member was written for it" "$(s member-by-no "0705" id)"; fi
+clean "$lang" "member with an address longer than the column"
+
+# The four fields come back into the form, and a change is stored.
+edit=$(curl -sk -b "$JAR" "$MEMBERS&member=$NEU_ID")
+has "the form is filled with the number" "$edit" 'value="0700"'
+has "the form is filled with the address" "$edit" 'value="neu@example.org"'
+has "the form is filled with the first name" "$edit" 'value="Neu"'
+has "the form is filled with the last name" "$edit" 'value="Probe"'
+ENONCE2=$(val /dev/stdin fg_member_nonce <<< "$edit")
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-edit.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_member" \
+	--data-urlencode "fg_member_id=$NEU_ID" \
+	--data-urlencode "fg_member_nonce=$ENONCE2" \
+	--data-urlencode "fg_member_no=0700" \
+	--data-urlencode "fg_member_email=neuanders@example.org" \
+	--data-urlencode "fg_first_name=Neu" \
+	--data-urlencode "fg_last_name=Geaendert")
+geandert=$(cat "$DIR/member-edit.html")
+has "save confirms the change" "$geandert" "Das Mitglied wurde gespeichert."
+if [ "$(s member "$NEU_ID" email)" = "neuanders@example.org" ]; then ok "the new address is stored"; else bad "the new address is stored" "$(s member "$NEU_ID" email)"; fi
+if [ "$(s member "$NEU_ID" last_name)" = "Geaendert" ]; then ok "the new name is stored"; else bad "the new name is stored" "$(s member "$NEU_ID" last_name)"; fi
+clean "$geandert" "member edit"
+
+# A wrong nonce changes nothing.
+out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_member" \
+	--data-urlencode "fg_member_id=$NEU_ID" \
+	--data-urlencode "fg_member_nonce=manipuliert" \
+	--data-urlencode "fg_member_no=0700" \
+	--data-urlencode "fg_member_email=ohne@example.org" \
+	--data-urlencode "fg_first_name=Ohne" \
+	--data-urlencode "fg_last_name=Erlaubnis")
+if [ "$out" = "403" ]; then ok "a wrong nonce is refused ($out)"; else bad "a wrong nonce is refused" "$out"; fi
+if [ "$(s member "$NEU_ID" email)" = "neuanders@example.org" ]; then ok "the address is unchanged after a refused save"; else bad "the address is unchanged after a refused save" "$(s member "$NEU_ID" email)"; fi
+
+# The member of [5] is registered for a duty of this run, so the removal has to
+# take the registration with it.
+LOESCH=$(s make-event "Loeschprobe" "$(date -d '+30 days' +%Y-%m-%d)" 2)
+s register "$LOESCH" "0700" "neuanders@example.org" >/dev/null
+if [ "$(s count-registrations "$LOESCH")" = "1" ]; then ok "the member of the list is signed in for a duty"; else bad "the member of the list is signed in for a duty" "$(s count-registrations "$LOESCH")"; fi
+del=$(curl -sk -b "$JAR" "$MEMBERS&member=$NEU_ID")
+has "the delete link asks what it takes" "$del" "return confirm("
+del_url=$(printf '%s' "$del" | link "member")
+if [ -n "$del_url" ]; then ok "delete link found"; else bad "delete link found" "no link on the screen"; fi
+# The question has to say what goes with the member. A member who is signed in
+# for three duties leaves three places behind, and the person clicking the
+# button is the one who has to know that.
+if [ -n "$del_url" ]; then
+	has "the delete question names the registration" "$del" "1 Anmeldung"
+	out=$(curl -sk -b "$JAR" -L "$del_url")
+	has "delete notice shown" "$out" "endgültig gelöscht"
+	clean "$out" "member deletion"
+fi
+if [ "$(s member "$NEU_ID" id)" = "missing" ]; then ok "the member is gone"; else bad "the member is gone" "still there"; fi
+if [ "$(s count-registrations "$LOESCH")" = "0" ]; then ok "its registration went with it"; else bad "its registration went with it" "$(s count-registrations "$LOESCH")"; fi
+s delete-event "$LOESCH" >/dev/null
+
+# --- the member import
+echo "[10] importing the member list"
+IMPORT_CSV="$DIR/mitglieder.csv"
+screen=$(curl -sk -b "$JAR" "$MEMBERS")
+INONCE=$(val /dev/stdin fg_import_nonce <<< "$screen")
+
+# The first import is the export of the whole list, read back. It has to change
+# nothing at all, and it is the only state in which the report can honestly say
+# that everybody in the database stood in the file. An import that rewrote
+# every row on every run would still fill this file in correctly and would
+# still report the right names, so what is measured here is the counts.
+s members-csv > "$IMPORT_CSV"
+MITGLIEDER_VORHER=$(s count-members)
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import1.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+erster=$(cat "$DIR/import1.html")
+has "the import is confirmed" "$erster" "Der Import wurde verarbeitet."
+# The report is the answer to the three questions the club asked: what is new,
+# what changed, and who is in the database but not in the file. Every reading of
+# it goes through report(), never over the whole screen: the screen lists every
+# member as well, so a sentence of the report could be missing and the check
+# would still find its words in the list.
+ersterbericht=$(printf '%s' "$erster" | report)
+has "the report counts the rows it read" "$ersterbericht" "$MITGLIEDER_VORHER Zeilen gelesen"
+has "the import of the whole list creates nobody" "$ersterbericht" "0 neue Mitglieder angelegt"
+has "and changes nobody" "$ersterbericht" "0 Mitglieder geändert"
+has "and says they are all unchanged" "$ersterbericht" "$MITGLIEDER_VORHER unverändert"
+has "and that nobody is missing from the file" "$ersterbericht" "Alle in der Datenbank vorhandenen Mitglieder standen auch in der Datei"
+if [ "$(s count-members)" = "$MITGLIEDER_VORHER" ]; then ok "the member count is the same after it"; else bad "the member count is the same after it" "$(s count-members) was $MITGLIEDER_VORHER"; fi
+clean "$erster" "import report of the whole list read back"
+
+# A file with two members the database does not have.
+printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n0801;import1@example.org;Import;Eins\n0802;import2@example.org;Import;Zwei\n' > "$IMPORT_CSV"
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import2.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+zweites=$(cat "$DIR/import2.html")
+zweitesbericht=$(printf '%s' "$zweites" | report)
+has "the report counts the rows it read" "$zweitesbericht" "2 Zeilen gelesen"
+has "the report counts the new members" "$zweitesbericht" "2 neue Mitglieder angelegt"
+has "the report says nothing changed" "$zweitesbericht" "0 Mitglieder geändert"
+# The three fixture members are in the database and not in this file, so the
+# list of who is missing has to name them. That list is the whole point of the
+# report: without it "2 angelegt" could just as well mean "2 of forty". It is
+# read out of the report and not out of the page, because 0042 stands on the
+# page as a row of the member list as well, and a check that finds it there says
+# nothing about the report.
+has "the report names a member that is not in the file" "$zweitesbericht" "0042"
+has "and the name that goes with it" "$zweitesbericht" "Anton"
+has "and says how many are missing" "$zweitesbericht" "stehen in der Datenbank, aber nicht in der Datei"
+hasnt "and the two new members are not in the missing list" "$zweitesbericht" "0801"
+if [ "$(s member-by-no "0801" id)" != "missing" ]; then ok "the first row of the file is in the database"; else bad "the first row of the file is in the database" "missing"; fi
+if [ "$(s member-by-no "0802" first_name)" = "Import" ]; then ok "and its names land in the right columns"; else bad "and its names land in the right columns" "$(s member-by-no "0802" first_name)"; fi
+clean "$zweites" "import report of a file with new members"
+
+# The same file a second time changes nothing and says so. An import that
+# reported "geändert" here would have rewritten every row on every run and
+# would have left an updated_at behind that means nothing.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import3.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+drittes=$(cat "$DIR/import3.html")
+drittesbericht=$(printf '%s' "$drittes" | report)
+has "the second run creates nobody" "$drittesbericht" "0 neue Mitglieder angelegt"
+has "the second run changes nobody" "$drittesbericht" "0 Mitglieder geändert"
+has "and it says they are unchanged" "$drittesbericht" "2 unverändert"
+clean "$drittes" "import report of the same file again"
+
+# A file with a changed name updates that member and leaves the other alone.
+printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n0801;import1@example.org;Import;EinsGeaendert\n0802;import2@example.org;Import;Zwei\n' > "$IMPORT_CSV"
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import4.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+viertes=$(cat "$DIR/import4.html")
+viertesbericht=$(printf '%s' "$viertes" | report)
+has "the report counts the changed member" "$viertesbericht" "1 Mitglieder geändert"
+has "and the unchanged one" "$viertesbericht" "1 unverändert"
+if [ "$(s member-by-no "0801" last_name)" = "EinsGeaendert" ]; then ok "the changed name is stored"; else bad "the changed name is stored" "$(s member-by-no "0801" last_name)"; fi
+if [ "$(s member-by-no "0802" last_name)" = "Zwei" ]; then ok "the other name is kept"; else bad "the other name is kept" "$(s member-by-no "0802" last_name)"; fi
+clean "$viertes" "import report of a changed file"
+
+# The third question, on its own: who is in the database but not in the file.
+# The club has to be able to see that list, because an import that only ever
+# adds can otherwise never be used to remove a member who has left.
+printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n0802;import2@example.org;Import;Zwei\n' > "$IMPORT_CSV"
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import5.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+funftes=$(cat "$DIR/import5.html")
+funftesbericht=$(printf '%s' "$funftes" | report)
+# 0801 is in the database and stands on the screen as a row of the member list,
+# so both of these are read out of the report. Otherwise they hold for a report
+# that names nobody at all.
+has "the report names the number of a missing member" "$funftesbericht" "0801"
+has "and the name that goes with it" "$funftesbericht" "EinsGeaendert"
+has "and its address" "$funftesbericht" "import1@example.org"
+has "it says nobody was deleted" "$funftesbericht" "Ein Import entfernt nie jemanden"
+if [ "$(s member-by-no "0801" id)" != "missing" ]; then ok "the member missing from the file is still there"; else bad "the member missing from the file is still there" "gone"; fi
+clean "$funftes" "import report with a member missing from the file"
+
+# A file the parser cannot read is refused with the line it is on, and the
+# whole file is refused: a half-imported member list is worse than none.
+KOPF='Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname'
+printf '%s\n0803;kaputt\n' "$KOPF" > "$IMPORT_CSV"
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import6.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+sechstes=$(cat "$DIR/import6.html")
+has "a short row is named by its line" "$sechstes" "Zeile 2 hat 2 Felder"
+has "and it says nothing was imported" "$sechstes" "Es wurde nichts importiert"
+if [ "$(s member-by-no "0803" id)" = "missing" ]; then ok "the refused file wrote nothing"; else bad "the refused file wrote nothing" "$(s member-by-no "0803" id)"; fi
+clean "$sechstes" "refused import"
+
+# The good row in front of the bad one is not written either. Half a file is not
+# a state a member list should ever be in, and a report that said "2 von 3
+# Zeilen übernommen" would be an invitation to do it again next week.
+printf '%s\n0804;gueltig@example.org;Gueltig;Probe\n;leer@example.org;Leer;Probe\n' "$KOPF" > "$IMPORT_CSV"
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import7.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+siebtes=$(cat "$DIR/import7.html")
+has "a row without a number is named by its line" "$siebtes" "In Zeile 3 fehlt die Mitgliedsnummer"
+if [ "$(s member-by-no "0804" id)" = "missing" ]; then ok "the good row in front of it was not written either"; else bad "the good row in front of it was not written either" "$(s member-by-no "0804" id)"; fi
+clean "$siebtes" "refused import with a good row in front"
+
+# A file without the column the plugin reads is named by its name, because the
+# club has to know which column to rename in their export.
+printf 'Nummer;Vorname;Nachname\n0805;falsch@example.org;Falsch;Probe\n' > "$IMPORT_CSV"
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import8.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+achtes=$(cat "$DIR/import8.html")
+has "the missing column is named" "$achtes" "fehlt: E-Mail-Adresse"
+has "and nothing was imported" "$achtes" "Es wurde nichts importiert"
+if [ "$(s member-by-no "0805" id)" = "missing" ]; then ok "and no row of the file was written"; else bad "and no row of the file was written" "$(s member-by-no "0805" id)"; fi
+clean "$achtes" "import with the wrong header"
+
+# The short names of the columns are read on purpose. A club that exports
+# "Nummer" and "Mail" does not have to rename anything for this import, so a
+# file it exports must not be refused over the names.
+printf 'Nummer;Mail;Vorname;Nachname\n0806;kurz@example.org;Kurz;Form\n' > "$IMPORT_CSV"
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import9.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+neuntes=$(cat "$DIR/import9.html")
+has "a header with the short names is read" "$neuntes" "1 neue Mitglieder angelegt"
+if [ "$(s member-by-no "0806" email)" = "kurz@example.org" ]; then ok "and the address lands in its column"; else bad "and the address lands in its column" "$(s member-by-no "0806" email)"; fi
+clean "$neuntes" "import with the short header names"
+s delete-member "$(s member-by-no 0806 id)" > /dev/null
+
+# An address longer than the column is not a valid address for this plugin, and
+# the export of another system does not know that. It has to be refused like
+# every other bad row, with its line named — and the whole file with it, because
+# a member list that took the good rows and dropped this one is a list the club
+# believes to be complete.
+printf '%s\n0807;%s;Zu;Lang\n' "$KOPF" "$LANGE_MAIL" > "$IMPORT_CSV"
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import10.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+zehntes=$(cat "$DIR/import10.html")
+has "an address longer than the column is named" "$zehntes" "In Zeile 2 steht keine gültige E-Mail-Adresse"
+has "and nothing of that file was imported" "$zehntes" "Es wurde nichts importiert"
+if [ "$(s member-by-no "0807" id)" = "missing" ]; then ok "and the row was not written behind the message"; else bad "the refused row was not written" "$(s member-by-no "0807" id)"; fi
+clean "$zehntes" "import with an address longer than the column"
+
+# A file that is not a file at all is refused by the upload, not by the parser.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import-no-file.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_import_members" \
+	--data-urlencode "fg_import_nonce=$INONCE")
+ohne=$(cat "$DIR/import-no-file.html")
+has "an import without a file is named" "$ohne" "Es wurde keine Datei gewählt"
+clean "$ohne" "import without a file"
+
+# A wrong nonce changes nothing.
+out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=manipuliert" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+if [ "$out" = "403" ]; then ok "an import with a wrong nonce is refused ($out)"; else bad "an import with a wrong nonce is refused" "$out"; fi
+if [ "$(s member-by-no "0805" id)" = "missing" ]; then ok "and it wrote nothing"; else bad "and it wrote nothing" "$(s member-by-no "0805" id)"; fi
+
+# The members of this run are removed again, so the screen is not left filled
+# with import probes.
+for nummer in 0801 0802; do
+	s delete-member "$(s member-by-no "$nummer" id)" > /dev/null
+done
+if [ "$(s member-by-no "0801" id)" = "missing" ] && [ "$(s member-by-no "0802" id)" = "missing" ]; then
+	ok "the imported members are gone again"
+else
+	bad "the imported members are gone again" "0801=$(s member-by-no "0801" id) 0802=$(s member-by-no "0802" id)"
+fi
+
+
+# --- a full duty refuses the registration on the server as well
+echo "[11] a full duty refuses the registration on the server"
+VOLLEDUTY=$(s make-event "Voller Dienst aus dem Admin" "$(date -d '+30 days' +%Y-%m-%d)" 1)
+VOLLMITGLIED=$(neu "0850" "voll@example.org" "Voll" "Belegt")
+s register "$VOLLEDUTY" "0850" "voll@example.org" >/dev/null
+FREIES=$(s make-event "Dienst mit freiem Platz" "$(date -d '+30 days' +%Y-%m-%d)" 2)
+# The member who tries to get in is created first. A pair that does not belong
+# to anybody is refused before the places are even looked at, and a check of
+# the full-duty refusal that ran against a member who did not exist would be
+# measuring that earlier refusal.
+FREIMITGLIED=$(neu "0851" "frei@example.org" "Frei" "Platz")
+if [ "$FREIMITGLIED" -gt 0 ]; then ok "the member who signs up was created"; else bad "the member who signs up was created" "$FREIMITGLIED"; fi
+
+LIST_PATH=$(s list-page-path)
+# The public page is the only place the signup nonce exists, so without it the
+# whole signup section would measure an empty string. Said here in one sentence
+# rather than eleven times as a missing nonce.
+if [ -n "$LIST_PATH" ]; then ok "the public duty list was found ($LIST_PATH)"; else bad "a published page with the duty list is there" "no page carries [arbeitsdienste]"; exit 1; fi
+list=$(curl -sk -b "$JAR" "$BASE$LIST_PATH")
+SNONCE=$(val /dev/stdin fg_register_nonce <<< "$list")
+if [ -n "$SNONCE" ]; then ok "the signup form hands out a nonce"; else bad "the signup form hands out a nonce" "no nonce on the page"; fi
+
+# The button is not there on a full duty, but a form can be posted by hand. The
+# refusal has to come from the server, or the demand would be a suggestion.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/voller-duty.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SNONCE" \
+	--data-urlencode "fg_event_ref=$(s event "$VOLLEDUTY" public_ref)" \
+	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_email=frei@example.org" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+voller=$(cat "$DIR/voller-duty.html")
+# Only the notice is read. The page also prints a sentence per duty card, and
+# the card of the full duty holds a word the notice must not be searched for.
+has "a full duty is refused" "$(printf '%s' "$voller" | notice)" "keine freien Plätze mehr"
+hasnt "and it is not called a missing demand" "$(printf '%s' "$voller" | notice)" "kein Bedarf"
+if [ "$(s count-registrations "$VOLLEDUTY")" = "1" ]; then ok "the refused registration wrote nothing"; else bad "the refused registration wrote nothing" "$(s count-registrations "$VOLLEDUTY")"; fi
+clean "$voller" "refused registration for a full duty"
+
+# The same request against a duty that has a place free is taken. Without this
+# the refusal above would also pass if every registration were refused.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/freier-duty.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SNONCE" \
+	--data-urlencode "fg_event_ref=$(s event "$FREIES" public_ref)" \
+	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_email=frei@example.org" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+freier=$(cat "$DIR/freier-duty.html")
+has "a duty with a free place accepts the registration" "$(printf '%s' "$freier" | notice)" "Du bist für diesen Arbeitsdienst angemeldet"
+if [ "$(s count-registrations "$FREIES")" = "1" ]; then ok "and the registration is stored"; else bad "and the registration is stored" "$(s count-registrations "$FREIES")"; fi
+clean "$freier" "registration for a duty with a free place"
+
+# A member who is already in is told so, and nothing is written a second time.
+# Two confirmation mails with two unregister links in one inbox would leave the
+# member with a link that does not work.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/zweite-anmeldung.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SNONCE" \
+	--data-urlencode "fg_event_ref=$(s event "$FREIES" public_ref)" \
+	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_email=frei@example.org" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+zweite=$(cat "$DIR/zweite-anmeldung.html")
+has "a second sign-up for the same duty is answered" "$(printf '%s' "$zweite" | notice)" "bereits angemeldet"
+if [ "$(s count-registrations "$FREIES")" = "1" ]; then ok "and wrote no second row"; else bad "and wrote no second row" "$(s count-registrations "$FREIES")"; fi
+clean "$zweite" "second sign-up for the same duty"
+
+# The overview answers the same two questions the club asks on the phone: how
+# many are in, and how many are still needed. The two cells are read from the
+# row of this run's own duty, because every other row carries numbers of its
+# own.
+overview=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events")
+if [ "$(printf '%s' "$overview" | cell "$FREIES" 4)" = "1" ]; then
+	ok "the overview counts the one member that signed up"
+else
+	bad "the overview counts the one member that signed up" "cell reads: $(printf '%s' "$overview" | cell "$FREIES" 4)"
+fi
+if [ "$(printf '%s' "$overview" | cell "$FREIES" 5)" = "1" ]; then
+	ok "and shows the one place that is left of the two"
+else
+	bad "and shows the one place that is left of the two" "cell reads: $(printf '%s' "$overview" | cell "$FREIES" 5)"
+fi
+if [ "$(printf '%s' "$overview" | cell "$VOLLEDUTY" 5)" = "0" ]; then
+	ok "a full duty shows no free place"
+else
+	bad "a full duty shows no free place" "cell reads: $(printf '%s' "$overview" | cell "$VOLLEDUTY" 5)"
+fi
+clean "$overview" "overview with the two count columns"
+
+# The duty of [5c] now holds a place that was given away and taken back, and
+# the count has to follow. A registration that was made and then removed must
+# not leave its mark in the list.
+ANZAHL_VORHER=$(s count-registrations "$NEW_ID")
+neu "0852" "zwei@example.org" "Zwei" "Platz" >/dev/null
+s register "$NEW_ID" "0852" "zwei@example.org" >/dev/null
+ANZAHL_DAZU=$(s count-registrations "$NEW_ID")
+if [ "$ANZAHL_DAZU" = "$((ANZAHL_VORHER + 1))" ]; then
+	ok "a registration on this run's duty is counted"
+else
+	bad "a registration on this run's duty is counted" "was $ANZAHL_VORHER, now $ANZAHL_DAZU"
+fi
+
+# A duty that states no demand is refused, and the refusal is a different
+# sentence from the one for a full duty. "Fully booked" for a duty nobody asked
+# anybody for would be a claim about the duty that is not true, and the card
+# on the page already says so; a refusal that contradicted the card would leave
+# the member reading one thing and being told another.
+OHNE=$(s make-event "Dienst ohne Bedarf aus dem Admin" "$(date -d '+30 days' +%Y-%m-%d)" 0)
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/ohne-bedarf.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SNONCE" \
+	--data-urlencode "fg_event_ref=$(s event "$OHNE" public_ref)" \
+	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_email=frei@example.org" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+ohne_bedarf=$(cat "$DIR/ohne-bedarf.html")
+has "a duty without a demand is refused" "$(printf '%s' "$ohne_bedarf" | notice)" "kein Bedarf eingetragen"
+hasnt "and it is not called full" "$(printf '%s' "$ohne_bedarf" | notice)" "freien Plätze"
+if [ "$(s count-registrations "$OHNE")" = "0" ]; then ok "and the refusal wrote nothing"; else bad "and the refusal wrote nothing" "$(s count-registrations "$OHNE")"; fi
+clean "$ohne_bedarf" "refused registration for a duty without a demand"
+
+# A duty that is not visible is not registrable either, even with its reference
+# in hand. The reference is not a key, it only names which duty is meant.
+WEG=$(s make-event "Nicht sichtbarer Dienst" "$(date -d '+30 days' +%Y-%m-%d)" 3 "" 0)
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/unsichtbar.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SNONCE" \
+	--data-urlencode "fg_event_ref=$(s event "$WEG" public_ref)" \
+	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_email=frei@example.org" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+if [ "$(s count-registrations "$WEG")" = "0" ]; then
+	ok "a duty that is not visible takes no registration"
+else
+	bad "a duty that is not visible takes no registration" "$(s count-registrations "$WEG")"
+fi
+clean "$(cat "$DIR/unsichtbar.html")" "registration for a duty that is not visible"
+
+# A reference that names no duty is refused like a duty that is not there.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/ohne-ref.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SNONCE" \
+	--data-urlencode "fg_event_ref=0000000000000000000000000000" \
+	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_email=frei@example.org" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+has "a reference that names no duty is refused" "$(printf '%s' "$(cat "$DIR/ohne-ref.html")" | notice)" "nicht möglich"
+clean "$(cat "$DIR/ohne-ref.html")" "registration with a reference that names nothing"
+
+# The pair has to belong to one member. A number of a member with somebody
+# else's address is refused without saying which half was right, because the
+# page is public and a hint would tell a passer-by whether a guessed number
+# exists.
+out=$(curl -sk -b "$JAR" -L -o "$DIR/falsches-paar.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SNONCE" \
+	--data-urlencode "fg_event_ref=$(s event "$FREIES" public_ref)" \
+	--data-urlencode "fg_member_no=0850" \
+	--data-urlencode "fg_member_email=frei@example.org" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+falsch=$(cat "$DIR/falsches-paar.html")
+has "a number with the wrong address is refused" "$(printf '%s' "$falsch" | notice)" "nicht möglich"
+hasnt "and it does not say which half was wrong" "$(printf '%s' "$falsch" | notice)" "Mitgliedsnummer stimmt"
+if [ "$(s count-registrations "$FREIES")" = "1" ]; then ok "and no row was added" ; else bad "and no row was added" "$(s count-registrations "$FREIES")"; fi
+clean "$falsch" "registration with a pair that does not belong together"
+
+# A wrong nonce changes nothing. The public form is not behind a login, so a
+# stale form is not answered with a refusal page but with the notice that asks
+# for a fresh page — what matters here is that nothing is written.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/ohne-erlaubnis.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=manipuliert" \
+	--data-urlencode "fg_event_ref=$(s event "$FREIES" public_ref)" \
+	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_email=frei@example.org" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+kein_bestand=$(printf '%s' "$(cat "$DIR/ohne-erlaubnis.html")" | notice)
+has "a signup with a wrong nonce is not taken" "$kein_bestand" "Formular ist nicht mehr gültig"
+if [ "$(s count-registrations "$FREIES")" = "1" ]; then ok "and it wrote nothing"; else bad "and it wrote nothing" "$(s count-registrations "$FREIES")"; fi
+clean "$(cat "$DIR/ohne-erlaubnis.html")" "signup with a wrong nonce"
+
+# The honeypot field is empty in every honest form. A bot fills in every field
+# it can see, so one that comes in is never written.
+#
+# The member of this POST has to be one that is not yet on this duty. With the
+# member of the checks above the POST would be refused anyway — that member is
+# already registered, and a second registration of the same member is turned
+# down whatever the honeypot says. Such a POST proves nothing about the
+# honeypot, and the counter-probe over exactly this line showed it: with the
+# honeypot check taken out of the code the suite stayed green here.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/honigtopf.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SNONCE" \
+	--data-urlencode "fg_event_ref=$(s event "$FREIES" public_ref)" \
+	--data-urlencode "fg_member_no=0852" \
+	--data-urlencode "fg_member_email=zwei@example.org" \
+	--data-urlencode "fg_website=http://spam.example.org" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+honigtopf=$(printf '%s' "$(cat "$DIR/honigtopf.html")" | notice)
+has "a form from the honeypot is refused like any other bad one" "$honigtopf" "nicht möglich"
+if [ "$(s count-registrations "$FREIES")" = "1" ]; then ok "a form from the honeypot writes nothing"; else bad "a form from the honeypot writes nothing" "$(s count-registrations "$FREIES")"; fi
+clean "$(cat "$DIR/honigtopf.html")" "signup with a filled honeypot"
+
+# The internal number is not what the form posts. A form that took the record
+# number would let anyone walk the whole table of duties, including the ones
+# that are not visible.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/mit-id.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SNONCE" \
+	--data-urlencode "fg_event_ref=$FREIES" \
+	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_email=frei@example.org" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+hasnt "the record number is not accepted as a reference" "$(printf '%s' "$(cat "$DIR/mit-id.html")" | notice)" "angemeldet"
+if [ "$(s count-registrations "$FREIES")" = "1" ]; then ok "and it wrote nothing" ; else bad "and it wrote nothing" "$(s count-registrations "$FREIES")"; fi
+clean "$(cat "$DIR/mit-id.html")" "signup with the record number as reference"
+
+# The screen of the duty carries a delete link for the registration, and it
+# removes the place from this duty and nothing else: the member stays in the
+# club, and the same member is still in the list of the other duty they signed
+# up for. Removing a place is the one thing the club has to be able to do
+# itself, and it has to be the one link, not the one for the duty.
+detail=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$FREIES")
+has "the duty screen lists the member number that signed up" "$detail" "0851"
+has "and the address" "$detail" "frei@example.org"
+has "it says what a removal does" "$detail" "Das Löschen einer Anmeldung gibt nur den Platz in diesem Arbeitsdienst frei"
+reg_url=$(printf '%s' "$detail" | link "registration")
+if [ -n "$reg_url" ]; then ok "the registration has its own delete link"; else bad "the registration has its own delete link" "no link on the screen"; fi
+# The question names the member, so the person clicking knows which of several
+# rows they are about to remove.
+if [ -n "$reg_url" ]; then
+	has "the question names the member it is about" "$detail" "Die Anmeldung von Mitglied 0851 für diesen Arbeitsdienst löschen?"
+	out=$(curl -sk -b "$JAR" -L "$reg_url")
+	has "the removal is confirmed" "$out" "wurde endgültig gelöscht"
+	clean "$out" "removal of one registration"
+fi
+if [ "$(s count-registrations "$FREIES")" = "0" ]; then ok "the place is free again"; else bad "the place is free again" "$(s count-registrations "$FREIES")"; fi
+if [ "$(s member "$FREIMITGLIED" member_no)" = "0851" ]; then ok "and the member is still in the club"; else bad "and the member is still in the club" "$(s member "$FREIMITGLIED" member_no)"; fi
+# The same member is still in the other duty they signed up for. A removal that
+# took the member out of the club would be a different operation, and one the
+# club does on the member screen.
+if [ "$(s count-registrations "$NEW_ID")" = "$ANZAHL_DAZU" ]; then ok "and is still signed up for the other duty"; else bad "and is still signed up for the other duty" "$(s count-registrations "$NEW_ID")"; fi
+# The place that was freed is on the list again, and the number the club reads
+# there is the number of places, not the number of members. The card of this
+# duty is named, because the list carries a card for every visible duty and a
+# word on the page says nothing about which one it was read from.
+list=$(curl -sk -b "$JAR" "$BASE$LIST_PATH")
+FREIREF=$(s event "$FREIES" public_ref)
+has "the card of this duty offers the place again" "$(printf '%s' "$list" | karte "$FREIREF")" "Eintragen"
+has "and the free places it reads are its own" "$(printf '%s' "$list" | karte "$FREIREF")" "Verfügbare freie Plätze 2"
+hasnt "and it does not name the member who took the other place" "$(printf '%s' "$list" | karte "$FREIREF")" "0850"
+clean "$list" "duty list after a place was freed"
+
+s delete-member "$VOLLMITGLIED" >/dev/null
+s delete-member "$FREIMITGLIED" >/dev/null
+s delete-member "$(s member-by-no 0852 id)" >/dev/null
+s delete-member "$(s member-by-no 0900 id)" >/dev/null
+s delete-member "$EVENTMITGLIED" >/dev/null
+
+# Every work duty of this run is removed again, so a repeated run does not pile
+# them up in the offer form of a manual test afterwards. The list is written
+# here, at the end, and holds every id the suite has built — not the ones the
+# sections below happened to remember. A duty that is only removed in the one
+# section that created it is a duty that is left behind as soon as that
+# section changes, and that is how three of them survived a run that reported
+# itself clean.
+ALLEDIENSTE="$EVENT_ID $CASCADE $LOESCH $VOLLEDUTY $FREIES $OHNE $WEG $NEW_ID"
+ERWARTET=0
+GERAUMT=0
+for dienst in $ALLEDIENSTE; do
+	case "$dienst" in
+		''|*[!0-9]*) continue ;;
+	esac
+	[ "$dienst" -gt 0 ] || continue
+	ERWARTET=$((ERWARTET + 1))
+	s delete-event "$dienst" > /dev/null
+	if [ "$(s exists-event "$dienst")" = "0" ]; then
+		GERAUMT=$((GERAUMT + 1))
+	else
+		bad "work duty $dienst is gone again" "still there"
+	fi
+done
+if [ "$GERAUMT" = "$ERWARTET" ] && [ "$ERWARTET" -gt 0 ]; then
+	ok "every work duty of this run is gone again ($GERAUMT)"
+else
+	bad "every work duty of this run is gone again" "$GERAUMT of $ERWARTET"
 fi
 
 s settings-restore "$SETTINGS_BEFORE" > /dev/null

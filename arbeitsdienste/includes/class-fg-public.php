@@ -2,7 +2,7 @@
 /**
  * Public shortcode and read-only ride listing.
  *
- * @package Fahrgemeinschaften
+ * @package Arbeitsdienste
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -50,13 +50,13 @@ final class FG_Public {
 	 */
 	public static function enqueue_style() {
 		wp_register_style(
-			'fahrgemeinschaften-public',
-			plugins_url( 'assets/css/fahrgemeinschaften.css', dirname( __DIR__ ) . '/fahrgemeinschaften.php' ),
+			'arbeitsdienste-public',
+			plugins_url( 'assets/css/arbeitsdienste.css', dirname( __DIR__ ) . '/arbeitsdienste.php' ),
 			array(),
 			FG_VERSION
 		);
 
-		wp_enqueue_style( 'fahrgemeinschaften-public' );
+		wp_enqueue_style( 'arbeitsdienste-public' );
 	}
 
 	/**
@@ -70,7 +70,7 @@ final class FG_Public {
 		// page to send the visitor to, so the form is rendered as it is and
 		// administrators are warned about the missing encryption instead.
 		if ( ! is_ssl() && FG_Security::site_uses_https() ) {
-			return '<div class="fg-notice fg-notice-error" role="alert">' . esc_html__( 'Diese Seite ist nur über eine sichere HTTPS-Verbindung verfügbar.', 'fahrgemeinschaften' ) . '</div>';
+			return '<div class="fg-notice fg-notice-error" role="alert">' . esc_html__( 'Diese Seite ist nur über eine sichere HTTPS-Verbindung verfügbar.', 'arbeitsdienste' ) . '</div>';
 		}
 
 		self::enqueue_style();
@@ -87,38 +87,38 @@ final class FG_Public {
 
 			<?php // The list is what most visitors come for, so it comes first. The link is the way back down to the form for everyone else. ?>
 			<p class="fg-toplink">
-				<a href="#<?php echo esc_attr( self::ANCHOR_OFFER ); ?>"><?php esc_html_e( 'Eintrag anlegen', 'fahrgemeinschaften' ); ?></a>
+				<a href="#<?php echo esc_attr( self::ANCHOR_OFFER ); ?>"><?php esc_html_e( 'Eintrag anlegen', 'arbeitsdienste' ); ?></a>
 			</p>
 
 			<?php $this->render_ride_list( $events, $admin_url, $source ); ?>
 
 			<section class="fg-section" aria-labelledby="<?php echo esc_attr( self::ANCHOR_OFFER ); ?>">
-				<h2 id="<?php echo esc_attr( self::ANCHOR_OFFER ); ?>" class="fg-jump"><?php esc_html_e( 'Fahrgemeinschaft anbieten oder suchen', 'fahrgemeinschaften' ); ?></h2>
+				<h2 id="<?php echo esc_attr( self::ANCHOR_OFFER ); ?>" class="fg-jump"><?php esc_html_e( 'Fahrgemeinschaft anbieten oder suchen', 'arbeitsdienste' ); ?></h2>
 				<?php if ( empty( $events ) ) : ?>
-					<p class="fg-empty"><?php esc_html_e( 'Aktuell steht kein Arbeitsdienst an, deshalb kannst du dich noch nicht eintragen. Sobald die nächsten Termine feststehen, kannst du hier wieder eine Fahrgemeinschaft anbieten oder suchen.', 'fahrgemeinschaften' ); ?></p>
+					<p class="fg-empty"><?php esc_html_e( 'Aktuell steht kein Arbeitsdienst an, deshalb kannst du dich noch nicht eintragen. Sobald die nächsten Termine feststehen, kannst du hier wieder eine Fahrgemeinschaft anbieten oder suchen.', 'arbeitsdienste' ); ?></p>
 				<?php else : ?>
-					<p class="fg-hint"><?php esc_html_e( 'Andere private Angaben gehören nicht in die öffentliche Anzeige: genaue Adressen, Telefonnummern und E-Mail-Adressen werden von der Serverseite zurückgewiesen.', 'fahrgemeinschaften' ); ?></p>
+					<p class="fg-hint"><?php esc_html_e( 'Andere private Angaben gehören nicht in die öffentliche Anzeige: genaue Adressen, Telefonnummern und E-Mail-Adressen werden von der Serverseite zurückgewiesen.', 'arbeitsdienste' ); ?></p>
 					<form action="<?php echo esc_url( $admin_url ); ?>" method="post">
 						<input type="hidden" name="action" value="fg_submit_ride">
 						<input type="hidden" name="source_url" value="<?php echo esc_url( $source ); ?>">
 						<input type="hidden" name="form_started_at" value="<?php echo esc_attr( time() ); ?>">
 						<?php wp_nonce_field( 'fg_submit_ride', 'fg_submit_nonce', false ); ?>
 						<div class="fg-honeypot" aria-hidden="true">
-							<label for="fg-website"><?php esc_html_e( 'Bitte dieses Feld leer lassen', 'fahrgemeinschaften' ); ?></label>
+							<label for="fg-website"><?php esc_html_e( 'Bitte dieses Feld leer lassen', 'arbeitsdienste' ); ?></label>
 							<input type="text" id="fg-website" name="fg_website" value="" tabindex="-1" autocomplete="off">
 						</div>
 
 						<div class="fg-form-grid">
 							<fieldset class="fg-field fg-field-full">
-								<legend><?php esc_html_e( 'Ich …', 'fahrgemeinschaften' ); ?></legend>
-								<label class="fg-choice"><input type="radio" name="fg_mode" value="offer" checked> <?php esc_html_e( 'biete eine Fahrgemeinschaft an', 'fahrgemeinschaften' ); ?></label>
-								<label class="fg-choice"><input type="radio" name="fg_mode" value="search"> <?php esc_html_e( 'suche eine Fahrgemeinschaft', 'fahrgemeinschaften' ); ?></label>
+								<legend><?php esc_html_e( 'Ich …', 'arbeitsdienste' ); ?></legend>
+								<label class="fg-choice"><input type="radio" name="fg_mode" value="offer" checked> <?php esc_html_e( 'biete eine Fahrgemeinschaft an', 'arbeitsdienste' ); ?></label>
+								<label class="fg-choice"><input type="radio" name="fg_mode" value="search"> <?php esc_html_e( 'suche eine Fahrgemeinschaft', 'arbeitsdienste' ); ?></label>
 							</fieldset>
 
 							<div class="fg-field fg-field-full">
-								<label for="fg-event"><?php esc_html_e( 'Arbeitsdienst', 'fahrgemeinschaften' ); ?></label>
+								<label for="fg-event"><?php esc_html_e( 'Arbeitsdienst', 'arbeitsdienste' ); ?></label>
 								<select id="fg-event" name="fg_event_ref" required>
-									<option value=""><?php esc_html_e( 'Bitte auswählen', 'fahrgemeinschaften' ); ?></option>
+									<option value=""><?php esc_html_e( 'Bitte auswählen', 'arbeitsdienste' ); ?></option>
 									<?php foreach ( $events as $event ) : ?>
 										<option value="<?php echo esc_attr( $event->public_ref ); ?>">
 											<?php echo esc_html( $event->title . ' – ' . $this->repository->format_event_date( $event ) ); ?>
@@ -128,23 +128,23 @@ final class FG_Public {
 							</div>
 
 							<div class="fg-field">
-								<label for="fg-alias"><?php esc_html_e( 'Vorname oder Spitzname', 'fahrgemeinschaften' ); ?></label>
+								<label for="fg-alias"><?php esc_html_e( 'Vorname oder Spitzname', 'arbeitsdienste' ); ?></label>
 								<input type="text" id="fg-alias" name="fg_alias" maxlength="80" required>
 								<?php // The name is the one thing that is meant to be read by people who know the member. ?>
-								<span class="fg-hint"><?php esc_html_e( 'Steht in der Liste öffentlich. Wer nicht mit Namen auftreten möchte, tritt unter einem Spitznamen auf.', 'fahrgemeinschaften' ); ?></span>
+								<span class="fg-hint"><?php esc_html_e( 'Steht in der Liste öffentlich. Wer nicht mit Namen auftreten möchte, tritt unter einem Spitznamen auf.', 'arbeitsdienste' ); ?></span>
 							</div>
 
 							<div class="fg-field">
-								<label for="fg-origin"><?php esc_html_e( 'Abfahrtsbereich', 'fahrgemeinschaften' ); ?></label>
+								<label for="fg-origin"><?php esc_html_e( 'Abfahrtsbereich', 'arbeitsdienste' ); ?></label>
 								<input type="text" id="fg-origin" name="fg_origin" maxlength="100" required>
 								<?php // The three examples are the ones the server also accepts. Each of them was checked against the personal data filter; see the note in PRUEFUMGEBUNG.md about values that end in a street word. ?>
-								<span class="fg-hint"><?php esc_html_e( 'Abfahrtsort, Stadtteil, z. B. Langwasser, Nürnberg Nord, S-Bahnstation Ostring.', 'fahrgemeinschaften' ); ?></span>
+								<span class="fg-hint"><?php esc_html_e( 'Abfahrtsort, Stadtteil, z. B. Langwasser, Nürnberg Nord, S-Bahnstation Ostring.', 'arbeitsdienste' ); ?></span>
 							</div>
 
 							<div class="fg-field fg-field-full">
-								<label for="fg-contact-email"><?php esc_html_e( 'E-Mail für die Kontaktaufnahme', 'fahrgemeinschaften' ); ?></label>
-								<input type="email" id="fg-contact-email" name="fg_contact_email" maxlength="254" autocomplete="email" required>
-								<span class="fg-hint"><?php esc_html_e( 'Die E-Mail-Adresse wird nicht öffentlich angezeigt und muss für den gewählten Arbeitsdienst hinterlegt sein.', 'fahrgemeinschaften' ); ?></span>
+								<label for="fg-contact-email"><?php esc_html_e( 'E-Mail für die Kontaktaufnahme', 'arbeitsdienste' ); ?></label>
+								<input type="email" id="fg-contact-email" name="fg_contact_email" maxlength="<?php echo esc_attr( FG_Schema::CONTACT_EMAIL_MAX ); ?>" autocomplete="email" required>
+								<span class="fg-hint"><?php esc_html_e( 'Die E-Mail-Adresse wird nicht öffentlich angezeigt. Sie muss zu einem Mitglied gehören, das sich für diesen Arbeitsdienst eingetragen hat.', 'arbeitsdienste' ); ?></span>
 							</div>
 
 							<div class="fg-field fg-field-full">
@@ -152,9 +152,9 @@ final class FG_Public {
 									<input id="fg-consent" type="checkbox" name="fg_consent" value="1" required>
 									<span>
 										<?php // The consent names what becomes public. "Meine persönlichen Kontaktdaten" was ambiguous: it could be read as covering a name, and a name is expected in the public list. ?>
-										<?php esc_html_e( 'Ich möchte die oben gemachten Angaben zur Organisation der Fahrgemeinschaft öffentlich anzeigen lassen. Dazu gehören mein Vorname oder Spitzname, die Art des Angebots, der Abfahrtsbereich und der Arbeitsdienst. Meine E-Mail-Adresse und meine Telefonnummer werden dabei nicht öffentlich angezeigt.', 'fahrgemeinschaften' ); ?>
+										<?php esc_html_e( 'Ich möchte die oben gemachten Angaben zur Organisation der Fahrgemeinschaft öffentlich anzeigen lassen. Dazu gehören mein Vorname oder Spitzname, die Art des Angebots, der Abfahrtsbereich und der Arbeitsdienst. Meine E-Mail-Adresse und meine Telefonnummer werden dabei nicht öffentlich angezeigt.', 'arbeitsdienste' ); ?>
 										<?php if ( $privacy ) : ?>
-											<a href="<?php echo esc_url( $privacy ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'fahrgemeinschaften' ); ?></a>
+											<a href="<?php echo esc_url( $privacy ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'arbeitsdienste' ); ?></a>
 										<?php endif; ?>
 									</span>
 								</label>
@@ -162,7 +162,7 @@ final class FG_Public {
 						</div>
 
 						<div class="fg-actions">
-							<button class="fg-button" type="submit"><?php esc_html_e( 'Eintragung vormerken', 'fahrgemeinschaften' ); ?></button>
+							<button class="fg-button" type="submit"><?php esc_html_e( 'Eintragung vormerken', 'arbeitsdienste' ); ?></button>
 						</div>
 					</form>
 				<?php endif; ?>
@@ -193,7 +193,7 @@ final class FG_Public {
 		$privacy_url = get_privacy_policy_url();
 		?>
 		<section aria-labelledby="fg-list-heading">
-			<h2 id="fg-list-heading"><?php esc_html_e( 'Aktuelle Fahrgemeinschaften', 'fahrgemeinschaften' ); ?></h2>
+			<h2 id="fg-list-heading"><?php esc_html_e( 'Aktuelle Fahrgemeinschaften', 'arbeitsdienste' ); ?></h2>
 			<?php foreach ( $events as $event ) : ?>
 				<?php
 				$rides = array_values(
@@ -221,13 +221,13 @@ final class FG_Public {
 				</div>
 			<?php endforeach; ?>
 			<?php if ( ! $has_rides ) : ?>
-				<p class="fg-empty"><?php esc_html_e( 'Aktuell hat sich für die anstehenden Arbeitsdienste niemand eingetragen. Du kannst unten eine Mitfahrgelegenheit anbieten oder selbst eine suchen.', 'fahrgemeinschaften' ); ?></p>
+				<p class="fg-empty"><?php esc_html_e( 'Aktuell hat sich für die anstehenden Arbeitsdienste niemand eingetragen. Du kannst unten eine Mitfahrgelegenheit anbieten oder selbst eine suchen.', 'arbeitsdienste' ); ?></p>
 			<?php else : ?>
 				<?php // The note says the same thing for every entry, so it is stated once for the whole list. ?>
 				<p class="fg-hint fg-list-hint">
-					<?php esc_html_e( 'Deine E-Mail-Adresse wird nur an den Ersteller der Fahrgemeinschaft gesendet, sofern sie für den Arbeitsdienst dieses Eintrags hinterlegt ist.', 'fahrgemeinschaften' ); ?>
+					<?php esc_html_e( 'Deine E-Mail-Adresse wird nur an den Ersteller der Fahrgemeinschaft gesendet, sofern sie zu einem Mitglied gehört, das sich für den Arbeitsdienst dieses Eintrags eingetragen hat.', 'arbeitsdienste' ); ?>
 					<?php if ( $privacy_url ) : ?>
-						<a href="<?php echo esc_url( $privacy_url ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'fahrgemeinschaften' ); ?></a>
+						<a href="<?php echo esc_url( $privacy_url ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'arbeitsdienste' ); ?></a>
 					<?php endif; ?>
 				</p>
 			<?php endif; ?>
@@ -251,13 +251,13 @@ final class FG_Public {
 	 */
 	private function render_ride( FG_Ride $ride, $admin_url, $source ) {
 		$data       = $this->repository->get_ride_display_data( $ride );
-		$mode_label = FG_RIDE_MODE_SEARCH === $data['mode'] ? __( 'Ich suche', 'fahrgemeinschaften' ) : __( 'Ich biete', 'fahrgemeinschaften' );
+		$mode_label = FG_RIDE_MODE_SEARCH === $data['mode'] ? __( 'Ich suche', 'arbeitsdienste' ) : __( 'Ich biete', 'arbeitsdienste' );
 		?>
 		<article class="fg-ride">
 			<h4 class="fg-ride-title"><span class="fg-badge"><?php echo esc_html( $mode_label ); ?></span> · <span class="fg-origin"><?php echo esc_html( $data['origin'] ); ?></span> · <?php echo esc_html( $ride->alias ); ?></h4>
 			<details class="fg-contact">
 				<?php // One control with two labels: the stylesheet shows the one that fits the state. A label that is not shown is not read out either. ?>
-				<summary class="fg-button fg-contact-toggle"><span class="fg-label-closed"><?php esc_html_e( 'Kontaktieren', 'fahrgemeinschaften' ); ?></span><span class="fg-label-open"><?php esc_html_e( 'Schließen', 'fahrgemeinschaften' ); ?></span></summary>
+				<summary class="fg-button fg-contact-toggle"><span class="fg-label-closed"><?php esc_html_e( 'Kontaktieren', 'arbeitsdienste' ); ?></span><span class="fg-label-open"><?php esc_html_e( 'Schließen', 'arbeitsdienste' ); ?></span></summary>
 				<form class="fg-contact-form" action="<?php echo esc_url( $admin_url ); ?>" method="post">
 					<input type="hidden" name="action" value="fg_contact_ride">
 					<input type="hidden" name="ride_ref" value="<?php echo esc_attr( $data['public_ref'] ); ?>">
@@ -265,16 +265,16 @@ final class FG_Public {
 					<input type="hidden" name="form_started_at" value="<?php echo esc_attr( time() ); ?>">
 					<?php wp_nonce_field( 'fg_contact_ride', 'fg_contact_nonce', false ); ?>
 					<div class="fg-honeypot" aria-hidden="true">
-						<label for="fg-contact-website-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'Bitte dieses Feld leer lassen', 'fahrgemeinschaften' ); ?></label>
+						<label for="fg-contact-website-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'Bitte dieses Feld leer lassen', 'arbeitsdienste' ); ?></label>
 						<input type="text" id="fg-contact-website-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_website" value="" tabindex="-1" autocomplete="off">
 					</div>
 					<?php // Label, field and button in one row. The label keeps its for, only its wording is short. ?>
 					<div class="fg-contact-row">
 						<div class="fg-field">
-							<label for="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'E-Mail', 'fahrgemeinschaften' ); ?></label>
-							<input type="email" id="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_contact_email" maxlength="254" autocomplete="email" required>
+							<label for="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'E-Mail', 'arbeitsdienste' ); ?></label>
+							<input type="email" id="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_contact_email" maxlength="<?php echo esc_attr( FG_Schema::CONTACT_EMAIL_MAX ); ?>" autocomplete="email" required>
 						</div>
-						<button class="fg-button" type="submit"><?php esc_html_e( 'Absenden', 'fahrgemeinschaften' ); ?></button>
+						<button class="fg-button" type="submit"><?php esc_html_e( 'Absenden', 'arbeitsdienste' ); ?></button>
 					</div>
 				</form>
 			</details>
@@ -293,15 +293,15 @@ final class FG_Public {
 			$notice_key = sanitize_key( wp_unslash( $_GET['fg_notice'] ) );
 		}
 		$notices    = array(
-			'pending'          => array( __( 'Deine Eintragung wurde vorgemerkt. Bitte prüfe deine E-Mail und bestätige die Veröffentlichung über den enthaltenen Link.', 'fahrgemeinschaften' ), false ),
-			'published'        => array( __( 'Deine Fahrgemeinschaft wurde erfolgreich veröffentlicht.', 'fahrgemeinschaften' ), false ),
-			'deleted'          => array( __( 'Die Eintragung wurde gelöscht.', 'fahrgemeinschaften' ), false ),
-			'contact_received' => array( __( 'Vielen Dank für deine Anfrage. Wir informieren den Ersteller, sofern die angegebene E-Mail-Adresse für den gewählten Arbeitsdienst hinterlegt ist.', 'fahrgemeinschaften' ), false ),
-			'not_created'      => array( __( 'Die Eintragung konnte nicht angelegt werden. Bitte prüfe die Eingaben und verwende die im Verein hinterlegte E-Mail-Adresse.', 'fahrgemeinschaften' ), true ),
-			'email_failed'     => array( __( 'Die Eintragung konnte nicht angelegt werden, weil die Bestätigungs-E-Mail nicht zugestellt werden konnte. Bitte versuche es später erneut.', 'fahrgemeinschaften' ), true ),
-			'publish_failed'   => array( __( 'Die Veröffentlichung wurde zurückgenommen, weil die E-Mail mit dem Lösch-Link nicht zugestellt werden konnte. Bitte bestätige die Veröffentlichung über den Link der ersten E-Mail erneut.', 'fahrgemeinschaften' ), true ),
-			'invalid_token'    => array( __( 'Der Link ist ungültig oder abgelaufen. Bitte kontaktiere uns, falls du Unterstützung benötigst.', 'fahrgemeinschaften' ), true ),
-			'form_expired'     => array( __( 'Das Formular ist nicht mehr gültig. Bitte lade die Seite neu und sende das Formular erneut ab.', 'fahrgemeinschaften' ), true ),
+			'pending'          => array( __( 'Deine Eintragung wurde vorgemerkt. Bitte prüfe deine E-Mail und bestätige die Veröffentlichung über den enthaltenen Link.', 'arbeitsdienste' ), false ),
+			'published'        => array( __( 'Deine Fahrgemeinschaft wurde erfolgreich veröffentlicht.', 'arbeitsdienste' ), false ),
+			'deleted'          => array( __( 'Die Eintragung wurde gelöscht.', 'arbeitsdienste' ), false ),
+			'contact_received' => array( __( 'Vielen Dank für deine Anfrage. Wir informieren den Ersteller, sofern die angegebene Adresse zu einem Mitglied gehört, das sich für den gewählten Arbeitsdienst eingetragen hat.', 'arbeitsdienste' ), false ),
+			'not_created'      => array( __( 'Die Eintragung konnte nicht angelegt werden. Bitte prüfe die Eingaben und verwende die im Verein hinterlegte E-Mail-Adresse.', 'arbeitsdienste' ), true ),
+			'email_failed'     => array( __( 'Die Eintragung konnte nicht angelegt werden, weil die Bestätigungs-E-Mail nicht zugestellt werden konnte. Bitte versuche es später erneut.', 'arbeitsdienste' ), true ),
+			'publish_failed'   => array( __( 'Die Veröffentlichung wurde zurückgenommen, weil die E-Mail mit dem Lösch-Link nicht zugestellt werden konnte. Bitte bestätige die Veröffentlichung über den Link der ersten E-Mail erneut.', 'arbeitsdienste' ), true ),
+			'invalid_token'    => array( __( 'Der Link ist ungültig oder abgelaufen. Bitte kontaktiere uns, falls du Unterstützung benötigst.', 'arbeitsdienste' ), true ),
+			'form_expired'     => array( __( 'Das Formular ist nicht mehr gültig. Bitte lade die Seite neu und sende das Formular erneut ab.', 'arbeitsdienste' ), true ),
 		);
 
 		if ( ! isset( $notices[ $notice_key ] ) ) {
