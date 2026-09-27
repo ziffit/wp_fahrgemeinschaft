@@ -15,9 +15,12 @@ defined( 'ABSPATH' ) || exit;
  * would be the only way to push arbitrary markup into every message the site
  * sends, so the layout stays in the code and only its values are configurable.
  *
- * The footer fields are mandatory. A mail without a sender address and a legal
- * notice is the one mistake that cannot be undone afterwards, so an incomplete
- * footer is refused instead of being stored and discovered in a real mail.
+ * The footer is one field and it is mandatory. A mail without a sender
+ * address and a legal notice is the one mistake that cannot be undone
+ * afterwards, so an empty footer is refused instead of being stored and
+ * discovered in a real mail. It was three fields up to version 1.9.0; what the
+ * three said is still what the one field says, and FG_Mail_Templates::get_settings()
+ * joins the old values for an installation that has not saved since.
  */
 final class FG_Admin_Settings {
 	/**
@@ -72,24 +75,11 @@ final class FG_Admin_Settings {
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-footer-organisation"><?php esc_html_e( 'Absender', 'arbeitsdienste' ); ?></label></th>
+						<th scope="row"><label for="fg-footer"><?php esc_html_e( 'Fußzeile', 'arbeitsdienste' ); ?></label></th>
 						<td>
-							<textarea id="fg-footer-organisation" name="fg_footer_organisation" rows="3" class="large-text" required><?php echo esc_textarea( $settings['footer_organisation'] ); ?></textarea>
-							<span class="description"><?php esc_html_e( 'Vereinsname und Anschrift, eine Angabe pro Zeile. Pflichtangabe.', 'arbeitsdienste' ); ?></span>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="fg-footer-contact"><?php esc_html_e( 'Kontakt', 'arbeitsdienste' ); ?></label></th>
-						<td>
-							<textarea id="fg-footer-contact" name="fg_footer_contact" rows="4" class="large-text" required><?php echo esc_textarea( $settings['footer_contact'] ); ?></textarea>
-							<span class="description"><?php esc_html_e( 'Telefon, E-Mail-Adresse und Website, eine Angabe pro Zeile. Pflichtangabe.', 'arbeitsdienste' ); ?></span>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row"><label for="fg-footer-legal"><?php esc_html_e( 'Rechtlicher Hinweis', 'arbeitsdienste' ); ?></label></th>
-						<td>
-							<textarea id="fg-footer-legal" name="fg_footer_legal" rows="4" class="large-text" required><?php echo esc_textarea( $settings['footer_legal'] ); ?></textarea>
-							<span class="description"><?php esc_html_e( 'Die satzungsgemäß erforderlichen Pflichtangaben zu Anbieter, Kontakt und Datenschutz. Eine Angabe pro Zeile. Pflichtangabe.', 'arbeitsdienste' ); ?></span>
+							<textarea id="fg-footer" name="fg_footer" rows="9" class="large-text" required><?php echo esc_textarea( $settings['footer'] ); ?></textarea>
+							<?php /* One field, because the three it replaces were three boxes with one purpose: what the club is and how to reach it. A blank line separates the sections, the line breaks inside them stay line breaks. */ ?>
+							<span class="description"><?php esc_html_e( 'Vereinsname und Anschrift, Telefon, E-Mail-Adresse, Website und die satzungsgemäß erforderlichen Angaben. Eine Angabe pro Zeile; eine Leerzeile trennt die Abschnitte voneinander ab. Pflichtangabe.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 				</table>
@@ -123,32 +113,16 @@ final class FG_Admin_Settings {
 			: 0;
 
 		$fields = array(
-			'footer_organisation' => $this->post_text( 'fg_footer_organisation' ),
-			'footer_contact'      => $this->post_text( 'fg_footer_contact' ),
-			'footer_legal'        => $this->post_text( 'fg_footer_legal' ),
+			'footer' => $this->post_text( 'fg_footer' ),
 		);
 
-		$labels = array(
-			'footer_organisation' => __( 'Absender', 'arbeitsdienste' ),
-			'footer_contact'      => __( 'Kontakt', 'arbeitsdienste' ),
-			'footer_legal'        => __( 'Rechtlicher Hinweis', 'arbeitsdienste' ),
-		);
-
-		$missing = array();
-
-		foreach ( $fields as $key => $value ) {
-			if ( '' === $value ) {
-				$missing[] = $labels[ $key ];
-			}
-		}
-
-		if ( $missing ) {
+		// A mail without a sender address and a legal notice is the one mistake
+		// that cannot be undone afterwards, so an empty footer is refused instead
+		// of being stored and discovered in a real mail. There is one field, so
+		// there is one name to say.
+		if ( '' === $fields['footer'] ) {
 			FG_Admin::store_notice(
-				sprintf(
-					/* translators: %s: comma separated list of field names. */
-					__( 'Es wurde nichts gespeichert, weil %s fehlt. Diese Angaben stehen in jeder E-Mail des Plugins.', 'arbeitsdienste' ),
-					implode( ', ', $missing )
-				),
+				__( 'Es wurde nichts gespeichert, weil die Fußzeile fehlt. Sie steht in jeder E-Mail des Plugins.', 'arbeitsdienste' ),
 				'error'
 			);
 			$this->redirect_back();

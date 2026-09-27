@@ -4,8 +4,12 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf der vier Suiten: 27.09.2026 — **1.132 Prüfungen, 0 Fehler**
-(CLI 482, öffentliches HTTP 176, Mail-Ebene 86, Admin-Ebene 388).
+Letzter Lauf: 27.09.2026 — **Admin-Ebene 392, öffentliches HTTP 179, Mail-Ebene 96,
+0 Fehler**. Die CLI-Suite ist an diesem Tag nicht gelaufen, weil `smoke.php` am Anfang
+alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht und dafür eine
+ausdrückliche Zustimmung braucht; ihre 482 Prüfungen stammen aus dem freigegebenen Lauf
+vom 27.09.2026 und sind seither unverändert. Der Lauf ist damit keine Viersuiten-Zahl,
+und er wird auch nicht als eine angegeben.
 
 Der Lauf ist kein `run-all.sh`, und die CLI-Suite ist auch nicht über den normalen Weg
 gefahren: `smoke.php` kennt nur den Schritt `all`, und der löscht am Anfang alle
@@ -584,6 +588,35 @@ Drei Dinge sind dabei mitgefallen:
 - `display: none` gefolgt von `display: block` bleibt grün. Das ist richtig und bleibt
   es: der Browser nimmt die letzte Meldung, das Formular ist zu.
 
+### Die fünfte Reihe (10 Fehlerbilder an den vier Layoutprüfungen)
+
+Sie ging die drei Änderungen an den E-Mail-Vorlagen an: **ein** Fußzeilenfeld statt drei,
+14 px für den Inhalt und 12 px für die Fußzeile, und kein grauer Balken zwischen Überschrift
+und Inhalt. Der Direktvergleich lief diesmal nicht gegen eine Datei, sondern gegen das
+gerenderte Dokument — die Vorschau aus dem Adminbereich ist die einzige Stelle in den
+Suiten, an der das Layout vollständig gerendert vorliegt.
+
+| Fundstelle | Was die Prüfung behauptete | Warum sie immer grün gewesen wäre |
+| --- | --- | --- |
+| `re.search(r'font-size:\s*[0-9.]+em', h)` in der Größenprüfung | Keine Zelle rechnet ihre Schriftgröße um | Das Muster suchte im **ganzen** Dokument und fand die absichtliche Regel `p { font-size: 1em }` aus dem Style-Sheet. Die Behauptung war zu weit gefasst: Sie wollte die Zellen prüfen, denn nur sie entscheiden, und griff deshalb für jede relative Größe — auch für die richtige. |
+| `w.strip().strip('"\'<> ')` beim Lesen einer Angabe | Der Innenabstand der grauen Container ist `0` | Die letzte Angabe eines Tags trägt das schließende Anführungszeichen und den spitzen Klammer mit, der gelesene Wert war also `0">` und niemals `0`. Der Wert wird jetzt aus dem `style`-Attribut gelesen, wo ihn diese Zeichen umschließen. |
+| `for tag in re.findall(..., region('copy block', 'copy'))` ohne Rücksicht auf die Farbe | Kein Container rückt etwas ein | Die Zone **enthält** die weiße Inhaltszelle, und deren 12 px 24 px sind genau das, was den Abstand des Containers ersetzt hat. Die Prüfung hätte beim richtigen Dokument gemeckert und beim Fehlerbild `padding: 0 24px` am grauen Container stillschweigend hingenommen. Jetzt werden nur die Zellen ohne Weiß geprüft, dazu die Gegenprobe, dass die weiße Inhaltszelle ihren eigenen Abstand behält. |
+| ein ungeschütztes `"` im Python-Rumpf einer `pruef`-Zeile | dieselbe | Ein solches Zeichen **schließt die bash-Zeichenkette**. Die Datei blieb syntaktisch gültig, weil im Rest der Datei genug einfache Anführungszeichen folgten, um sie wieder zu schließen — `bash -n` meldete nichts, und die Prüfung bekam bis zum Zeilenende verschobenen Text. `bash -n` schlägt inzwischen an, sobald die Kette nicht zufällig ausbalanciert ist; es ist deshalb vor jedem Lauf zu beachten. |
+
+Alle zehn Fehlerbilder (Container wieder auf 12 px, Luft unter der Überschrift, Container
+beider Zonen wieder eingerückt, Inhalt und Fußzeile wieder relativ, Inhalt auf 12 px,
+Fußzeile auf 14 px, Inhalt wieder grau, Leerzeile zwischen den Abschnitten weg) ließen
+genau die benannte Prüfung rot werden, und jede nennt den schuldigen Wert im Fehlerbild.
+Die Grundlinie war vorher vollständig grün.
+
+Beim Prüfen der Anker ist noch etwas gefallen, das nichts mit dem Layout zu tun hat: Die
+Gegenproben an Zeilen aus dem Suite-Bild **und** den Vergleich sämtlicher Prüfungsnamen
+gegen `HEAD` gestellt zu haben, hat vier stillschweigend verschluckte Prüfungen gezeigt.
+Beim Einsetzen des neuen Prüfblocks waren vier ältere Prüfungen zur Vorschau mitgegangen —
+das Escaping eines Besucherwerts, das rohe kaufmännische Und, das Laden von einer fremden
+Adresse und die unaufgelöste Schablone. Sie sind wieder hergestellt; der Abschnitt [8] läuft
+wieder mit allen Prüfungen, und die Suite mit 392.
+
 ## Umstieg von den eigenen Beitragstypen
 
 Die Testinstanz lief ursprünglich mit einer Fassung, die eigene WordPress-Beitragstypen
@@ -635,7 +668,11 @@ die Aktion `phpmailer_init` in `Body` und `AltBody`. Der Recorder kann diese Eig
 nicht mehr sehen, deshalb prüft `tests/mail-mime.php` die fertige Nachricht getrennt: Es baut
 sie in der Reihenfolge von `wp_mail()` nach, ruft `preSend()` auf und untersucht die Bytes,
 die hinausgehen würden. Geprüft werden der Inhaltstyp, die Reihenfolge beider Teile, das
-Escaping eines Besuchereingabewerts, die drei Fußzeilen und das eingebettete Logo.
+Escaping eines Besuchereingabewerts, die Fußzeile und das eingebettete Logo. Die Fußzeile
+hat einen eigenen Abschnitt `[4]`: das eine Feld mit seiner Leerzeile zwischen den Abschnitten,
+die drei Felder der Fassung davor, die beim Lesen zu einem Block verbunden werden, und die
+Sache, dass ein gespeichertes Feld nicht zu einem liegengebliebenen der alten drei addiert
+wird.
 
 Die Option `fg_test_mail_fail=1` lässt die Zustellung fehlschlagen. Damit werden die
 Fehlerpfade `email_failed` und `publish_failed` über echtes HTTP geprüft, inklusive

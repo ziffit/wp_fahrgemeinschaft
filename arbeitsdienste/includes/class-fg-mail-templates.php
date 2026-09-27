@@ -33,28 +33,54 @@ final class FG_Mail_Templates {
 	/**
 	 * Read the stored settings and fill in defaults for what is not set yet.
 	 *
-	 * The footer fields are mandatory in the admin, so an empty value here
-	 * means the settings were never saved and the footer stays empty.
+	 * The footer is one field. Up to version 1.9.0 it was three — sender, contact
+	 * and legal notice — and an installation that has not saved its settings
+	 * since then still carries the three names in the option. They are joined in
+	 * the order they were entered, separated by a blank line, so nothing is lost
+	 * and nobody has to type a legal notice a second time. The next save writes
+	 * the one field and drops the three; the fallback is not needed afterwards.
 	 *
-	 * @return array{logo_attachment_id:int,footer_organisation:string,footer_contact:string,footer_legal:string}
+	 * The footer is mandatory in the admin, so an empty value here means the
+	 * settings were never saved and the footer stays empty.
+	 *
+	 * @return array{logo_attachment_id:int,footer:string}
 	 */
 	public static function get_settings() {
 		$stored = get_option( FG_SETTINGS_OPTION, array() );
 		$stored = is_array( $stored ) ? $stored : array();
 
-		$text = static function ( $key ) use ( $stored ) {
-			if ( ! isset( $stored[ $key ] ) || ! is_scalar( $stored[ $key ] ) ) {
+		$text = static function ( $value ) {
+			if ( ! is_scalar( $value ) ) {
 				return '';
 			}
 
-			return trim( (string) $stored[ $key ] );
+			// A textarea in a browser sends CRLF and the stored value keeps it.
+			// nl2br() below only knows the LF, so every line break would carry a
+			// stray CR into the mail.
+			return trim( str_replace( "\r\n", "\n", (string) $value ) );
 		};
+
+		$footer = $text( isset( $stored['footer'] ) ? $stored['footer'] : null );
+
+		if ( '' === $footer ) {
+			$footer = implode(
+				"\n\n",
+				array_filter(
+					array(
+						$text( isset( $stored['footer_organisation'] ) ? $stored['footer_organisation'] : null ),
+						$text( isset( $stored['footer_contact'] ) ? $stored['footer_contact'] : null ),
+						$text( isset( $stored['footer_legal'] ) ? $stored['footer_legal'] : null ),
+					),
+					static function ( $part ) {
+						return '' !== $part;
+					}
+				)
+			);
+		}
 
 		return array(
 			'logo_attachment_id' => isset( $stored['logo_attachment_id'] ) ? absint( $stored['logo_attachment_id'] ) : 0,
-			'footer_organisation' => $text( 'footer_organisation' ),
-			'footer_contact'      => $text( 'footer_contact' ),
-			'footer_legal'        => $text( 'footer_legal' ),
+			'footer'             => $footer,
 		);
 	}
 
@@ -224,35 +250,23 @@ final class FG_Mail_Templates {
 	/**
 	 * Build the footer from the configured text.
 	 *
-	 * The three fields become three paragraphs, the order they are stored in.
-	 * A line break inside a field stays a line break, which is how the postal
-	 * address and the contact block are written.
+	 * One field, one block. A line break inside it stays a line break, which is
+	 * how the address and the contact block are written; a blank line in the
+	 * field leaves a blank line in the mail, so the sections can be told apart
+	 * without a second field.
 	 *
 	 * @return string
 	 */
 	private static function footer_block() {
-		$settings = static::get_settings();
-		$fields   = array(
-			'footer_organisation',
-			'footer_contact',
-			'footer_legal',
-		);
+		$value = static::get_settings()['footer'];
 
-		$html = '';
-
-		foreach ( $fields as $field ) {
-			$value = $settings[ $field ];
-
-			if ( '' === $value ) {
-				continue;
-			}
-
-			$html .= '<p style="font-size: 1em; margin: 0; padding: 0">'
-				. nl2br( esc_html( $value ) )
-				. "</p>\n";
+		if ( '' === $value ) {
+			return '';
 		}
 
-		return $html;
+		return '<p style="font-size: 1em; margin: 0; padding: 0">'
+			. nl2br( esc_html( $value ) )
+			. "</p>\n";
 	}
 
 	/**
@@ -261,6 +275,19 @@ final class FG_Mail_Templates {
 	 * Tables and inline styles, no external stylesheet, no web font, no
 	 * background image. Everything a client needs is in the document itself.
 	 * The Outlook conditionals are the reason for the repeated wrapper tables.
+	 *
+	 * The headline and the copy are two white boxes on the grey ground, and they
+	 * touch. Both of their containers therefore carry no padding at all: the
+	 * horizontal spacing sits in the white cell, where it is 24px on both boxes
+	 * and they line up at every window width. Padding the container instead would
+	 * put a grey bar between the two boxes, and on a narrow window it would also
+	 * make the copy 48px narrower than the headline above it.
+	 *
+	 * A size that is relative to the body belongs on the cell that holds the text,
+	 * not on its container. `font-size: 0.8em` used to sit on the container of the
+	 * copy and came out at 11.2px, because the body is 14px; the same cell also
+	 * carried the grey of the footer. The copy now says 14px in the colour of the
+	 * body, and the footer says 12px.
 	 *
 	 * The tokens are replaced in render().
 	 */
@@ -419,7 +446,7 @@ final class FG_Mail_Templates {
 
 			<!-- start copy block -->
 	<tr>
-			   <td align="center" bgcolor="#f1f1f1" style="-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; mso-table-rspace: 0pt; mso-table-lspace: 0pt; padding: 12px 24px; font-size: 0.8em; line-height: 20px; color: #666666">
+			   <td align="center" bgcolor="#f1f1f1" style="-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; mso-table-rspace: 0pt; mso-table-lspace: 0pt; padding: 0">
 			<!--[if (gte mso 9)|(IE)]>
 					<table align="center" border="0" cellpadding="0" cellspacing="0" width="600px">
 					<tr>
@@ -428,7 +455,7 @@ final class FG_Mail_Templates {
 				<table border="0" cellpadding="0" cellspacing="0" width="100%" style="-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; mso-table-rspace: 0pt; mso-table-lspace: 0pt; border-collapse: collapse !important; max-width: 600px">
 				<!-- start copy -->
 					<tr>
-						<td align="left" bgcolor="#ffffff" style="-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; mso-table-rspace: 0pt; mso-table-lspace: 0pt; padding: 12px 24px">
+						<td align="left" bgcolor="#ffffff" style="-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; mso-table-rspace: 0pt; mso-table-lspace: 0pt; padding: 12px 24px; font-size: 14px; color: #111111">
 								{{CONTENT}}
 						</td>
 					</tr>
@@ -454,7 +481,7 @@ final class FG_Mail_Templates {
 
 				<!-- start footer text -->
 					 <tr>
-					  <td align="center" bgcolor="#f1f1f1" style="-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; mso-table-rspace: 0pt; mso-table-lspace: 0pt; padding: 12px 24px; font-size: 0.8em; line-height: 20px; color: #666666">
+					  <td align="center" bgcolor="#f1f1f1" style="-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; mso-table-rspace: 0pt; mso-table-lspace: 0pt; padding: 12px 24px; font-size: 12px; line-height: 18px; color: #666666">
 							{{FOOTER}}
 					  </td>
 					 </tr>

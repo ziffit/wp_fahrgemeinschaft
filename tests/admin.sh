@@ -136,6 +136,13 @@ a=m.group(0) if m else ''
 f=re.search(r'<form class=\"fg-signup-form\".*?</form>', a, re.S)
 print(re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',f.group(0)))).strip() if f else 'kein-formular')"; }
 
+# One claim about a rendered document, decided on the document itself. The
+# python may print what it found; that text becomes the detail of a failure, so
+# a red line names the value that is wrong instead of only the claim. The
+# reasons a claim about a stylesheet is read as declarations instead of as a
+# pattern are written down where the body that does it says them.
+pruef() { local grund; if grund=$(python3 -c "$3" <<< "$1"); then ok "$2"; else bad "$2" "${4:+$4 — }$grund"; fi; }
+
 echo "== Admin level tests =="
 
 # The work duty this suite works on belongs to this suite. It used to be read
@@ -677,51 +684,64 @@ else
 	bad "picker runs after the media library and after the buttons" "wrong order in the document"
 fi
 has "the pick button waits for the script" "$screen" 'id="fg-logo-pick" disabled'
-has "sender field present" "$screen" 'name="fg_footer_organisation"'
-has "contact field present" "$screen" 'name="fg_footer_contact"'
-has "legal field present" "$screen" 'name="fg_footer_legal"'
-has "the three fields are marked as mandatory" "$screen" 'id="fg-footer-legal" name="fg_footer_legal" rows="4" class="large-text" required'
+# One field, not three. The field is asked for as what it has to be: a
+# textarea, and a mandatory one, both in the same tag. Looking for the name
+# alone would be answered by a hidden field, and "required" somewhere on the
+# page says nothing about which field it belongs to.
+has "the footer has one field" "$screen" 'id="fg-footer" name="fg_footer" rows="9" class="large-text" required'
+hasnt "and no second field for the sender" "$screen" 'name="fg_footer_organisation"'
+hasnt "and no third field for the contact" "$screen" 'name="fg_footer_contact"'
+hasnt "and no fourth field for the legal notice" "$screen" 'name="fg_footer_legal"'
 hasnt "no field offers a path to a file" "$screen" "logo_path"
 hasnt "no field offers a url for the logo" "$screen" "logo_url"
 has "preview link present" "$screen" "action=fg_mail_preview"
 has "preview link carries a nonce" "$screen" "action=fg_mail_preview&#038;_wpnonce="
 clean "$screen" "settings screen"
 
-echo "[8b] the mandatory fields refuse an incomplete footer"
+echo "[8b] the mandatory footer refuses an empty one"
 SNONCE=$(val /dev/stdin fg_settings_nonce <<< "$screen")
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/settings-bad.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_save_settings" \
 	--data-urlencode "fg_settings_nonce=$SNONCE" \
 	--data-urlencode "fg_logo_attachment_id=0" \
-	--data-urlencode "fg_footer_organisation=Musterverein e.V." \
-	--data-urlencode "fg_footer_contact=" \
-	--data-urlencode "fg_footer_legal=Angaben gemäß § 5 TMG")
+	--data-urlencode "fg_footer=   ")
 refused=$(cat "$DIR/settings-bad.html")
-has "the missing field is named" "$refused" "Kontakt"
+has "the missing field is named" "$refused" "weil die Fußzeile fehlt"
 has "it says that nothing was saved" "$refused" "Es wurde nichts gespeichert"
 has "it returns to the settings screen" "$out" "page=fahrgemeinschaften-settings"
 # Compared with the state of before the run and not with "empty": a footer that
 # was configured by hand has to stay untouched as well.
 if [ "$(s settings-json)" = "$SETTINGS_BEFORE" ]; then ok "nothing was stored"; else bad "nothing was stored" "$(s settings-json)"; fi
-clean "$refused" "settings save with an incomplete footer"
+clean "$refused" "settings save with an empty footer"
 
 echo "[8c] a complete footer is stored"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/settings-saved.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_save_settings" \
 	--data-urlencode "fg_settings_nonce=$SNONCE" \
 	--data-urlencode "fg_logo_attachment_id=0" \
-	--data-urlencode "fg_footer_organisation=Musterverein e.V.
-Musterstraße 1" \
-	--data-urlencode "fg_footer_contact=info@angeln.example.org" \
-	--data-urlencode "fg_footer_legal=Angaben gemäß § 5 TMG: Musterverein e.V.")
+	--data-urlencode "fg_footer=Musterverein e.V.
+Musterstraße 1
+
+info@angeln.example.org
+
+Angaben gemäß § 5 TMG: Musterverein e.V.")
 stored=$(cat "$DIR/settings-saved.html")
 has "save confirms" "$stored" "Die Einstellungen wurden gespeichert."
-if [ "$(s settings footer_organisation | tr '\n' ',')" = "Musterverein e.V.,Musterstraße 1," ]; then
-	ok "sender stored with its line break"
+# The whole footer is compared in one go, line break and blank line included.
+# Three checks of three fields could each pass while the sections came back in
+# the wrong order or the blank line between them was lost.
+if [ "$(s settings footer | tr '\n' ',')" = "Musterverein e.V.,Musterstraße 1,,info@angeln.example.org,,Angaben gemäß § 5 TMG: Musterverein e.V.," ]; then
+	ok "the footer is stored as it was typed, blank lines and all"
 else
-	bad "sender stored with its line break" "$(s settings footer_organisation | tr '\n' ',')"
+	bad "the footer is stored as it was typed, blank lines and all" "$(s settings footer | tr '\n' ',')"
 fi
-if [ "$(s settings footer_contact)" = "info@angeln.example.org" ]; then ok "contact stored"; else bad "contact stored" "$(s settings footer_contact)"; fi
+# The three names of the version before must be gone from the option, or a
+# later read would find them and join them to the one field.
+if printf '%s' "$(s settings-json)" | grep -q "footer_"; then
+	bad "the option holds nothing but the one field" "$(s settings-json)"
+else
+	ok "the option holds nothing but the one field"
+fi
 if [ "$(s settings logo_attachment_id)" = "0" ]; then ok "no logo stored"; else bad "no logo stored" "$(s settings logo_attachment_id)"; fi
 AFTER_SAVE=$(s settings-json)
 clean "$stored" "settings save"
@@ -730,9 +750,7 @@ echo "[8d] a wrong nonce changes nothing"
 out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_save_settings" \
 	--data-urlencode "fg_settings_nonce=manipuliert" \
-	--data-urlencode "fg_footer_organisation=Ohne Erlaubnis" \
-	--data-urlencode "fg_footer_contact=info@angeln.example.org" \
-	--data-urlencode "fg_footer_legal=Angaben gemäß § 5 TMG")
+	--data-urlencode "fg_footer=Ohne Erlaubnis")
 if [ "$out" = "403" ]; then ok "a wrong nonce is refused ($out)"; else bad "a wrong nonce is refused" "$out"; fi
 # Compared with the values of the save before and not with the values of the
 # run before it, which the site may have had configured by hand.
@@ -748,13 +766,150 @@ if [ -n "$preview_url" ]; then ok "preview link extracted"; else bad "preview li
 preview=$(curl -sk -b "$JAR" "$preview_url")
 has "preview is a full html document" "$preview" "<!DOCTYPE html>"
 has "preview carries the layout" "$preview" 'class="body-wrap"'
-has "preview carries the stored sender" "$preview" "Musterverein e.V."
+has "preview carries the stored footer" "$preview" "Musterverein e.V."
 has "preview carries the stored contact" "$preview" "info@angeln.example.org"
 has "preview carries the stored legal notice" "$preview" "§ 5 TMG"
 has "preview escapes a visitor value" "$preview" "Müller &amp; Söhne"
 hasnt "preview keeps the raw ampersand" "$preview" "Müller & Söhne"
 hasnt "preview loads no foreign address" "$preview" 'src="http'
 hasnt "preview has no unresolved token" "$preview" "{{"
+# The blank line the club typed has to survive into the mail as a blank line,
+# not as a single break: it is what tells the three sections apart. nl2br puts
+# a newline behind every break, so a blank line is two breaks and two newlines,
+# and a search that leaves the newlines out would find nothing and pass for
+# another reason.
+pruef "$preview" "preview keeps the blank line between the sections" "
+import sys
+h = sys.stdin.read()
+# nl2br setzt hinter jeden Umbruch einen Zeilenumbruch. Eine Leerzeile ist
+# deshalb zwei Umbrueche und zwei Zeilenumbrueche — eine Suche, die die
+# Zeilenumbrueche weglässt, fände nichts und wäre aus einem anderen Grund grün.
+gesucht = 'Musterstraße 1<br />\n<br />\ninfo@angeln.example.org'
+if gesucht not in h:
+    print('die Abschnitte stehen nicht mit einer Leerzeile getrennt nebeneinander')
+    sys.exit(1)
+sys.exit(0)
+" "im HTML der Vorschau"
+pruef "$preview" "the copy is written at 14px and the footer at 12px" "
+import re, sys
+h = sys.stdin.read()
+def region(von, bis):
+    return h.split('<!-- start %s -->' % von, 1)[-1].split('<!-- end %s -->' % bis, 1)[0]
+def zelle(teil):
+    tags = re.findall(r'<td\b[^>]*>', teil)
+    return tags[0] if tags else ''
+def groesse(tag):
+    gefunden = re.findall(r'font-size:\s*([0-9.]+)\s*(px|em)\b', tag)
+    return ''.join(gefunden[-1]) if gefunden else ''
+# Eine Größe in em hängt an dem, was die Zelle darüber sagt, und der Körper
+# sagt 14px: aus 0.8em wurden 11.2px, und das stand an Inhalt und Fußzeile
+# gleichermaßen. Die Regel im Style-Sheet bleibt außen vor, denn p ist dort
+# mit Absicht 1em, und 1em von 14px ist 14px. Gelesen werden nur die Zellen,
+# weil nur sie entscheiden.
+for tag in re.findall(r'<td\b[^>]*>', h):
+    if re.search(r'font-size:\s*[0-9.]+em', tag):
+        print('eine Zelle rechnet ihre Schriftgröße um: ' + str(groesse(tag)))
+        sys.exit(1)
+inhalt = groesse(zelle(region('copy', 'copy')))
+fuss = groesse(zelle(region('footer text', 'footer text')))
+if inhalt != '14px':
+    print('der Inhalt steht in ' + (inhalt or 'keiner festgelegten Größe'))
+    sys.exit(1)
+if fuss != '12px':
+    print('die Fußzeile steht in ' + (fuss or 'keiner festgelegten Größe'))
+    sys.exit(1)
+sys.exit(0)
+" "der Inhalt oder die Fußzeile steht in einer anderen Größe"
+pruef "$preview" "the copy is in the colour of the body" "
+import re, sys
+h = sys.stdin.read()
+teil = h.split('<!-- start copy -->', 1)[-1].split('<!-- end copy -->', 1)[0]
+# Das Grau der Fußzeile stand an dem Container des Inhalts und der Text hat es
+# geerbt. Die Zelle mit dem Text nennt die Farbe des Körpers jetzt selbst, damit
+# die beiden nicht wieder auseinanderlaufen können. Gelesen wird wie beim
+# Innenabstand aus dem style-Attribut, und die letzte Angabe zählt.
+gefunden = None
+for tag in re.findall(r'<td\b[^>]*>', teil):
+    stil = re.search(r'style=\"([^\"]*)\"', tag)
+    if not stil:
+        continue
+    for stueck in stil.group(1).split(';'):
+        if ':' not in stueck:
+            continue
+        k, _, w = stueck.partition(':')
+        if k.strip() == 'color':
+            gefunden = w.strip()
+if gefunden != '#111111':
+    print('die Zelle mit dem Text nennt ' + str(gefunden))
+    sys.exit(1)
+sys.exit(0)
+" "die Zelle mit dem Text nennt die Farbe des Körpers nicht"
+pruef "$preview" "the headline and the copy touch, no bar of grey between them" "
+import re, sys
+h = sys.stdin.read()
+def region(von, bis):
+    return h.split('<!-- start %s -->' % von, 1)[-1].split('<!-- end %s -->' % bis, 1)[0]
+def zellen(teil):
+    return re.findall(r'<td\b[^>]*>', teil)
+def eigenschaft(tag, name):
+    # Der Wert wird aus dem style-Attribut gelesen und nicht aus dem ganzen
+    # Tag: die letzte Angabe eines Tags trägt das schließende Anführungszeichen
+    # und den spitzen Klammer mit, und beides muss weg, bevor verglichen wird.
+    # Dann Angabe für Angabe, und die letzte zählt, wie im Browser. Ein Muster
+    # mit einer Look-Ahead und etwas Variablem davor kann das nicht: die Variable
+    # kann nichts matchen, dann sieht die Look-Ahead das Leerzeichen vor dem
+    # Wort und gelingt, und jede Regel mit der Eigenschaft besteht.
+    stil = re.search(r'style=\"([^\"]*)\"', tag)
+    if not stil:
+        return None
+    gefunden = None
+    for stueck in stil.group(1).split(';'):
+        if ':' not in stueck:
+            continue
+        k, _, w = stueck.partition(':')
+        if k.strip() == name:
+            gefunden = w.strip()
+    return gefunden
+def weiss(teil):
+    return [t for t in zellen(teil) if '#ffffff' in t]
+# Der graue Grund zeigt überall dort, wo keine weiße Box ist. Keiner der beiden
+# Container darf deshalb etwas einrücken: sonst steht ein Balken zwischen den
+# weißen Boxen, und die Boxen selbst wären auf einem schmalen Fenster nicht
+# gleich breit, weil sie unterschiedlich weit eingerückt wären. Die Zellen der
+# bedingten Outlook-Ausgabe tragen kein style und werden mitgezählt, sonst
+# hinge die Aussage an einem Konstrukt, das nur ein Client sieht.
+for bezeichnung, zone in (('des Inhalts', region('copy block', 'copy')), ('der Überschrift', region('hero', 'hero'))):
+    for tag in zellen(zone):
+        if '#ffffff' in tag:
+            continue
+        p = eigenschaft(tag, 'padding')
+        if p not in (None, '0'):
+            print('der Container ' + bezeichnung + ' trägt padding: ' + str(p))
+            sys.exit(1)
+# Die weiße Box der Überschrift darf an ihrem unteren Ende keinen Abstand
+# tragen, sonst steht derselbe Balken am anderen Ende derselben Kante.
+held = weiss(region('hero', 'hero'))
+if not held:
+    print('die Überschrift hat keine weiße Box')
+    sys.exit(1)
+unten = (eigenschaft(held[0], 'padding') or '').split()
+if not unten or unten[-1] not in ('0', '0px'):
+    print('die weiße Box der Überschrift trägt unten ' + str(unten))
+    sys.exit(1)
+# Und die weiße Box des Inhalts muss ihren eigenen Abstand behalten. Er ist
+# das, was den Abstand des Containers ersetzt hat: ohne ihn stünde der Text
+# direkt an der Kante, und eine Prüfung, die nur nach dem Container sieht,
+# hätte das nicht bemerkt.
+innen = weiss(region('copy', 'copy'))
+if not innen:
+    print('der Inhalt hat keine weiße Box')
+    sys.exit(1)
+p = eigenschaft(innen[0], 'padding')
+if not p or p == '0':
+    print('die weiße Box des Inhalts trägt keinen eigenen Abstand: ' + str(p))
+    sys.exit(1)
+sys.exit(0)
+" "eine Box lässt den grauen Grund sichtbar, oder die beiden weißen Boxen unterscheiden sich in der Breite"
 clean "$preview" "mail preview"
 
 echo "[8f] the preview needs a nonce"

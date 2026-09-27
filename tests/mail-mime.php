@@ -118,10 +118,14 @@ $text    = implode(
 	)
 );
 
+// One field, and a blank line between the sections: that is what tells them
+// apart in the mail, so it has to survive into the HTML as a blank line.
 $footer = array(
-	'footer_organisation' => 'Musterverein e.V.' . "\n" . 'Musterstraße 1',
-	'footer_contact'      => '0911 / 000 000' . "\n" . 'info@angeln.example.org',
-	'footer_legal'        => 'Angaben gemäß § 5 TMG: Musterverein e.V.',
+	'footer' => 'Musterverein e.V.' . "\n"
+		. 'Musterstraße 1' . "\n\n"
+		. '0911 / 000 000' . "\n"
+		. 'info@angeln.example.org' . "\n\n"
+		. 'Angaben gemäß § 5 TMG: Musterverein e.V.',
 );
 
 // --- without a logo
@@ -161,6 +165,38 @@ echo "[3] a wrong logo\n";
 fg_mime_check( 'an attachment that is not an image is not embedded', array() === FG_Mail_Templates::get_logo_embed() );
 $mime = fg_mime_build( $subject, $text );
 fg_mime_check( 'the message still goes out without a logo', false === strpos( $mime, 'cid:logo' ) );
+
+// --- the footer: one field, and the three the version before wrote
+echo "[4] the footer of the mail\n";
+update_option( FG_SETTINGS_OPTION, array_merge( $footer, array( 'logo_attachment_id' => 0 ) ), false );
+$neu = FG_Mail_Templates::render( $subject, $text, '' );
+// A blank line in the field is what tells the sections apart, so it has to
+// reach the mail as a blank line and not as a single break.
+fg_mime_check( 'the blank line between two sections of the footer is one', false !== strpos( $neu, 'Musterstraße 1<br />' . "\n" . '<br />' . "\n" . '0911' ) );
+// A footer that was stored as three fields, which is how it was written up to
+// version 1.9.0, has to reach the mail as one block and in the order it was
+// entered. Nobody may have to type a legal notice a second time after an
+// update.
+update_option( FG_SETTINGS_OPTION, array( 'logo_attachment_id' => 0, 'footer_organisation' => 'Musterverein e.V.', 'footer_contact' => 'info@angeln.example.org', 'footer_legal' => '§ 5 TMG' ), false );
+$alte = FG_Mail_Templates::render( $subject, $text, '' );
+fg_mime_check( 'the three old fields come out joined, in order and separated', false !== strpos( $alte, 'Musterverein e.V.<br />' . "\n" . '<br />' . "\n" . 'info@angeln.example.org<br />' . "\n" . '<br />' . "\n" . '§ 5 TMG' ) );
+// One field is one block. The three of them used to become three paragraphs,
+// and a footer that is one block is what the layout's single rule for the
+// footer is written for.
+$abschnitt = strstr( $alte, '<!-- start footer text -->' );
+$abschnitt = false === $abschnitt ? '' : strstr( $abschnitt, '<!-- end footer text -->', true );
+fg_mime_check( 'the footer is one paragraph and not one per field', substr_count( (string) $abschnitt, '<p' ) === 1 );
+// The one field wins over the three: after a save the option holds one name,
+// and a footer that is stored must not be added to a stale second copy of it.
+update_option( FG_SETTINGS_OPTION, array( 'logo_attachment_id' => 0, 'footer' => 'Nur diese Angabe.', 'footer_legal' => 'Altes Feld' ), false );
+$beide = FG_Mail_Templates::render( $subject, $text, '' );
+fg_mime_check( 'a stored footer is not added to a leftover of the old fields', false !== strpos( $beide, 'Nur diese Angabe.' ) && false === strpos( $beide, 'Altes Feld' ) );
+// A textarea in a browser sends CRLF, and the stored value keeps it. A line
+// break that carries a stray CR would show as a broken character in a client
+// that is strict about the bytes.
+update_option( FG_SETTINGS_OPTION, array( 'logo_attachment_id' => 0, 'footer' => "Musterverein e.V.\r\nMusterstraße 1" ), false );
+$crlf = FG_Mail_Templates::render( $subject, $text, '' );
+fg_mime_check( 'a carriage return from the browser never reaches the mail', false === strpos( $crlf, "\r" ) );
 
 // --- restore
 wp_delete_attachment( $logo_id, true );
