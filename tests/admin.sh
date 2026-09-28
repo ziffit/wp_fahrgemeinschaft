@@ -2159,6 +2159,11 @@ has "the form shows the saved subject" "$formular" 'value="Angemeldet: {{Arbeits
 has "the form shows the saved text" "$formular" "Servus, {{Vorname}}."
 has "a changed message offers the way back" "$formular" "Auf Standard zurücksetzen"
 
+# A link may carry its own wording behind a colon. A club can only use that if the
+# screen says so: the form of the placeholder is in its description, and a
+# feature nobody can find is not a feature of the club.
+has "the screen explains the wording of a link" "$formular" '{{Abmeldelink:Teilnahme am Arbeitsdienst abmelden}}'
+
 # What is in the table is what was typed, with its placeholders: the send path
 # needs them and the screen is not the only thing that reads the row.
 s mail-text-body duty_signup > "$DIR/fg-mail-body.txt"
@@ -2196,12 +2201,56 @@ has "the preview shows the HTML part" "$vorschau" "</html>"
 has "the preview shows the text part" "$vorschau" "<pre"
 has "the preview greets the invented member" "$vorschau" "Hallo Anton"
 
+# A link of the message has to be a link in the preview too, and it has to say
+# what it does. The address alone is what the club would otherwise learn to
+# expect, and it is what pushed the column apart in every mail client.
+has "the preview shows the link as a link" "$vorschau" '<a href="https://example.org/?fg_duty_action=view&#038;ref='
+has "the wording of the link stands in front of it" "$vorschau" '>Teilnahme am Arbeitsdienst abmelden</a>'
+
+# The complaint of the club: an address that is only inside an href attribute
+# cannot break the layout, because a reader never sees it. The href attributes
+# are taken off the page first, and then no address of a link may be left in what
+# is shown.
+#
+# Only the html part, and not the text part: a text part has no links and carries
+# the address in full, which is what the reader there needs. The <pre> element
+# opens the text part, so everything in front of it is the html part.
+pruef "$vorschau" "no address of a link is left standing in the html part of the preview" "
+import re, sys
+html = sys.stdin.read().split('<pre')[0]
+rest = re.sub(r'\shref=\"[^\"]*\"', '', html)
+if 'fg_duty_action=view' in rest or 'token=' in rest:
+    print('an address stands in the text of the html part')
+    sys.exit(1)
+sys.exit(0)
+" "the preview still shows the address of a link"
+
+# The text part has no links at all, and carries the address in full instead.
+pruef "$vorschau" "the text part of the preview carries no link" "
+import sys
+seite = sys.stdin.read()
+teile = seite.split('<pre')
+text = teile[1] if len(teile) > 1 else ''
+if '<a ' in text or 'href=' in text:
+    print('the text part carries a link')
+    sys.exit(1)
+sys.exit(0)
+" "the text part of the preview carries a link"
+
+# The text part has no links and must carry the address, or a reader who answers
+# from a text client has nothing to answer with.
+has "the text part of the preview carries the address" "$vorschau" 'Teilnahme am Arbeitsdienst abmelden: https://example.org/?fg_duty_action=view'
+
 # A placeholder left over would be shown to the club as {{Datum}} in the preview
 # and would go out as those seven characters in a real mail. The check counts
-# them over the whole page, because both parts have to be free of them.
+# them over the whole page, because both parts have to be free of them. The
+# pattern takes everything between the braces, not only letters: a link may carry
+# its wording behind a colon, and a leftover of that form has to be found here
+# too, or the pattern would look green for a wording that is still standing in the
+# page.
 pruef "$vorschau" "no placeholder is left in the preview" "
 import re, sys
-rest = sorted(set(re.findall(r'\{\{[A-Za-z]*\}\}', sys.stdin.read())))
+rest = sorted(set(re.findall(r'\{\{[^{}]*\}\}', sys.stdin.read())))
 if rest:
     print('left over: ' + ', '.join(rest))
     sys.exit(1)

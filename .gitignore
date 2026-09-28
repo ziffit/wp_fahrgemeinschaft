@@ -26,7 +26,7 @@ tests/mitglieder.csv
 #   PY
 #   Die Reihenfolge der Einträge ist für WordPress ohne Bedeutung. Maßgeblich
 #   ist, dass genau die Dateien des Plugin-Quellbaums enthalten sind, Stand
-#   28.09.2026: 22 Dateien, davon 20 PHP. Der Wurzelordner im Paket heißt
+#   28.09.2026: 24 Dateien, davon 22 PHP. Der Wurzelordner im Paket heißt
 #   arbeitsdienste, denn er bestimmt den Ordnernamen nach dem Entpacken und
 #   damit den Aktivierungs-Haken.
 arbeitsdienste.zip

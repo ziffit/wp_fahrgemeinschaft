@@ -4,7 +4,7 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **Admin-Ebene 531, öffentliches HTTP 181, Mail-Ebene 78,
+Letzter Lauf: 28.09.2026 — **Admin-Ebene 537, öffentliches HTTP 181, Mail-Ebene 163,
 0 Fehler**. Die CLI-Suite ist nicht gelaufen, weil `smoke.php` am Anfang
 alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht und dafür eine
 ausdrückliche Zustimmung braucht; ihre 482 Prüfungen stammen aus dem freigegebenen Lauf
@@ -135,7 +135,7 @@ Fahrgemeinschaften und Mitglieder sowie die Statistik-Option, es gibt also keine
 | --- | --- | --- |
 | CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–20: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene und die Mitgliederverwaltung; dazu die Abschnitte `[2a]` (die vier freiwilligen Angaben eines Arbeitsdienstes) und `[3c]` (die Liste der Arbeitsdienste) |
 | Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data`, Verhalten der Schaltflächen im Stylesheet; dazu die Abschnitte `[8]` für die Arbeitsdienstliste auf einer eigenen Seite und `[9]` für den vollständigen Weg von der Anmeldung über die E-Mail bis zum Abmelden |
-| Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo` |
+| Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo`, und die Links beider Teile: im HTML ein `<a href>` mit einem Wortlaut, der die Handlung nennt, im Text die Adresse in Klarschrift |
 | Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der sechs Unterseiten auf jeder Seite, die neue Seite E-Mails eingeschlossen), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die Abschnitte `[9]` (Mitgliederverwaltung), `[10]` (CSV-Import), `[11]` (Anmeldung zu einem Dienst) und `[12]` (Aufräumen um alle Mitglieder ohne Arbeitsdienst) und `[13]` mit `[13b]` (Anrede der Nachrichten) und `[13c]` (Zurückhaltung bei einem unbekannten Platzhalter) — Wortlaut der fünf E-Mails, Platzhalter je Nachricht, Vorschau, Zurücksetzen |
 
 Zwei Eigenheiten der Suiten, die man kennen muss, bevor man einem Fehlschlag traut:
@@ -150,6 +150,14 @@ Zwei Eigenheiten der Suiten, die man kennen muss, bevor man einem Fehlschlag tra
   `http.sh` läuft dann gegen leere Werte und meldet 24 rote Zeilen, von denen keine
   einen Fehler des Plugins bezeichnet. Vor jeder von Hand gefahrenen Suite also
   `http_setup.php` laufen lassen.
+- **Eine Suite, die man zur Fehlersuche zweimal fährt, verbraucht ihre Fixture
+  selbst.** Am 28.09.2026 ist das mit 18 roten Zeilen in `http.sh` passiert: Der
+  erste Lauf hatte die Vormerkung der Fixture bestätigt und die veröffentlichte Fahrt
+  gelöscht, der zweite las diese Werte erneut und meldete sie als Fehler. Der Grund war
+  nicht im Plugin, sondern im Ablauf. Zwei Regeln daraus: Vor **jedem** Lauf
+  `http_setup.php`, und die Ausgabe **einmal** in eine Datei statt zweimal auf den
+  Bildschirm, weil ein zweiter Blick auf dasselbe Log kein zweiter Lauf ist, sondern
+  derselbe — außer man schreibt vorher die Fixture neu.
 - **Der Bericht eines Imports wird aus einem Rahmen gelesen, nicht aus der Seite.**
   Auf dem Bildschirm der Mitglieder steht der Bericht *und* die Liste aller Mitglieder.
   Eine Prüfung, die eine Mitgliedsnummer auf der ganzen Seite sucht, findet sie in
@@ -856,6 +864,53 @@ Umlaute, und ohne `charset=UTF-8` kämen sie als zwei Fragezeichen an, während 
 Prüfung nach den ASCII-Zeilen der Fußzeile weiterhin grün bliebe. Und die Fußzeile
 darf kein HTML des Layouts in den Textteil tragen.
 
+### Die neunte Reihe (8 Fehlerbilder an den Links in beiden Teilen)
+
+Sie ging die Links der Nachrichten an. Die Behauptung war: **jeder Link ist im
+HTML-Teil ein `<a href>` mit einem Wortlaut, der die Handlung nennt, und im
+Textteil steht die Adresse.** Bis 1.13.0 stand die Adresse als Klartext im
+Wortlaut, und `paragraphs()` escapte jede Zeile — sie war im HTML-Teil damit
+weder klickbar noch kürzbar, und aus einem Nebensatz wurden fünfundneunzig
+Zeichen in einer Zeile.
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| `{{Loeschlink}}` wird wie jeder andere Platzhalter durch `strtr()` ersetzt | der HTML-Teil trägt einen Anker | 2 Prüfungen: `the html part has one anchor per link` und `no placeholder is left in the html part` |
+| der Anker entsteht aus dem escaped Text | keine Adresse steht als Text im HTML-Teil | `no address of a link is left standing in the text of the html part` (sie prüft es über den HTML-Teil allein, mit abgenommenen `href`-Attributen) |
+| der Wortlaut des Ankers wird nicht escaped | Markup des Vereins bleibt Text | `a wording from the club brings no markup into the html part` |
+| `esc_url()` fehlt am `href` | ein Attribut mit `&` wird zur Entität | `an ampersand in an address is written as an entity` |
+| ein Link ohne eigenen Wortlaut fällt auf den Vorgabewortlaut | Text gespeicherter Texte bleibt ein Link | `a link without a wording takes the one of the message` |
+| ein Wortlaut hinter einem Doppelpunkt gilt für **jeden** Platzhalter | ein Name, der kein Link dieser Nachricht ist, wird abgelehnt | 2 Prüfungen: `a wording behind a link of another message is refused` und `a wording behind a name that is no link at all is refused` |
+| die Ablehnung nennt nur die nackten Namen | die erlaubte Menge nennt beide Formen | `the complaint names the form with a colon as allowed` |
+| der Textteil bekommt denselben Wortlaut wie das HTML | der Textteil trägt die Adresse | `the text part carries the address of the confirmation` |
+
+Eine Prüfung in dieser Reihe ist **keine** Prüfung, sondern eine Bedingung für
+die anderen: Der Vorgabewortlaut eines Links steht in zwei Listen derselben
+Definition, `links` und `placeholders`, und ein Name, der nur in einer davon
+steht, ist ein Link, den die Nachricht gar nicht anbietet. `mail-mime.php`
+vergleicht die beiden Listen für alle fünf Nachrichten und verlangt zusätzlich
+einen Wortlaut und eine Beispieladresse. Ohne diese Prüfung wären die Zeilen
+darüber grün, während die Vorschau im Adminbereich einen Link zeigt, der
+nirgends hingesetzt wird.
+
+Und eine Prüfung musste an einem **Muster** wachsen, nicht an einer Zeile:
+Das Muster, das übrig gebliebene Platzhalter in der Vorschau suchte, kannte
+nur Buchstaben — `\{\{[A-Za-z]*\}\}` — und wäre für einen Wortlaut hinter
+einem Doppelpunkt blind gewesen. Gegengerechnet an sechs Fallen:
+
+| Fall | altes Muster `\{\{[A-Za-z]*\}\}` | neues Muster `\{\{[^{}]*\}\}` |
+| --- | --- | --- |
+| `{{Loeschlink}}` | gefunden | gefunden |
+| `{{Loeschlink:Fahrgemeinschaft löschen}}` | **nichts** | gefunden |
+| `{{Abmeldelink:Teilnahme am Arbeitsdienst abmelden}}` | **nichts** | gefunden |
+| `{{Loeschlink:}}` | **nichts** | gefunden |
+| `{{Loeschlink:{{Name}}}}` | findet `{{Name}}` | findet `{{Name}}` |
+| Wortlaut über zwei Zeilen | **nichts** | gefunden |
+
+Eine Prüfung, die an einem Muster gewachsen ist, ist an genau einem Muster
+blind — und dieses hier wäre es für die Form geworden, die diese Fassung
+gerade eingeführt hat.
+
 ## Umstieg von den eigenen Beitragstypen
 
 Die Testinstanz lief ursprünglich mit einer Fassung, die eigene WordPress-Beitragstypen
@@ -941,9 +996,19 @@ Deshalb ist der Recorder **standardmäßig aus** und wird nur für den Testlauf 
   danach für die Handprüfung mit SureMails oder echtem SMTP bereit. `KEEP_RECORDER=1`
   lässt sie aktiv.
 - `WPDEV/setup.sh` gibt den Zustand als letzte Zeile aus: `mail recorder: …`.
+- `tests/state.php recorder on|off` schaltet ihn von Hand um und meldet es in einer Zeile.
 
 Ohne Recorder läuft der Nachrichtentransport unverändert über `wp_mail()`; am Plugin ist
 dafür keine Zeile anzufassen.
+
+**Nach jeder von Hand gefahrenen Suite ausschalten.** `run-all.sh` erledigt das im
+Schritt `5/5 handover`, eine von Hand gefahrene Suite nicht. Am Lauf vom 28.09.2026 hat
+das zwei der sechs roten Zeilen des Admin-Laufs verursacht: Die fünf Prüfungen des
+Abschnitts `[13b]` — die Anrede der Nachrichten — lesen das Mail-Protokoll, und bei
+ausgeschaltetem Recorder steht dort nichts, woraus sie lesen könnten. Sie melden
+zuverlässig `KEINE-MAIL`, was wie ein Fehler im Plugin aussieht und keiner ist. Wer
+eine Suite einzeln fährt, schaltet den Recorder vorher mit `state.php recorder on` ein
+und danach wieder aus.
 
 ## Handprüfung mit SureMails
 
@@ -1026,3 +1091,13 @@ wieder entfernt.
   `details`-Schaltflächen heißt das auch: Es wird geprüft, dass die offene und die
   geschlossene Beschriftung im Stylesheet vorhanden sind, nicht, dass ein bestimmter
   Browser den Marker des Elements wegräumt.
+- **Kein Mailclient, der auf einen Link klickt.** Die Prüfungen der neunten Reihe lesen
+  die Bytes der fertigen MIME-Nachricht: Sie finden den `<a href>` mit der richtigen
+  Adresse und dem Wortlaut als Textinhalt, und sie rechnen die `href`-Attribute von der
+  Seite ab, um zu behaupten, dass keine Adresse sichtbar stehenbleibt. Damit ist
+  **behauptet**, nicht **gesehen**, dass die Anzeige stimmt. Outlook, der Mail-Client von
+  Apple und die von Googlemail entfernen oder ersetzen unter Umständen einzelne
+  `style`-Angaben, und ein Anker, dem der Client die Farbe und die Unterstreichung
+  nimmt, ist immer noch ein Anker — aber das steht hier nicht gemessen. Die
+  Handprüfung mit SureMails zeigt die Nachricht so, wie der Client sie anzeigt, und
+  dort ist der Link anzuklicken; sie ist der einzige Weg, der diese Lücke schließt.

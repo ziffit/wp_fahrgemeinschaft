@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Arbeitsdienste
  * Description:       Arbeitsdienste eines Vereins planen, Mitglieder eintragen und öffentlich anbieten, mit Anmeldung zum Dienst und zu den Fahrgemeinschaften je Dienst.
- * Version:           1.10.0
+ * Version:           1.13.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            Verein
@@ -23,8 +23,15 @@ defined( 'ABSPATH' ) || exit;
  * Sie wächst auch dann, wenn sich nur Text ändert, zum Beispiel an Formular,
  * Mails oder Datenschutzerklärung: sie kennzeichnet die ausgelieferte Fassung,
  * und wer ein Archiv entpackt, soll an der Zahl erkennen, was darin ist.
+ *
+ * Sie steht zweimal in dieser Datei, einmal als "Version:" im Kopf über dem
+ * Plugin-Namen und einmal hier. WordPress zeigt im Pluginverzeichnis die Zahl
+ * aus dem Kopf an und prüft_updates() vergleicht sie, während der Browser die
+ * Zahl von hier bekommt. Ein Kopf, der drei Fassungen zurückliegt, meldet dem
+ * Verein eine neue Version, die es nicht gibt, und liefert beim Update die alte
+ * Optik zur neuen. Beide Zahlen werden deshalb zusammen gesetzt.
  */
-define( 'FG_VERSION', '1.12.0' );
+define( 'FG_VERSION', '1.13.0' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
 /**
  * Name of the element that carries a message after a form was sent.

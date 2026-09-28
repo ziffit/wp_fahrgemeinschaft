@@ -124,11 +124,12 @@ final class FG_Mail_Templates {
 	 * @param object $phpmailer PHPMailer instance, passed by the phpmailer_init action.
 	 * @param string $subject   Message subject.
 	 * @param string $text      Message text as plain text.
+	 * @param array<string, array{url: string, label: string}> $links The links of the message.
 	 * @return void
 	 */
-	public static function apply_alternative( $phpmailer, $subject, $text ) {
-		$phpmailer->AltBody = static::plain_text( (string) $text );
-		$phpmailer->Body    = static::render( $subject, $text );
+	public static function apply_alternative( $phpmailer, $subject, $text, $links = array() ) {
+		$phpmailer->AltBody = static::plain_text( (string) $text, (array) $links );
+		$phpmailer->Body    = static::render( $subject, $text, null, (array) $links );
 	}
 
 	/**
@@ -143,10 +144,41 @@ final class FG_Mail_Templates {
 	 * The footer is taken from the same place the layout takes it, so there is
 	 * one place where a club's contact data stands and not two.
 	 *
-	 * @param string $text Message text as plain text.
+	 * The text that goes to wp_mail() is this part without the footer. That is
+	 * what every filter on wp_mail() sees — a plugin that logs the message, a
+	 * plugin that puts its own footer on — and a message that arrives there with
+	 * a placeholder in it is a message that is half written. Both parts are
+	 * therefore written from the same text, and each one finishes it for itself.
+	 *
+	 * @param string $text  Message text as plain text.
+	 * @param array<string, array{url: string, label: string}> $links The links of the message.
 	 * @return string
 	 */
-	public static function plain_text( $text ) {
+	public static function text_part( $text, $links = array() ) {
+		$ersetzungen = array();
+		$text        = static::mark_links( (string) $text, (array) $links, $ersetzungen, 'text' );
+
+		return $ersetzungen ? strtr( $text, $ersetzungen ) : $text;
+	}
+
+	/**
+	 * The message as the text part goes out.
+	 *
+	 * A client that shows the text part instead of the layout would otherwise
+	 * show a message without sender, without contact data and without a legal
+	 * notice, and a forwarded message stays plain text for a long time. The
+	 * footer therefore belongs in both alternatives, the logo does not: a text
+	 * part has no images, and the From: header already names the site.
+	 *
+	 * The footer is taken from the same place the layout takes it, so there is
+	 * one place where a club's contact data stands and not two.
+	 *
+	 * @param string $text  Message text as plain text.
+	 * @param array<string, array{url: string, label: string}> $links The links of the message.
+	 * @return string
+	 */
+	public static function plain_text( $text, $links = array() ) {
+		$text   = static::text_part( (string) $text, (array) $links );
 		$footer = static::get_settings()['footer'];
 
 		if ( '' === $footer ) {
@@ -164,9 +196,10 @@ final class FG_Mail_Templates {
 	 * @param string|null $logo_src Image address for the logo row, or null to
 	 *                              embed the configured logo as `cid:logo`.
 	 *                              An empty string omits the row.
+	 * @param array<string, array{url: string, label: string}> $links The links of the message.
 	 * @return string
 	 */
-	public static function render( $subject, $text, $logo_src = null ) {
+	public static function render( $subject, $text, $logo_src = null, $links = array() ) {
 		$subject = sanitize_text_field( (string) $subject );
 
 		if ( null === $logo_src ) {
@@ -177,7 +210,7 @@ final class FG_Mail_Templates {
 			'{{SUBJECT}}'  => esc_html( $subject ),
 			'{{HEADLINE}}' => esc_html( $subject ),
 			'{{LOGO}}'     => static::logo_block( (string) $logo_src ),
-			'{{CONTENT}}'  => static::paragraphs( (string) $text ),
+			'{{CONTENT}}'  => static::paragraphs( (string) $text, (array) $links ),
 			'{{FOOTER}}'   => static::footer_block(),
 		);
 
@@ -194,10 +227,20 @@ final class FG_Mail_Templates {
 	 * paragraph becomes a line break in the HTML. Every value is escaped: the
 	 * text carries the alias and the origin area a visitor typed in.
 	 *
-	 * @param string $text Message text as plain text.
+	 * The links of a message are put in after the escaping, never through it. A
+	 * placeholder for a link is therefore taken out of the text first and put
+	 * back as a mark made of characters that esc_html() leaves alone. Escaping
+	 * then does its work on everything a club or a visitor typed, and the mark
+	 * is still there to be exchanged for the link.
+	 *
+	 * @param string $text  Message text as plain text.
+	 * @param array<string, array{url: string, label: string}> $links The links of the message.
 	 * @return string
 	 */
-	private static function paragraphs( $text ) {
+	private static function paragraphs( $text, array $links = array() ) {
+		$anker = array();
+		$text  = static::mark_links( (string) $text, $links, $anker, 'html' );
+
 		$html = '';
 
 		foreach ( preg_split( '/\n\s*\n/', trim( $text ) ) as $block ) {
@@ -217,7 +260,112 @@ final class FG_Mail_Templates {
 				. "</p>\n";
 		}
 
-		return $html;
+		// strtr() replaces the longest keys first and does not look at the text
+		// it inserted, so a link that happens to contain a mark stays untouched.
+		return $anker ? strtr( $html, $anker ) : $html;
+	}
+
+	/**
+	 * Take the link placeholders out of a text and put their links in their place.
+	 *
+	 * A link placeholder is either the bare name or the name with a colon and
+	 * the wording of the link behind it. The wording belongs to the club, and it
+	 * is the one string of a message that ends up inside the html, so it is
+	 * escaped here like every other value. A stored text that names a link
+	 * without a wording gets the default of that message, and a link that is
+	 * listed but carries no address at all is written as its wording alone — an
+	 * anchor with an empty target would be a link to nowhere.
+	 *
+	 * @param string $text          Message text as plain text.
+	 * @param array<string, array{url: string, label: string}> $links The links of the message.
+	 * @param array<string, string> $out   Replacements by mark, filled in here.
+	 * @param string $format         Either "html" or "text".
+	 * @return string
+	 */
+	private static function mark_links( $text, array $links, array &$out, $format ) {
+		if ( ! $links ) {
+			return $text;
+		}
+
+		$namen = array();
+
+		foreach ( array_keys( $links ) as $name ) {
+			$namen[] = preg_quote( $name, '/' );
+		}
+
+		$ersetzt = static function ( $treffer ) use ( $links, &$out, $format ) {
+			$name    = $treffer[1];
+			$wortlaut = isset( $treffer[2] ) ? trim( $treffer[2] ) : '';
+			$link    = $links[ $name ];
+
+			if ( '' === $wortlaut ) {
+				$wortlaut = (string) $link['label'];
+			}
+
+			$url = (string) $link['url'];
+
+			if ( '' === $url ) {
+				return $wortlaut;
+			}
+
+			$ersetzung = 'text' === $format ? static::link_as_text( $url, $wortlaut ) : static::anchor( $url, $wortlaut );
+
+			if ( 'text' === $format ) {
+				return $ersetzung;
+			}
+
+			// Two characters that no html entity needs and that a line of a text
+			// does not carry, so the mark survives the escaping untouched.
+			$mark = "\x01" . count( $out ) . "\x02";
+			$out[ $mark ] = $ersetzung;
+
+			return $mark;
+		};
+
+		return preg_replace_callback(
+			'/\{\{(' . implode( '|', $namen ) . ')(?::([^{}]*))?\}\}/',
+			$ersetzt,
+			$text
+		);
+	}
+
+	/**
+	 * A link for the html part.
+	 *
+	 * The address goes through esc_url() and the wording through esc_html(), so
+	 * a stored text cannot bring markup into the message. The wording is what a
+	 * reader clicks; a link that shows an address of ninety-five characters
+	 * pushes every line after it out of the column and is unreadable on a phone.
+	 *
+	 * @param string $url     Address.
+	 * @param string $wortlaut Wording of the link.
+	 * @return string
+	 */
+	private static function anchor( $url, $wortlaut ) {
+		$url = esc_url( (string) $url );
+
+		if ( '' === $url ) {
+			return '';
+		}
+
+		$wortlaut = trim( (string) $wortlaut );
+
+		return '<a href="' . $url . '" style="color: #1a82e2; text-decoration: underline">'
+			. esc_html( '' === $wortlaut ? $url : $wortlaut )
+			. '</a>';
+	}
+
+	/**
+	 * A link for the text part.
+	 *
+	 * @param string $url     Address.
+	 * @param string $wortlaut Wording of the link.
+	 * @return string
+	 */
+	private static function link_as_text( $url, $wortlaut ) {
+		$wortlaut = trim( (string) $wortlaut );
+
+		return '' === $wortlaut ? (string) $url : $wortlaut . ': ' . $url;
 	}
 
 	/**

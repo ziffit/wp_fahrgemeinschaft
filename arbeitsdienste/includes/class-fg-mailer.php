@@ -71,7 +71,7 @@ final class FG_Mailer {
 			return false;
 		}
 
-		return $this->send( $to, $mail['subject'], $mail['body'] );
+		return $this->send( $to, $mail['subject'], $mail['body'], null, $mail['links'] );
 	}
 
 	/**
@@ -109,7 +109,7 @@ final class FG_Mailer {
 			return false;
 		}
 
-		return $this->send( $to, $mail['subject'], $mail['body'] );
+		return $this->send( $to, $mail['subject'], $mail['body'], null, $mail['links'] );
 	}
 
 	/**
@@ -170,7 +170,8 @@ final class FG_Mailer {
 				$creator_email,
 				$creator['subject'],
 				$creator['body'],
-				array( 'Reply-To: ' . $requester_email )
+				array( 'Reply-To: ' . $requester_email ),
+				$creator['links']
 			);
 		}
 
@@ -179,7 +180,9 @@ final class FG_Mailer {
 			$requester_sent = $this->send(
 				$requester_email,
 				$requester['subject'],
-				$requester['body']
+				$requester['body'],
+				null,
+				$requester['links']
 			);
 		}
 
@@ -251,7 +254,7 @@ final class FG_Mailer {
 			return false;
 		}
 
-		return $this->send( $to, $mail['subject'], $mail['body'] );
+		return $this->send( $to, $mail['subject'], $mail['body'], null, $mail['links'] );
 	}
 
 	/**
@@ -302,9 +305,10 @@ final class FG_Mailer {
 	 * @param string       $subject Subject.
 	 * @param string       $body Body as plain text.
 	 * @param string[]|null $headers Optional headers.
+	 * @param array<string, array{url: string, label: string}> $links The links of the message.
 	 * @return bool
 	 */
-	private function send( $to, $subject, $body, $headers = null ) {
+	private function send( $to, $subject, $body, $headers = null, $links = array() ) {
 		$from_email = get_option( 'admin_email' );
 		if ( ! is_string( $from_email ) || ! is_email( $from_email ) ) {
 			$host       = wp_parse_url( home_url( '/' ), PHP_URL_HOST );
@@ -323,8 +327,17 @@ final class FG_Mailer {
 		// wp_mail() cannot express the plain-text alternative of a message, so
 		// the text is handed over as the message and the layout is added while
 		// PHPMailer is being set up. See FG_Mail_Templates::apply_alternative().
-		$alternative = static function ( &$phpmailer ) use ( $subject, $body ) {
-			FG_Mail_Templates::apply_alternative( $phpmailer, $subject, $body );
+		//
+		// What goes into wp_mail() is the finished text part and not the text
+		// with the link placeholders in it. Every filter on wp_mail() reads that
+		// string — this plugin's own recorder, a mail log, the plugin that puts
+		// its own footer underneath — and a placeholder in it is a message that
+		// has not been written yet. The text with the placeholders in it is what
+		// the html part is written from, because that is where they become links.
+		$message = FG_Mail_Templates::text_part( $body, $links );
+
+		$alternative = static function ( &$phpmailer ) use ( $subject, $body, $links ) {
+			FG_Mail_Templates::apply_alternative( $phpmailer, $subject, $body, $links );
 		};
 
 		add_filter( 'wp_mail_from', $from_filter );
@@ -332,7 +345,7 @@ final class FG_Mailer {
 		add_action( 'phpmailer_init', $alternative );
 
 		try {
-			$sent = wp_mail( $to, $subject, $body, $headers, array(), FG_Mail_Templates::get_logo_embed() );
+			$sent = wp_mail( $to, $subject, $message, $headers, array(), FG_Mail_Templates::get_logo_embed() );
 		} finally {
 			remove_filter( 'wp_mail_from', $from_filter );
 			remove_filter( 'wp_mail_from_name', $name_filter );

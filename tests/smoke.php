@@ -601,6 +601,19 @@ fg_ok( FG_Schema::tables_exist(), 'all four tables exist' );
 // never been equal since the plugin left 1.0.0, so the check could only ever
 // have passed by accident.
 fg_ok( FG_Schema::VERSION === (string) get_option( FG_Schema::OPTION ), 'the stored schema version is the one the code carries', (string) get_option( FG_Schema::OPTION ) );
+// The version stands twice in the plugin file, and WordPress reads both. The
+// "Version:" line is what the plugin list shows and what an update check
+// compares; FG_VERSION is what goes into the address of the stylesheet, so the
+// browser can tell the files apart. A header that is three releases behind
+// therefore tells the club a new version exists that does not, and hands the
+// old optik to the new text on the next update. Read the file instead of
+// guessing: get_plugin_data() would read the same header and take the first
+// match, which is the line this check is about.
+$kopfzeile = (string) file_get_contents( WP_PLUGIN_DIR . '/my-plugin/arbeitsdienste.php' );
+preg_match( '/^[ \t\/*#@]*Version:(.*)$/mi', $kopfzeile, $treffer );
+$im_kopf = isset( $treffer[1] ) ? trim( $treffer[1] ) : '';
+fg_ok( '' !== $im_kopf, 'the plugin file names a version in its header', $im_kopf );
+fg_ok( FG_VERSION === $im_kopf, 'the version in the header is the one the code carries', 'Kopf: ' . $im_kopf . ', Code: ' . FG_VERSION );
 fg_ok( ! post_type_exists( 'fg_arbeitsdienst' ) && ! post_type_exists( 'fg_fahrgemeinschaft' ), 'no custom post types' );
 fg_ok( ! defined( 'FG_EVENT_POST_TYPE' ) && ! defined( 'FG_RIDE_POST_TYPE' ), 'no post type constants' );
 $granted_before = array();

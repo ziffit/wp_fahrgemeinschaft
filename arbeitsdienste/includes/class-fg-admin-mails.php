@@ -368,7 +368,8 @@ final class FG_Admin_Mails {
 			? (string) wp_get_attachment_image_url( $settings['logo_attachment_id'], 'full' )
 			: '';
 
-		$text = FG_Mail_Templates::plain_text( $mail['body'] );
+		$links = isset( $mail['links'] ) ? (array) $mail['links'] : array();
+		$text  = FG_Mail_Templates::plain_text( $mail['body'], $links );
 
 		if ( ! headers_sent() ) {
 			header( 'Content-Type: text/html; charset=' . get_bloginfo( 'charset' ) );
@@ -404,7 +405,7 @@ final class FG_Admin_Mails {
 				<?php
 				// The same render path a real message takes, with the stored logo
 				// linked by its address because a browser cannot resolve a cid:.
-				echo FG_Mail_Templates::render( $mail['subject'], $mail['body'], $logo_url ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Layout with escaped values, see FG_Mail_Templates::render().
+				echo FG_Mail_Templates::render( $mail['subject'], $mail['body'], $logo_url, $links ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Layout with escaped values, see FG_Mail_Templates::render().
 				?>
 			</div>
 
