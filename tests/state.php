@@ -19,6 +19,52 @@ $repo = new FG_Repository();
  * @param mixed $value Value to print.
  * @return void
  */
+/**
+ * The greeting of a message.
+ *
+ * Since version 1.21.0 what reaches the recorder is the layout, not the plain
+ * text, and in the layout the greeting is not the first line of the file: the
+ * first line is `<!DOCTYPE html>`, and a member reads the subject in the
+ * heading of the letterhead before the greeting. What the checks want is the
+ * greeting, and the layout marks the block it is written in — `<!-- start copy -->`
+ * to `<!-- end copy -->`. That block is taken, the tags come off, the entities
+ * are read back, and the first line that carries something is the answer.
+ *
+ * A body that is plain text is read as it stands, because that is still what the
+ * transport gets on a path where the layout is not built.
+ *
+ * Without the marks there is no way to tell the message from the letterhead,
+ * and the subject would be read as the greeting. That is a wrong answer and not
+ * a missing one, so it is said out loud instead of being returned as text.
+ *
+ * @param string $body Recorded message body.
+ * @return string
+ */
+function fg_state_greeting( $body ) {
+	$text = (string) $body;
+
+	if ( false !== stripos( $text, '<html' ) || false !== stripos( $text, '<!doctype' ) ) {
+		$anfang = stripos( $text, '<!-- start copy -->' );
+		$ende   = stripos( $text, '<!-- end copy -->' );
+
+		if ( false === $anfang || false === $ende || $ende < $anfang ) {
+			return 'KEIN-TEXTBLOCK';
+		}
+
+		$text = html_entity_decode( wp_strip_all_tags( substr( $text, $anfang, $ende - $anfang ) ), ENT_QUOTES, 'UTF-8' );
+	}
+
+	foreach ( preg_split( '/\r\n|\r|\n/', $text ) as $zeile ) {
+		$zeile = trim( preg_replace( '/\s+/', ' ', $zeile ) );
+
+		if ( '' !== $zeile ) {
+			return $zeile;
+		}
+	}
+
+	return '';
+}
+
 function fg_state_out( $value ) {
 	if ( is_bool( $value ) ) {
 		$value = $value ? '1' : '0';
@@ -508,6 +554,59 @@ switch ( $command ) {
 		fg_state_out( $an ? 'on, wp_mail wird in die Tabelle geschrieben' : 'off, wp_mail erreicht SureMail' );
 		break;
 
+	// mail-recorded-greeting
+	//
+	// The greeting of the message that was recorded last. http.sh asks the same
+	// thing admin.sh asks for, and it gets it from the same helper: a second
+	// implementation of "the first line of the message" in a suite is a second
+	// rule, and the two drift apart without anybody noticing.
+	case 'mail-recorded-greeting':
+		global $wpdb;
+
+		$zeile = (string) $wpdb->get_var( 'SELECT mail_body FROM ' . $wpdb->prefix . 'fg_test_mail_log ORDER BY id DESC LIMIT 1' );
+
+		fg_state_out( '' === $zeile ? 'KEINE-MAIL' : fg_state_greeting( $zeile ) );
+		break;
+
+	// mail-handler <art> [<name>]
+	//
+	// What FG_Mail_Templates::foreign_mail_handler() answers when a mail handler
+	// is registered. The three shapes a handler can have are all here, because
+	// only one of them is a plain function name and the other two are where a
+	// reader of the name would be lost.
+	//
+	// The filter is registered in this process and nowhere else. The admin screen
+	// that shows the notice is a different request and has to find the handler
+	// there itself; what this measures is the decision, not the page.
+	case 'mail-handler':
+		switch ( isset( $args[0] ) ? (string) $args[0] : '' ) {
+			case 'funktion':
+				add_filter( 'pre_wp_mail', isset( $args[1] ) && '' !== $args[1] ? (string) $args[1] : 'fg_test_mail_anderer' );
+				break;
+
+			case 'closure':
+				add_filter( 'pre_wp_mail', function () {} );
+				break;
+
+			case 'closure-klasse':
+				// A closure in the scope of a class, which is how a plugin usually
+				// writes it. The class of the plugin is used as the scope, because
+				// a class that only exists for this test would have to be defined
+				// first, and the shape is the same either way.
+				add_filter( 'pre_wp_mail', Closure::bind( function () {}, null, 'FG_Mail_Templates' ) );
+				break;
+
+			case 'objekt':
+				add_filter( 'pre_wp_mail', array( new class() { public function handle() {} }, 'handle' ) );
+				break;
+
+			case 'nichts':
+				break;
+		}
+
+		fg_state_out( FG_Mail_Templates::foreign_mail_handler() );
+		break;
+
 	// --- the wording of the five messages
 	//
 	// These read and write the mail texts from the shell. The admin screen is
@@ -667,16 +766,12 @@ switch ( $command ) {
 
 		$zeilen = $wpdb->get_col( $wpdb->prepare( "SELECT mail_body FROM $log WHERE id > %d ORDER BY id ASC", $vorher_id ) );
 
-		$erste_zeile = static function ( $text ) {
-			$zeilen = explode( "\n", (string) $text );
-
-			return isset( $zeilen[0] ) ? $zeilen[0] : '';
-		};
+		$anrede = 'fg_state_greeting';
 
 		// Two messages, creator first: send_contact_notifications() writes the
 		// creator's before the interested person's.
-		$an_kontrakt = $erste_zeile( isset( $zeilen[0] ) ? $zeilen[0] : '' );
-		$an_fragend  = $erste_zeile( isset( $zeilen[1] ) ? $zeilen[1] : '' );
+		$an_kontrakt = $anrede( isset( $zeilen[0] ) ? $zeilen[0] : '' );
+		$an_fragend  = $anrede( isset( $zeilen[1] ) ? $zeilen[1] : '' );
 
 		$wpdb->query(
 			$wpdb->prepare(
@@ -762,7 +857,7 @@ switch ( $command ) {
 			$zeile = "KEINE-MAIL: die Anmeldung ging nicht raus";
 		}
 
-		$rest = explode( "\n", $zeile );
+		$greeting = fg_state_greeting( $zeile );
 
 		// Everything this command built is removed again, including the log row,
 		// so the count other sections read is the count they left behind.
@@ -778,7 +873,7 @@ switch ( $command ) {
 			delete_option( 'fg_test_mail_enabled' );
 		}
 
-		fg_state_out( isset( $rest[0] ) ? $rest[0] : '' );
+		fg_state_out( $greeting );
 		break;
 
 	case 'tables':

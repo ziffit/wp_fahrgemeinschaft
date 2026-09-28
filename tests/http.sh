@@ -1407,13 +1407,30 @@ has "the body says that the deletion has to be confirmed" "$MAIL_BODY" "auf der 
 # go out at all; the greeting is the one place the club reads a name of a member
 # as a whole, and the rest of the text still carries the first name alone.
 has "the body greets the member with both names" "$MAIL_BODY" "Hallo Cem Cemu,"
-struct "$MAIL_BODY" "and the surname stands only in the greeting" "
+# Two claims, because they are two things: the surname may not stand a second
+# time anywhere in the mail, and the text block may not open with anything else.
+# One check said both, and when it went red it did not say which of the two it was.
+struct "$MAIL_BODY" "and the surname stands once in the mail" "
 import sys
-b = sys.stdin.read()
-sys.exit(0 if b.count('Cemu') == 1 and b.lstrip().startswith('Hallo Cem Cemu,') else 1)
-" "the surname stands a second time in the mail, or the greeting is not its first line"
+sys.exit(0 if sys.stdin.read().count('Cemu') == 1 else 1)
+" "the surname stands a second time in the mail"
+# The greeting is read with the helper that admin.sh uses as well, and not with a
+# second rule written here. In the layout the first line of the file is
+# "<!DOCTYPE html>" and the subject stands in the heading of the letterhead, so a
+# check that reads the first line of the file reads something that is not the
+# greeting, and would have gone red for a mail that greets its member correctly.
+recorded_greeting=$(s mail-recorded-greeting)
+if [ "$recorded_greeting" = "Hallo Cem Cemu," ]; then
+	ok "and the text block opens with the greeting ($recorded_greeting)"
+else
+	bad "and the text block opens with the greeting" "$recorded_greeting"
+fi
 hasnt "and no record number of the member" "$MAIL_BODY" "member_id"
-ABMELDE_URL=$(printf '%s' "$MAIL_BODY" | grep -o "$BASE/?fg_duty_action=view[^ ]*" | head -1)
+# The link stands in the html as an attribute of an anchor, so the search ends at
+# the closing quote, and an ampersand in an address is `&#038;` there. The
+# entity is turned back into the character afterwards, so that the address which
+# is fetched below is the one a member would click.
+ABMELDE_URL=$(printf '%s' "$MAIL_BODY" | grep -o "$BASE/?fg_duty_action=view[^\"]*" | head -1 | sed 's/&#038;/\&/g')
 if [ -n "$ABMELDE_URL" ]; then ok "the link out of the mail is extracted"; else bad "the link out of the mail is extracted" "none in the body"; fi
 # The reference out of that link, read once and used for every further request.
 # It is a 32 character name of one registration and not a number of a table: it

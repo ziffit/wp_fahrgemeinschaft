@@ -52,6 +52,24 @@ final class FG_Admin_Mails {
 		<div class="wrap">
 			<h1><?php esc_html_e( 'E-Mails', 'arbeitsdienste' ); ?></h1>
 
+			<?php // The same note as on the settings screen, and on the screen that
+			// holds the previews: this is where a club looks at what it sends, and a
+			// mail plugin in charge is not something a preview can show. ?>
+			<?php $handler = FG_Mail_Templates::foreign_mail_handler(); ?>
+			<?php if ( '' !== $handler ) : ?>
+				<div class="notice notice-warning">
+					<p>
+						<?php
+						printf(
+							/* translators: %s: name of the class that takes wp_mail() over. */
+							esc_html__( 'Eine Mail-Erweiterung (%s) verschickt die Nachrichten dieser Website selbst. Das Layout kommt trotzdem an, aber der Textteil als zweite Fassung der Mail geht dabei verloren.', 'arbeitsdienste' ),
+							esc_html( $handler )
+						);
+						?>
+					</p>
+				</div>
+			<?php endif; ?>
+
 			<?php $this->render_hold_back(); ?>
 
 			<p><?php esc_html_e( 'Diese fünf E-Mails verschickt das Plugin. Betreff und Text sind änderbar; die Platzhalter stehen für die Angaben, die das Plugin zum Zeitpunkt des Versands einsetzt. Die Vorschau zeigt eine E-Mail mit erfundenen Namen — die Namen des letzten Empfängers stehen bewusst nirgends auf dieser Seite.', 'arbeitsdienste' ); ?></p>

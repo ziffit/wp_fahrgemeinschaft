@@ -55,6 +55,26 @@ final class FG_Admin_Settings {
 
 			<p><?php esc_html_e( 'Diese Angaben stehen in allen E-Mails, die das Plugin verschickt. Das Layout selbst ist nicht einstellbar; es wird im Plugin mitgeliefert und hier nur mit Logo und Fußzeile versehen.', 'arbeitsdienste' ); ?></p>
 
+			<?php // A mail plugin that takes the message over drops the plain-text
+			// alternative this plugin hands to wp_mail(), and its own wording is added
+			// to the layout. Neither is visible in a received mail, so the screen says
+			// it here: this is the one thing about the way the mails leave the site that
+			// the club cannot see by looking at one. ?>
+			<?php $handler = FG_Mail_Templates::foreign_mail_handler(); ?>
+			<?php if ( '' !== $handler ) : ?>
+				<div class="notice notice-warning">
+					<p>
+						<?php
+						printf(
+							/* translators: %s: name of the class that takes wp_mail() over. */
+							esc_html__( 'Eine Mail-Erweiterung (%s) verschickt die Nachrichten dieser Website selbst. Das Layout kommt trotzdem an, aber der Textteil als zweite Fassung der Mail geht dabei verloren, und ein Text, den die Erweiterung selbst ergänzt, landet im Layout statt im Textteil.', 'arbeitsdienste' ),
+							esc_html( $handler )
+						);
+						?>
+					</p>
+				</div>
+			<?php endif; ?>
+
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="fg_save_settings">
 				<?php wp_nonce_field( 'fg_save_settings', 'fg_settings_nonce' ); ?>

@@ -257,10 +257,21 @@ final class FG_Mailer {
 	/**
 	 * Send a message with a controlled sender.
 	 *
-	 * The message goes out as multipart/alternative: the text as plain text in
-	 * the first part, the layout of this plugin as HTML in the second. The
-	 * configured logo is embedded, so no address of the recipient is passed to
-	 * another host.
+	 * What goes into wp_mail() is the **HTML** of this plugin's layout, not the
+	 * plain text, and that is the whole difference to the version before 1.21.0.
+	 * Until then the plain text was handed over and the layout was attached to
+	 * the phpmailer_init action — an event that only WordPress' own PHPMailer
+	 * fires. A mail plugin that takes the message over, and there is one on
+	 * almost every club site, never fires it, and the members got a message with
+	 * no layout, no logo and no links while the preview in the admin showed all
+	 * three. The layout is therefore the message now, and every path delivers it.
+	 *
+	 * The plain text stays as the alternative: the phpmailer_init action still
+	 * sets AltBody, and PHPMailer writes an alternative part before the body, so
+	 * the order "text first, HTML second" is unchanged on that path. On a path
+	 * that is not PHPMailer the alternative is dropped by whoever built the
+	 * message, and the HTML alone goes out — including the footer, which the
+	 * layout carries as well.
 	 *
 	 * @param string       $to Recipient.
 	 * @param string       $subject Subject.
@@ -285,28 +296,30 @@ final class FG_Mailer {
 			return $from_name;
 		};
 
-		// wp_mail() cannot express the plain-text alternative of a message, so
-		// the text is handed over as the message and the layout is added while
-		// PHPMailer is being set up. See FG_Mail_Templates::apply_alternative().
-		//
-		// What goes into wp_mail() is the finished text part and not the text
-		// with the link placeholders in it. Every filter on wp_mail() reads that
-		// string — this plugin's own recorder, a mail log, the plugin that puts
-		// its own footer underneath — and a placeholder in it is a message that
-		// has not been written yet. The text with the placeholders in it is what
-		// the html part is written from, because that is where they become links.
-		$message = FG_Mail_Templates::text_part( $body, $links );
+		// The layout is written here and not while PHPMailer is being set up. That
+		// is the whole fix of version 1.21.0: a mail plugin takes the message
+		// over, and everything this plugin did behind phpmailer_init went with it.
+		// The link placeholders are in the text while it is written, and they
+		// become anchors in the HTML, so the HTML is finished before it is handed
+		// over. Every filter on wp_mail() reads this string — a recorder, a mail
+		// log, a plugin that appends its own footer — and a placeholder in it would
+		// be a message that has not been written yet.
+		$message = FG_Mail_Templates::render( $subject, $body, null, $links );
 
-		$alternative = static function ( &$phpmailer ) use ( $subject, $body, $links ) {
-			FG_Mail_Templates::apply_alternative( $phpmailer, $subject, $body, $links );
+		// The plain text is the alternative and nothing else: the HTML is the
+		// message now, and setting Body here would write the same part twice.
+		$alternative = static function ( &$phpmailer ) use ( $body, $links ) {
+			FG_Mail_Templates::apply_alternative( $phpmailer, $body, $links );
 		};
+
+		$headers[] = 'Content-Type: text/html; charset=' . get_bloginfo( 'charset' );
 
 		add_filter( 'wp_mail_from', $from_filter );
 		add_filter( 'wp_mail_from_name', $name_filter );
 		add_action( 'phpmailer_init', $alternative );
 
 		try {
-			$sent = wp_mail( $to, $subject, $message, $headers, array(), FG_Mail_Templates::get_logo_embed() );
+			$sent = wp_mail( $to, $subject, $message, $headers );
 		} finally {
 			remove_filter( 'wp_mail_from', $from_filter );
 			remove_filter( 'wp_mail_from_name', $name_filter );

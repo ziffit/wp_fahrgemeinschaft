@@ -4,18 +4,21 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **öffentliches HTTP 224, Mail-Ebene 116, Admin-Ebene 574,
-0 Fehler**, gegen den Stand **Plugin 1.20.0, Schema 1.6.0**, dazu **drei von vier
-Gegenproben mit dem gestellten Fehlerbild rot**. Die Mail-Ebene 116 ist die Summe aus 57 Prüfungen im
-Shell-Satz `mail.sh` und 59 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
-gibt 116 aus.
+Letzter Lauf: 28.09.2026 — **öffentliches HTTP 225, Mail-Ebene 124, Admin-Ebene 574,
+0 Fehler**, gegen den Stand **Plugin 1.21.0, Schema 1.6.0**, dazu **vier von vier
+Gegenproben mit dem gestellten Fehlerbild rot**. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
+Shell-Satz `mail.sh` und 58 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
+gibt 124 aus. Die HTTP-Zahl ist um eine Prüfung höher als bei 1.20.0, und die Mail-Ebene um
+acht: sechs davon sind der neue Abschnitt `[5b]` (die sechs Formen eines Mail-Händlers), zwei
+sind die ersetzten Behauptungen über Inhaltstyp und Rumpf, und der Rest verteilt sich auf die
+Prüfungen, die an die HTML-Form der Nachricht angepasst wurden.
 
 **Die CLI-Suite ist bei diesem Lauf nicht gefahren worden.** Sie stand zuletzt mit **CLI 533**
 gegen den Stand **Plugin 1.16.0** (Commit `9883f85`) und ist damit die einzige der vier
 Zahlen, die nicht zu diesem Stand gehört; sie zu wiederholen wäre ein Lauf, der am Anfang
 alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht, und dafür lag an diesem
-Nachmittag keine Zustimmung vor. Das ist bei der Fassung 1.20.0 mehr als eine Lücke in der
-Tabelle: **Diese Fassung ändert einen Datenbankschlüssel**, und die Prüfung, die ihn
+Nachmittag keine Zustimmung vor. Das ist inzwischen über zwei Fassungen mehr als eine Lücke in der
+Tabelle: **Die Fassung 1.20.0 ändert einen Datenbankschlüssel**, und die Prüfung, die ihn
 ansieht, liegt in der CLI-Suite. Sie ist geschrieben, aber **nicht gelaufen** — siehe den
 Abschnitt zu 1.20.0. Wer nachrechnen will, findet die Zahl also nicht zu 1.17.0,
 sondern zu 1.16.0 — und diese Lücke ist eine bewusste und keine vergessene. Die drei
@@ -1421,12 +1424,20 @@ grün, sie ist es immer noch, und nur die Meldung neben ihr hat es aufgedeckt.
 | --- | --- | --- |
 | `read_text()` wieder auf `str_replace( "\r", "\n", … )` | Speichern ändert den Text nicht | 2 Prüfungen: `saving the form again does not change the description` und `description stored with its line break` |
 
-**Eine Beobachtung ohne Erklärung.** In diesem einen Lauf meldeten zusätzlich drei Prüfungen
-aus den Abschnitten `[13b]` und der Anmeldung **KEINE-MAIL** — also: Es kam keine Nachricht
-an, die gelesen werden konnte. Derselbe Bruchpunkt, von Hand gebaut und `admin.sh` gefahren,
-gab zwei rote Zeilen und keine davon; drei weitere Läufe mit dem reparierten Code gaben
-564/0, einer davon mit `< /dev/null` an der Suite, weil das der Verdacht war. Der Auslöser ist
-nicht gefunden. Was die Prüfungen gemeinsam haben: Sie bauen ihre Mitglieder vorher selbst
+**Eine Beobachtung, inzwischen erklärt.** In diesem einen Lauf meldeten zusätzlich drei
+Prüfungen aus den Abschnitten `[13b]` und der Anmeldung **KEINE-MAIL** — also: Es kam keine
+Nachricht an, die gelesen werden konnte. Derselbe Bruchpunkt, von Hand gebaut und `admin.sh`
+gefahren, gab zwei rote Zeilen und keine davon; drei weitere Läufe mit dem reparierten Code gaben
+564/0, einer davon mit `< /dev/null` an der Suite, weil das der Verdacht war.
+
+**Die Erklärung kam mit Fassung 1.21.0 und steht dort im Abschnitt über das Werkzeug der
+Gegenproben:** `admin.sh` schaltet den Mail-Recorder nicht selbst ein, und `gegenprobe.sh`
+ließ ihn aus. Im normalen Lauf war er an (von Hand), im Gegenprobelauf aus — daher dieselben
+Prüfungen mit `KEINE-MAIL` nur dort. Was hier als „nicht gefunden" stand, war ein Fehler im
+Werkzeug und nicht in der Suite. Die Lehre ist die alte: Ein Symptom, das nur im Werkzeug
+auftritt und nie im normalen Lauf, ist kein Befund über den geprüften Code, sondern einer über
+das Werkzeug — und es gehört die **vollständige** Ausgabe eines solchen Laufs gesichert, nicht
+nur die Zeilen mit `FAIL`, weil die Antwort im verworfenen Teil stand. Was die Prüfungen gemeinsam haben: Sie bauen ihre Mitglieder vorher selbst
 (`neu 7201 …`) und schicken eine echte Anfrage an einen echten Dienst; wenn das Anlegen des
 Mitglieds scheitert, entfällt die Nachricht und der Befehl meldet `KEINE-MAIL`. Für den nächsten
 Fall dieser Art ist der vollständige Lauf zu sichern, nicht nur die Zeilen mit `FAIL` — das
@@ -1516,22 +1527,162 @@ Strukturprüfung für das Stylesheet ist keine Formalie, sondern fängt genau da
 PHP-Prüfung fände; und ein Diff, den man nicht erklären kann, wird zurückgesetzt und
 protokolliert, nicht mitgenommen.
 
+## Fassung 1.21.0: die Mail trägt ihr Layout in die Nachricht hinein
+
+Der Befund aus dem Verein: Die vier Nachrichten des Plugins kommen ohne Logo, ohne
+Hintergrund und ohne Links an, obwohl die Vorschau auf der Seite **Einstellungen** alles
+zeigt. Im Quelltext der empfangenen Mail stand `Content-Type: text/plain`.
+
+### Der gemessene Weg
+
+`FG_Mailer::send()` gab bis hier den **reinen Text** an `wp_mail()` und hängte das Layout an
+die Aktion `phpmailer_init`. Die Aktion feuert nur der eigene Mailversand von WordPress
+selbst. Eine Mail-Erweiterung, die `wp_mail()` übernimmt, baut die Nachricht selbst und feuert
+sie nie — und auf der Testinstanz ist eine aktiv (SureMails).
+
+Gemessen wurde an derselben Naht, an der eine Erweiterung die Nachricht übernimmt: über
+`pre_wp_mail`, also über den Filter, an dem auch der Recorder der Testumgebung hängt.
+
+| | bis 1.20.0 | ab 1.21.0 |
+| --- | --- | --- |
+| Nachricht | 364 Bytes Text | 8415 Bytes, beginnt mit `<!DOCTYPE html>` |
+| Header | nur `Reply-To:` | zusätzlich `Content-Type: text/html; charset=UTF-8` |
+| Layout, Fußzeile | fehlen | vorhanden |
+| Logo | `cid:logo` ohne Bilddatei im Umschlag | `<img src="https://…/wp-content/uploads/…">` |
+| Links | keiner | `<a … href="…fg_ride_action=view&#038;ride_ref=…">` |
+
+### Warum keine Prüfung es gesehen hat
+
+Zwei Lücken nebeneinander, und jede allein hätte gereicht.
+
+**Der MIME-Satz baute die Nachricht von Hand.** `fg_mime_build()` setzte den Text als Rumpf
+und rief dann `apply_alternative()` auf einem frischen PHPMailer auf — es maß also, was
+`FG_Mail_Templates` bauen **kann**, und nicht, was `FG_Mailer` übergibt. Dass beides zwei
+verschiedene Wege sind, stand in keiner Prüfung und in keinem Kommentar.
+
+**Der Recorder sah nur den Text.** Er hängt an `pre_wp_mail` und damit genau dort, wo eine
+Mail-Erweiterung die Nachricht übernimmt — er *ist* eine. Er schrieb den Rumpf in die
+Tabelle `wp_fg_test_mail_log`, und die Prüfungen suchten darin nach Wörtern aus dem Text
+(`has "the body names the duty" …`). Eine Nachricht ohne Layout enthält diese Wörter
+weiterhin; sie enthält nur nicht die zweite Hälfte des Auftrags. Die Tabelle hat eine Spalte
+`mail_content_type`, und keine einzige Prüfung hat sie angesehen.
+
+### Was dazugekommen ist
+
+- **`wp_mail()` bekommt das HTML.** `FG_Mailer::send()` übergibt `FG_Mail_Templates::render()`
+  und den Header `Content-Type: text/html; charset=…`. Der reine Text bleibt drin, aber nur
+  als `AltBody` über `phpmailer_init`. Dort schreibt PHPMailer den Textteil vor den HTML-Teil;
+  die Reihenfolge „Text zuerst, HTML als zweite Alternative" ist unverändert, und auf einem
+  Weg, der nicht PHPMailer ist, entfällt die Alternative — die Fußzeile steht auch im Layout.
+- **Das Logo steht als Adresse des eigenen Servers im Layout.** `get_logo_embed()` und die
+  Konstante `LOGO_CID` sind weg, der `cid:`-Sonderfall in `logo_block()` mit ihnen, und das
+  sechste Argument von `wp_mail()`. Die Adresse kommt aus `wp_get_attachment_image_url( $id,
+  'full' )` — dieselbe, die auch die Vorschau auf **Einstellungen** und die auf **E-Mails**
+  benutzt. Damit fällt die Voraussetzung **WordPress 6.9** weg, denn `$embeds` gab es erst
+  dort.
+- **Ein Hinweis, wenn eine fremde Erweiterung `wp_mail()` übernimmt.**
+  `FG_Mail_Templates::foreign_mail_handler()` nennt sie auf den Seiten **Einstellungen** und
+  **E-Mails**. Der Layout-Verlust ist damit behoben; der Hinweis betrifft noch die verlorene
+  Textfassung.
+- **Was der Hinweis nicht sieht, steht im Code und nicht nur in diesem Abschnitt:** eine
+  Erweiterung, die den Filter `pre_wp_mail` nur **anwendet**, statt sich an ihn zu hängen.
+  SureMails in der Testumgebung tut genau das und wird deshalb nicht erkannt. Eine Registrierung,
+  die es nicht gibt, kann man nicht anzeigen.
+
+### Der Preis, offen benannt
+
+Ein Client, der fremde Bilder sperrt, zeigt kein Logo mehr; und das Öffnen der Mail löst einen
+Abruf auf dem **eigenen** Webserver aus, und der Verein sieht, dass eines seiner Postfächer eine
+Datei von ihm geladen hat. Die Adresse des Empfängers geht dabei nirgends hin. Der Grund für
+den Wechsel ist der Befund oben: Fehlendes Layout, fehlendes Logo und fehlende Links zusammen
+sind schlimmer als ein fehlendes Bild, denn eine Mail ohne Layout ist keine Mail dieses
+Vereins, und ein gesperrtes Bild ist immer noch eine lesbare Mail.
+
+### Die ersetzten Prüfungen
+
+| Vorher | Jetzt |
+| --- | --- |
+| `mail.sh`: *plugin forces no content type* (`text/plain`) | *the message is declared as html* |
+| `mail.sh`: *headers carry no content type* | *and the header says so too* |
+| `mail.sh`: *plain text alternative has no html* | *the body is the layout of the plugin* + *and it carries the layout's own background* + *and the logo by its address* + *on the club's own site* |
+| `mail.sh`: *plain text alternative has no html links* | *the link is a link in the html* + *and it uses the https site* |
+| `mail.sh`: *requester mail has no link* / *has no html* | *requester mail is the layout as well* |
+| `mail-mime.php`: *the logo is embedded under the id logo*, *the logo is sent inline*, *the logo is sent as base64*, *the html part refers to the embedded logo* | *the html part refers to the logo by its address*, *and that address is a file of this installation*, *the logo is not embedded any more*, *and no third host is loaded for it* |
+| `mail-mime.php`: `fg_mime_build()` baut den Rumpf von Hand | `fg_mime_build()` holt den Rumpf aus `FG_Mail_Templates::render()`, wie `send()` es tut |
+| `http.sh`: *and the surname stands only in the greeting* (eine Prüfung, zwei Behauptungen) | *and the surname stands once in the mail* + *and the text block opens with the greeting* |
+| `state.php`: erste Zeile des Rumpfes, an drei Stellen neu geschrieben | `fg_state_greeting()` liest den markierten Textblock, einmal geschrieben |
+| — | **neu:** `mail.sh` Abschnitt `[5b]`: sechs Prüfungen zu `foreign_mail_handler()` |
+
+Drei weitere Prüfungen in `http.sh` und `admin.sh` sind nicht ersetzt, sondern **an die
+HTML-Form angepasst**: Sie zogen den Löschen- und den Abmeldelink aus dem Rumpf (`&` steht im
+Attribut als `&#038;`, der Suchausdruck endet jetzt am schließenden Anführungszeichen) und sie
+lasen die Anrede als erste Zeile der Datei. Beides ist an der **richtigen** Stelle behoben —
+in einer Lesehilfe, die `mail-anrede`, `mail-greeting` und `mail-recorded-greeting` gemeinsam
+benutzen, statt an drei Stellen einzeln.
+
+### Die Gegenproben
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| `send()` übergibt wieder `text_part( … )` | Der Rumpf ist das Layout, der Löschlink funktioniert | 14 Prüfungen, darunter alle sieben neuen des Layouts, der Löschlink, die Löschseite und die Aufräumprüfung |
+| Der `Content-Type`-Header in `send()` entfernt | Die Nachricht ist als HTML angesagt | 2 Prüfungen (`text/plain` fällt dann auf den Vorgabe-Wert von PHPMailer zurück) |
+| Die Auslassung des Recorders in `foreign_mail_handler()` auf `if ( false )` gesetzt | Der Recorder der Testumgebung wird nicht als Mail-Erweiterung gemeldet | 6 Prüfungen im Abschnitt `[5b]` |
+| `fg_state_greeting()` liest die ganze Datei statt des markierten Textblocks | Die Anrede steht am Anfang des Textblocks | 3 Prüfungen in `admin.sh` (statt der Anrede kam der Betreff) und 1 in `http.sh` |
+
+### Drei Fehler, die erst beim Messen auffielen
+
+1. **`apply_alternative( $phpmailer, '', $body, $links )`.** Der erste Entwurf wollte den
+   Betreff nicht doppelt rendern und übergab deshalb eine leere Zeichenkette. Diese Methode
+   schrieb aber bis hier **beides** — `AltBody` und `Body` — und hätte die fertige Nachricht
+   mit einem Betreff ohne Wort überschrieben. Seitdem setzt sie nur noch die Alternative.
+2. **`WP_Hook::callbacks` ist zweistufig.** Die erste Fassung von `foreign_mail_handler()` las
+   eine Ebene und bekam aus dem Array `null`, was sie als „unbekannt" meldete — während der
+   Name eine Ebene tiefer dasteht. Dazu zwei kleinere: `getClosureCalledClass()` gibt ein
+   `ReflectionClass` zurück (nicht die Klasse), und die Bedingung für den anonymen Klassennamen
+   war verkehrt herum, sodass sie `class@anonymous` samt Datei und Zeilennummer ausgab.
+3. **Vier falsche Nadeln in den eigenen Messskripten.** Gesucht wurde nach `<a href`, im Layout
+   steht `<a style="…" href="…">`; nach dem grünen Hintergrund, den das Layout **nicht** hat
+   (darin stehen nur `#f1f1f1`, `#ffffff`, `#111111`, `#666666` und `#1a82e2`); nach einem
+   Header ohne JSON-Escaping (`text\/html` steht in der Tabelle); und der Listenschreiber der
+   Gegenproben vergaß einmal die `@N@`-Ersetzung, sodass die Bruchstelle mit echten
+   Zeilenumbrüchen in der Liste stand. Keiner dieser vier Fehler hat das Ergebnis verfälscht —
+   sie hätten es als Grün aussehen lassen.
+
+### Ein Werkzeugdefekt, der zwei Gegenproben wertlos machte
+
+`gegenprobe.sh` spielt `tests/` **nicht** in den Container, obwohl die Suiten `state.php` von
+dort aufrufen. Eine Bruchstelle in `tests/` erreicht die Suite damit nicht: Der Lauf sieht den
+unveränderten Zustand, bleibt grün, und das Werkzeug meldet das wie einen Erfolg. Zwei
+Gegenproben dieser Fassung sind so gelaufen und haben nichts gezeigt. Das Werkzeug meldet eine
+grüne Suite jetzt ausdrücklich als „die Bruchstelle hat nichts bewegt" und liefert `tests/`
+mit aus.
+
+Dasselbe Werkzeug ließ außerdem den Mail-Recorder aus, während `admin.sh` ihn nicht selbst
+einschaltet. Damit meldete jede Admin-Gegenprobe bei den Anmeldeprüfungen `KEINE-MAIL` statt
+des gesuchten Fehlers — **das ist die Erklärung der offenen Beobachtung aus Fassung 1.19.0**,
+die dort als „der Auslöser ist nicht gefunden" stand: Dieselben Prüfungen, immer `KEINE-MAIL`,
+nur im Gegenprobelauf und nie im normalen Lauf. Zwei der vier Gegenproben dieser Fassung sind
+erst mit der Reparatur des Werkzeugs rot geworden, vorher waren sie grün.
+
 ## Mail-Auswertung
 
 `tests/mail-log.php` wird als `wp-content/mu-plugins/fg-mail-log.php` eingespielt. Es
 hängt an `pre_wp_mail`, schreibt Empfänger, Betreff, Header, den effektiven Inhaltstyp,
-den Text und den Rückgabewert in die Tabelle `wp_fg_test_mail_log` und meldet eine
+den Rumpf und den Rückgabewert in die Tabelle `wp_fg_test_mail_log` und meldet eine
 Zustellung als erfolgreich zurück. Damit ist belegt, dass das Plugin `wp_mail()` mit den
 richtigen Werten aufruft, ohne dass ein SMTP-Server nötig ist.
 
 Weil der Recorder `wp_mail()` an dieser Stelle abbricht, sieht er nur das, was das Plugin
-als Argument übergibt — und das ist der Text. `wp_mail()` hat kein Argument für die zweite
-Alternative einer `multipart/alternative`-Nachricht; die HTML-Fassung setzt das Plugin über
-die Aktion `phpmailer_init` in `Body` und `AltBody`. Der Recorder kann diese Eigenschaften
-nicht mehr sehen, deshalb prüft `tests/mail-mime.php` die fertige Nachricht getrennt: Es baut
-sie in der Reihenfolge von `wp_mail()` nach, ruft `preSend()` auf und untersucht die Bytes,
-die hinausgehen würden. Geprüft werden der Inhaltstyp, die Reihenfolge beider Teile, das
-Escaping eines Besuchereingabewerts, die Fußzeile und das eingebettete Logo. Die Fußzeile
+als Argument übergibt — und das ist seit 1.21.0 das **Layout**. Genau hier war der Grund,
+weshalb der Fehler so lange unbemerkt blieb: Der Recorder ist selbst eine Mail-Erweiterung,
+seine Sicht ist die Sicht einer solchen Erweiterung, und er sieht seit dieser Fassung genau
+das, was auch sie sieht. `wp_mail()` hat weiterhin kein Argument für eine zweite Fassung der
+Nachricht; der reine Text kommt über die Aktion `phpmailer_init` in `AltBody`, und diese
+Eigenschaft kann der Recorder nicht mehr sehen. Deshalb prüft `tests/mail-mime.php` die
+fertige Nachricht getrennt: Es baut sie in der Reihenfolge von `wp_mail()` nach, ruft
+`preSend()` auf und untersucht die Bytes, die hinausgehen würden. Geprüft werden der
+Inhaltstyp, die Reihenfolge beider Teile, das Escaping eines Besuchereingabewerts, die
+Fußzeile und die Adresse des Logos. Die Fußzeile
 hat einen eigenen Abschnitt `[4]`: das eine Feld mit seiner Leerzeile zwischen den Abschnitten,
 die drei Felder der Fassung davor, die beim Lesen zu einem Block verbunden werden, und die
 Sache, dass ein gespeichertes Feld nicht zu einem liegengebliebenen der alten drei addiert
@@ -1612,9 +1763,17 @@ Der Zustand ist die Voraussetzung für:
    keine Löschung; gelöscht wird erst nach dem zweiten Klick.
 
 Der Recorder ist eine Einrichtung der Testumgebung. Am Plugin ist für SureMails nichts zu
-tun: `class-fg-mailer.php` ruft ausschließlich `wp_mail()` auf und setzt davor nur
-`wp_mail_from`, `wp_mail_from_name` und `wp_mail_content_type` per Filter, die es danach
-wieder entfernt.
+tun: `class-fg-mailer.php` ruft ausschließlich `wp_mail()` auf. Davor hängt es die Filter
+`wp_mail_from` und `wp_mail_from_name` ein und danach die Aktion `phpmailer_init`, die den
+reinen Text als zweite Fassung setzt; alle drei werden nach dem Aufruf wieder entfernt. Der
+Inhaltstyp steht als **Header** an der Nachricht (`Content-Type: text/html`) und nicht als
+Filter — der Filter `wp_mail_content_type`, den dieser Absatz hier früher nannte, ist nie im
+Plugin gewesen; `git log -S` findet keine Zeile dazu, und der Satz stand hier falsch.
+
+Der Hinweis, den die Seiten **Einstellungen** und **E-Mails** für eine fremde Erweiterung
+anzeigen, erscheint in dieser Umgebung **nicht**: SureMails wendet `pre_wp_mail` an, hängt sich
+aber nicht daran, und nur eine Registrierung lässt sich anzeigen. Für die Sichtprüfung heißt
+das: Der Hinweis ist hier nicht zu sehen, und das ist richtig.
 
 ## Was die Umgebung nicht prüft
 

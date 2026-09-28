@@ -56,20 +56,26 @@ function fg_mime_build( $subject, $text, $links = array() ) {
 
 	$mailer = new PHPMailer\PHPMailer\PHPMailer( true );
 
-	// The order of wp_mail(): the message becomes the body, then the
-	// phpmailer_init action runs and the plugin adds the HTML part.
-	$mailer->ContentType = 'text/plain';
+	// The order of wp_mail() since version 1.21.0: the message that goes in is
+	// the **layout**, written by FG_Mailer itself, and the phpmailer_init action
+	// only adds the plain text as the alternative. The header below is the one
+	// FG_Mailer::send() sets, and it is why the content type of the message is
+	// text/html and not text/plain.
+	//
+	// The body used to be handed in from the outside and the layout was added
+	// here by hand. That measured the inside of a function and not the way a
+	// message leaves the plugin, and it is why a mail plugin could swallow the
+	// whole layout for years without a single check turning red: this script
+	// asked FG_Mail_Templates what it could build, never FG_Mailer what it
+	// hands over.
+	$mailer->ContentType = 'text/html';
 	$mailer->CharSet     = 'UTF-8';
 	$mailer->Subject     = $subject;
-	$mailer->Body        = $text;
+	$mailer->Body        = FG_Mail_Templates::render( $subject, $text, null, $links );
 	$mailer->setFrom( 'admin@angeln.example.org', 'Test' );
 	$mailer->addAddress( 'anton@angeln.example.org' );
 
-	FG_Mail_Templates::apply_alternative( $mailer, $subject, $text, $links );
-
-	foreach ( FG_Mail_Templates::get_logo_embed() as $cid => $path ) {
-		$mailer->addEmbeddedImage( $path, $cid, basename( $path ), 'base64', 'image/png' );
-	}
+	FG_Mail_Templates::apply_alternative( $mailer, $text, $links );
 
 	$mailer->preSend();
 
@@ -194,6 +200,12 @@ fg_mime_check( 'the text part is announced as UTF-8 when it carries an umlaut', 
 fg_mime_check( 'the footer in the text part is not the html of the layout', false === strpos( $textteil, '<p' ) && false === strpos( $textteil, '<br' ) );
 fg_mime_check( 'no image is referenced', false === strpos( $mime, '<img' ) );
 fg_mime_check( 'no address of another host is loaded', ! preg_match( '/<(img|table|div|td)[^>]+(src|background)="https?:/i', $mime ) );
+// The body of a message without a logo still has to be the layout. Until
+// version 1.21.0 the body of the message was the plain text and the layout only
+// appeared in the part that PHPMailer built; a check that asked the MIME string
+// for a tag could therefore be answered by either part, and the html part was
+// the only one that ever had it.
+fg_mime_check( 'the message body is the layout, not the plain text', false !== strpos( $htmlteil, '<!DOCTYPE html>' ) && false !== strpos( $htmlteil, 'bgcolor="#f1f1f1"' ) );
 
 // --- with a logo
 $logo_id = fg_mime_logo();
@@ -203,17 +215,21 @@ $mime = fg_mime_build( $subject, $text );
 echo "[2] message with a logo\n";
 fg_mime_check( 'content type is multipart/alternative', (bool) preg_match( '/^Content-Type: multipart\/alternative/m', $mime ) );
 fg_mime_check( 'the plain text part comes first', strpos( $mime, 'Content-Type: text/plain' ) < strpos( $mime, 'Content-Type: text/html' ) );
-fg_mime_check( 'the logo is embedded under the id logo', false !== strpos( $mime, 'Content-ID: <logo>' ) );
-fg_mime_check( 'the logo is sent inline', (bool) preg_match( '/Content-Type: image\/png.*Content-ID: <logo>.*Content-Disposition: inline/s', $mime ) );
-fg_mime_check( 'the logo is sent as base64', false !== strpos( $mime, 'Content-Transfer-Encoding: base64' ) );
-fg_mime_check( 'the html part refers to the embedded logo', false !== strpos( $mime, 'src="cid:logo"' ) );
-fg_mime_check( 'the logo is not loaded from a foreign address', ! preg_match( '/<img[^>]+src="https?:/i', $mime ) );
-fg_mime_check( 'the embed is a file of this installation', 1 === count( FG_Mail_Templates::get_logo_embed() ) );
+// The logo is an address of the club's own site and no longer a file inside the
+// message. That is the change of version 1.21.0, and it is why the assertions
+// about Content-ID, Content-Disposition: inline and the base64 transfer of the
+// image are gone: an embed only ever worked where WordPress' own PHPMailer
+// built the message, and a mail plugin that takes the message over never
+// fires the action the embed was attached to.
+fg_mime_check( 'the html part refers to the logo by its address', (bool) preg_match( '/<img[^>]+src="https?:\/\/' . preg_quote( wp_parse_url( home_url( '/' ), PHP_URL_HOST ), '/' ) . '/', $mime ) );
+fg_mime_check( 'and that address is a file of this installation', false !== strpos( FG_Mail_Templates::get_logo_url(), wp_parse_url( home_url( '/' ), PHP_URL_HOST ) ) );
+fg_mime_check( 'the logo is not embedded any more', false === strpos( $mime, 'Content-ID: <logo>' ) && false === strpos( $mime, 'src="cid:logo"' ) );
+fg_mime_check( 'and no third host is loaded for it', ! preg_match( '/<img[^>]+src="https?:\/\/(?!' . preg_quote( wp_parse_url( home_url( '/' ), PHP_URL_HOST ), '/' ) . ')/i', $mime ) );
 
 // --- a logo that is not an image is refused
 update_option( FG_SETTINGS_OPTION, array_merge( $footer, array( 'logo_attachment_id' => 1 ) ), false );
 echo "[3] a wrong logo\n";
-fg_mime_check( 'an attachment that is not an image is not embedded', array() === FG_Mail_Templates::get_logo_embed() );
+fg_mime_check( 'an attachment that is not an image is no logo', '' === FG_Mail_Templates::get_logo_url() );
 $mime = fg_mime_build( $subject, $text );
 fg_mime_check( 'the message still goes out without a logo', false === strpos( $mime, 'cid:logo' ) );
 

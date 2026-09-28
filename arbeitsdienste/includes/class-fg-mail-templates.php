@@ -22,15 +22,6 @@ defined( 'ABSPATH' ) || exit;
  */
 final class FG_Mail_Templates {
 	/**
-	 * Content-ID of the embedded logo.
-	 *
-	 * The layout refers to the logo as `cid:logo`. WordPress uses the key of
-	 * the embeds array as Content-ID, so the key and this constant have to
-	 * match.
-	 */
-	const LOGO_CID = 'logo';
-
-	/**
 	 * Read the stored settings and fill in defaults for what is not set yet.
 	 *
 	 * The footer is one field. Up to version 1.9.0 it was three — sender, contact
@@ -85,51 +76,164 @@ final class FG_Mail_Templates {
 	}
 
 	/**
-	 * Resolve the configured logo to a file that can be embedded.
+	 * Is something else sending the messages of this site?
 	 *
-	 * An embed has to be a file on this server, which is why the logo is
-	 * picked from the media library instead of being given as a URL. The
-	 * address of the recipient is never leaked to another host, and a client
-	 * that blocks remote images still shows the logo.
+	 * A mail plugin takes the message over at `pre_wp_mail` and builds it
+	 * itself. That is the normal case on a club site, and it is where this
+	 * plugin lost its whole layout until version 1.21.0: the layout was attached
+	 * to the `phpmailer_init` action, and a plugin that builds the message on
+	 * its own never fires it.
 	 *
-	 * @return array<string,string> Map of Content-ID to file path, empty when
-	 *                             no usable logo is configured.
+	 * The club should be able to see that something else is in charge, because
+	 * two things follow from it and neither is visible in a received mail: the
+	 * plain-text alternative this plugin hands over is dropped, and any other
+	 * wording the club's mail plugin adds is added to the layout instead of to
+	 * the text part.
+	 *
+	 * **What this cannot see, and it is worth knowing before it is trusted:** an
+	 * extension that only *applies* `pre_wp_mail` without ever adding to it. There
+	 * is one in the test environment, and it is the shape that lost the layout in
+	 * the first place. The layout arrives there since 1.21.0, and what is lost
+	 * there is the text part alone — but the screen stays quiet, because a
+	 * registration that is not there cannot be reported.
+	 *
+	 * The recorder of the test environment hangs there too, and the recorder is
+	 * not a mail plugin a club has; a screen that names it as one would be
+	 * crying wolf in the test environment. The check is therefore for a handler
+	 * that is registered under its own name, and that is the only thing a
+	 * foreign handler can be asked for without calling it.
+	 *
+	 * @return string Name of the registered handler, or an empty string.
 	 */
-	public static function get_logo_embed() {
+	public static function foreign_mail_handler() {
+		global $wp_filter;
+
+		if ( ! isset( $wp_filter['pre_wp_mail'] ) ) {
+			return '';
+		}
+
+		// Two levels, not one: WP_Hook::callbacks is a list of priorities, and each
+		// of them holds the registered callbacks. Reading one level gives the list
+		// itself, and 'function' out of that is nothing — which is how the first
+		// version of this method reported "unbekannt" for a handler whose name was
+		// sitting right there in the next level.
+		foreach ( $wp_filter['pre_wp_mail']->callbacks as $callbacks ) {
+			foreach ( (array) $callbacks as $registriert ) {
+				$funktion = isset( $registriert['function'] ) ? $registriert['function'] : null;
+
+				// The recorder of the test environment is the one handler that is
+				// not a mail plugin, and it is named exactly. A prefix would also
+				// silence a real plugin whose name happens to start the same way,
+				// and a diagnostic that can be silenced by a name is not one.
+				if ( 'fg_test_mail_filter' === $funktion ) {
+					continue;
+				}
+
+				return static::mail_handler_name( $funktion );
+			}
+		}
+
+		return '';
+	}
+
+	/**
+	 * A readable name for whatever is registered as a mail handler.
+	 *
+	 * Three shapes are in use and all three appear in the wild: a plain function
+	 * name, an array of object or class and method, and a closure. A closure is
+	 * the one that needs help, because get_class() would answer "Closure" and name
+	 * nobody; the class it was created in is the useful part, and if there is none
+	 * then it belongs to no class and the answer says so rather than guessing.
+	 *
+	 * @param mixed $funktion Registered callback.
+	 * @return string
+	 */
+	private static function mail_handler_name( $funktion ) {
+		if ( is_string( $funktion ) ) {
+			return $funktion;
+		}
+
+		if ( $funktion instanceof Closure ) {
+			// getClosureCalledClass() hands back a ReflectionClass, not the class
+			// itself, so the name has to be asked for instead of read off.
+			$scope = ( new ReflectionFunction( $funktion ) )->getClosureCalledClass();
+
+			return $scope ? $scope->getName() . ' (anonyme Funktion)' : 'eine anonyme Funktion';
+		}
+
+		if ( is_array( $funktion ) && isset( $funktion[0], $funktion[1] ) ) {
+			$traeger = is_object( $funktion[0] ) ? static::mail_handler_name( $funktion[0] ) : (string) $funktion[0];
+
+			return $traeger . '::' . $funktion[1];
+		}
+
+		if ( is_object( $funktion ) ) {
+			$name = get_class( $funktion );
+
+			// An anonymous class answers with its name, the file and the line it
+			// was written on: "class@anonymous" plus a NUL byte plus
+			// "/path/file.php:539$0". That is no name a club can do anything with,
+			// and a plugin that registers a handler that way has not named itself
+			// either. The test is on the prefix and not the other way round: a
+			// condition that returns the raw name when the prefix is there would
+			// print the file and the line, which is what it did.
+			return 0 === strpos( $name, 'class@anonymous' ) ? 'eine anonyme Klasse' : $name;
+		}
+
+		return 'ein Händler ohne Namen';
+	}
+
+	/**
+	 * The address of the configured logo, or an empty string.
+	 *
+	 * The address is on the club's own site, so nothing about the recipient
+	 * reaches a third host. Until version 1.21.0 the logo was attached to the
+	 * message as a file and referred to as `cid:logo`; that only ever worked
+	 * where WordPress' own PHPMailer built the message. A mail plugin that takes
+	 * the message over never fires the action the embed was attached to, and the
+	 * mails went out with the layout missing altogether — which is worse than a
+	 * client that blocks images, because a blocked image is still a readable
+	 * mail.
+	 *
+	 * What the address costs is stated where it is decided: the client's address
+	 * is not disclosed, but the club's own web server sees that one of its own
+	 * mailboxes has loaded a file. It sees that already when a member opens any
+	 * page of the site.
+	 *
+	 * @return string Address, or an empty string when no usable logo is set.
+	 */
+	public static function get_logo_url() {
 		$settings = static::get_settings();
 		$id       = $settings['logo_attachment_id'];
 
 		if ( ! $id || ! wp_attachment_is_image( $id ) ) {
-			return array();
+			return '';
 		}
 
-		$path = get_attached_file( $id );
-
-		if ( ! is_string( $path ) || '' === $path || ! is_readable( $path ) ) {
-			return array();
-		}
-
-		return array( self::LOGO_CID => $path );
+		return (string) wp_get_attachment_image_url( $id, 'full' );
 	}
 
 	/**
-	 * Put the plain text and the HTML layout into a prepared message.
+	 * Put the plain text of a message into a prepared one as the alternative.
 	 *
-	 * wp_mail() has no parameter for the plain-text alternative, so the plain
-	 * text is handed over as the message and moved into the AltBody property
-	 * here. PHPMailer then writes the AltBody as the first `text/plain` part
-	 * and the body as the `text/html` part, and switches the content type to
-	 * `multipart/alternative` on its own.
+	 * wp_mail() has no parameter for a plain-text alternative, so it is put into
+	 * the AltBody property of the prepared message. PHPMailer then writes the
+	 * AltBody as the first `text/plain` part, the body as the `text/html` part,
+	 * and switches the content type to `multipart/alternative` on its own.
+	 *
+	 * Only the alternative is set, and that is what changed in version 1.21.0:
+	 * Until then this method also wrote the body, because the body was not
+	 * known to wp_mail() yet — the plain text was the message. The body is the
+	 * layout now and comes in through wp_mail() itself, and a method that also
+	 * wrote it would put a second, differently rendered one underneath.
 	 *
 	 * @param object $phpmailer PHPMailer instance, passed by the phpmailer_init action.
-	 * @param string $subject   Message subject.
 	 * @param string $text      Message text as plain text.
 	 * @param array<string, array{url: string, label: string}> $links The links of the message.
 	 * @return void
 	 */
-	public static function apply_alternative( $phpmailer, $subject, $text, $links = array() ) {
+	public static function apply_alternative( $phpmailer, $text, $links = array() ) {
 		$phpmailer->AltBody = static::plain_text( (string) $text, (array) $links );
-		$phpmailer->Body    = static::render( $subject, $text, null, (array) $links );
 	}
 
 	/**
@@ -144,11 +248,13 @@ final class FG_Mail_Templates {
 	 * The footer is taken from the same place the layout takes it, so there is
 	 * one place where a club's contact data stands and not two.
 	 *
-	 * The text that goes to wp_mail() is this part without the footer. That is
-	 * what every filter on wp_mail() sees — a plugin that logs the message, a
-	 * plugin that puts its own footer on — and a message that arrives there with
-	 * a placeholder in it is a message that is half written. Both parts are
-	 * therefore written from the same text, and each one finishes it for itself.
+	 * The link placeholders are still in the text when it comes here, and they
+	 * are finished here: the text part gets the address as a bare line, the
+	 * layout gets an anchor. Since version 1.21.0 neither of the two parts is
+	 * what goes into wp_mail() — the layout is — and what every filter on
+	 * wp_mail() sees is the finished HTML. A message that arrives at such a
+	 * filter with a placeholder in it is a message that is half written, so
+	 * both parts are written from the same text and each finishes it for itself.
 	 *
 	 * @param string $text  Message text as plain text.
 	 * @param array<string, array{url: string, label: string}> $links The links of the message.
@@ -194,8 +300,8 @@ final class FG_Mail_Templates {
 	 * @param string      $subject  Message subject.
 	 * @param string      $text     Message text as plain text.
 	 * @param string|null $logo_src Image address for the logo row, or null to
-	 *                              embed the configured logo as `cid:logo`.
-	 *                              An empty string omits the row.
+	 *                              use the configured logo. An empty string
+	 *                              omits the row.
 	 * @param array<string, array{url: string, label: string}> $links The links of the message.
 	 * @return string
 	 */
@@ -203,7 +309,7 @@ final class FG_Mail_Templates {
 		$subject = sanitize_text_field( (string) $subject );
 
 		if ( null === $logo_src ) {
-			$logo_src = static::get_logo_embed() ? 'cid:' . self::LOGO_CID : '';
+			$logo_src = static::get_logo_url();
 		}
 
 		$replacements = array(
