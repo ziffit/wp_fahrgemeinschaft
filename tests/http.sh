@@ -646,6 +646,25 @@ has "and says that a mail follows, and where to look for it" "$body" "Du bekomms
 has "the consent names the member list as the source of the name" "$body" "Dazu gehören mein Vorname aus der Mitgliederverwaltung"
 has "the consent keeps the address out of the public" "$body" "Meine E-Mail-Adresse und meine Mitgliedsnummer werden dabei nicht öffentlich angezeigt"
 hasnt "the ambiguous wording in the consent is gone" "$body" "persönlichen Kontaktdaten"
+# The box stands above the two fields of the member, not below them. Its own last
+# sentence is about the number and the address, and a reader who meets that
+# sentence before the two fields knows what the form does with them. The order is
+# read and compared and not merely looked for, because a check that found the
+# three parts anywhere in the form would be green with the box back under them.
+struct "$body" "the consent stands above the two member fields" "
+import re, sys
+h = sys.stdin.read()
+m = re.search(r'name=\"action\" value=\"fg_submit_ride\"', h)
+form = h[h.rfind('<form', 0, m.start()):h.find('</form>', m.start())] if m else ''
+def stelle(muster):
+    mm = re.search(muster, form)
+    return mm.start() if mm else -1
+bereich = stelle(r'name=\"fg_origin\"')
+box = stelle(r'<input id=\"fg-consent\"')
+nummer = stelle(r'name=\"fg_member_no\"')
+adresse = stelle(r'name=\"fg_member_email\"')
+sys.exit(0 if -1 not in (bereich, box, nummer, adresse) and bereich < box < nummer < adresse else 1)
+" "the consent is not above the two member fields, or one of the three is missing from the offer form"
 has "the area field carries its examples" "$body" "Abfahrtsort, Stadtteil, z. B. Langwasser, Nürnberg Nord, S-Bahnstation Ostring."
 hasnt "no address field of the form invites more than the column holds" "$body" 'maxlength="254"'
 has "the address of the form stops at the width of the column" "$body" 'name="fg_member_email" maxlength="190"'

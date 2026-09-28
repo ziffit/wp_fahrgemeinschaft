@@ -4,8 +4,8 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **öffentliches HTTP 223, Mail-Ebene 116, Admin-Ebene 561,
-0 Fehler**, gegen den Stand **Plugin 1.17.0, Schema 1.5.0**, dazu **vier Gegenproben, alle
+Letzter Lauf: 28.09.2026 — **öffentliches HTTP 224, Mail-Ebene 116, Admin-Ebene 561,
+0 Fehler**, gegen den Stand **Plugin 1.18.0, Schema 1.5.0**, dazu **fünf Gegenproben, alle
 mit dem gestellten Fehlerbild rot**. Die Mail-Ebene 116 ist die Summe aus 57 Prüfungen im
 Shell-Satz `mail.sh` und 59 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
 gibt 116 aus.
@@ -1274,7 +1274,7 @@ Kontaktformulars hat die Feldzeile verlassen. Der Satz über das Postfach steht 
 drei; am Arbeitsdienst fiel der Satz „Vorname und Nachname tragen wir für dich ein.“
 weg.
 
-Das ist die vierte Fassung an einem Tag, und damit ist die Regel „ein Lauf, ein Stand“
+Das ist die vierte Fassung an einem Tag (die fünfte ist 1.18.0), und damit ist die Regel „ein Lauf, ein Stand“
 wieder wichtig: `http.sh` prüft die Reihenfolge über das gerenderte Markup, nicht über
 den Quelltext, und die Reihenfolge zweier Elemente ist im Quelltext eine Frage der
 Einrückung.
@@ -1318,6 +1318,33 @@ das ist richtig so: Beide Bruchstellen haben den Hinweistext gleich mit verschob
 mitgelöscht, und die Prüfungen, die nur auf die **Wörter** des Hinweises sehen, haben
 das mitbekommen. Eine Bruchstelle, die genau eine Prüfung rot macht, ist der Fall, in dem
 man sich das Fehlerbild noch einmal ansieht.
+
+## Fassung 1.18.0: die Einwilligung über den beiden Feldern
+
+Der Auftrag war eine Zeile: die Checkbox der Einwilligung über die Eingabe der
+Mitgliedsnummer und der E-Mail-Adresse. Am Stylesheet ändert sich nichts, die Zelle ist
+dieselbe und wandert nur im Raster nach oben; `FG_VERSION` wächst trotzdem, weil die Zahl
+die ausgelieferte Fassung kennzeichnet.
+
+`http.sh` prüft die Reihenfolge über das gerenderte Markup und über **Positionen**:
+Abfahrtsbereich vor der Checkbox vor der Nummer vor der Adresse. Das ist die fünfte
+Prüfung, die in diesem Zustand nicht mit einem `has` auskommt, und der Grund ist immer
+derselbe: Eine Suche nach den drei Teilen wäre grün, sobald die Checkbox wieder unten
+steht, weil sie nicht weiß, in welcher Reihenfolge sie dastehen.
+
+### Eine Gegenprobe
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| die Checkbox wandert zurück ans Ende des Formulars | sie steht über den beiden Feldern | genau diese eine Prüfung, 223 von 224 bleiben grün |
+
+Dass hier **nur eine** Prüfung rot wurde, ist das bemerkenswerte an dieser Reihe und der
+Gegensatz zu den vier Gegenproben der Fassung 1.17.0: Dort hatte jede Bruchstelle den
+Hinweistext mit verschoben, und die Prüfungen, die nur auf die **Wörter** des Hinweises
+sehen, haben das mitbekommen. Hier gibt es keinen Text, der mitwandert — die Bruchstelle
+verschiebt drei Blöcke und sonst nichts. Eine Gegenprobe, die nur eine Prüfung rot macht,
+ist der Fall, in dem man sich das Fehlerbild noch einmal ansieht; sie ist der Beweis dafür,
+dass die übrigen 223 Prüfungen an dieser Stelle nichts zu tun haben.
 
 ## Mail-Auswertung
 

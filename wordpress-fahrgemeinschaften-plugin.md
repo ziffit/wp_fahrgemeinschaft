@@ -294,7 +294,7 @@ Die Umsetzung folgt dem Plan, ergänzt ihn aber an den folgenden Stellen. Die au
 
 ### Öffentliche Seite und Formulare
 
-- Das Formular enthält kein Freitextfeld für eine Beschreibung und keine Platzanzahl, sondern nur Art, Arbeitsdienst, Abfahrtsbereich, Mitgliedsnummer, E-Mail-Adresse und Einwilligung. ~~Vorname oder Spitzname~~ **Seit 1.14.0** nicht mehr abgefragt, der Vorname kommt aus dem Mitglied. Die Schaltfläche heißt seit `1.16.0` **Fahrgemeinschaft eintragen**; vorher stand dort „Eintragung vormerken“, was einen Schritt vor dem Eintrag versprach, den es seit `1.15.0` nicht gibt. Der Abfahrtsbereich liegt über die volle Breite, die beiden Felder des Paares teilen sich eine Zeile, und der Hinweis steht als eigener Absatz zwischen den Feldern und der Schaltfläche.
+- Das Formular enthält kein Freitextfeld für eine Beschreibung und keine Platzanzahl, sondern nur Art, Arbeitsdienst, Abfahrtsbereich, Mitgliedsnummer, E-Mail-Adresse und Einwilligung. ~~Vorname oder Spitzname~~ **Seit 1.14.0** nicht mehr abgefragt, der Vorname kommt aus dem Mitglied. Die Schaltfläche heißt seit `1.16.0` **Fahrgemeinschaft eintragen**; vorher stand dort „Eintragung vormerken“, was einen Schritt vor dem Eintrag versprach, den es seit `1.15.0` nicht gibt. Der Abfahrtsbereich liegt über die volle Breite, die beiden Felder des Paares teilen sich eine Zeile, und der Hinweis steht als eigener Absatz zwischen den Feldern und der Schaltfläche. **Seit 1.18.0** steht die Einwilligung über den beiden Feldern des Mitglieds und nicht mehr unter ihnen; vorher stand sie am Ende des Formulars.
 - Die Serverseite weist zusätzlich personenbezogene Angaben in den öffentlich sichtbaren Feldern ab: E-Mail-Adressen, Telefonnummern und „Straße + Hausnummer“. Solche Versuche landen in der neutralen Antwort `not_created` und im Zähler `publish_personal_data`.
 - Öffentliche Formulare nutzen WordPress-Nonces. Die langlebigen Token-Seiten nutzen stattdessen eine eigene Formularprüfung, die per HMAC mit `wp_salt()` aus Token und Aktion abgeleitet wird. Damit hängt die Prüfung am geheimen Token und nicht an einer Sitzung.
 
@@ -722,3 +722,37 @@ Bestätigung ist.** Sie sagt selbst „es ist nichts mehr zu bestätigen“, und
 genau diesen Satz im Mailtext. Die Entscheidung ist bewusst so gefallen: drei Formulare, drei
 Formulierungen wären drei Regeln mit zwei Ausnahmen, und ein Besucher, der den Satz in einem
 Formular liest, soll ihn in den beiden anderen wiedererkennen. Der Mailtext bleibt unangetastet.
+
+## Umsetzungsstand: Die Einwilligung über den beiden Feldern (1.18.0)
+
+Ergänzt um den Auftrag vom selben Tag, nach der Fassung 1.17.0: Die Checkbox der
+Einwilligung soll über der Eingabe der Mitgliedsnummer und der E-Mail-Adresse stehen.
+
+| Vorher (bis 1.17.0) | Jetzt (ab 1.18.0) |
+| --- | --- |
+| Ich …, Arbeitsdienst, Abfahrtsbereich, Nummer, E-Mail-Adresse, Einwilligung | Ich …, Arbeitsdienst, Abfahrtsbereich, **Einwilligung**, Nummer, E-Mail-Adresse |
+| die Einwilligung am Ende des Formulars | die Einwilligung über den beiden Feldern, über die ihr letzter Satz handelt |
+| Hinweis, dann Schaltfläche | unverändert |
+
+Der Wortlaut der Einwilligung ist **unverändert** geblieben, und das ist der Kern der
+Entscheidung: Ihr letzter Satz lautet „Meine E-Mail-Adresse und meine Mitgliedsnummer werden
+dabei nicht öffentlich angezeigt.“ Bis hierher stand dieser Satz über zwei Feldern, die noch
+kamen — der Leser musste sich merken, worüber er da liest. Jetzt steht er über ihnen. Das
+„oben gemachten Angaben“ im ersten Satz bleibt richtig, weil alles, was die Einwilligung
+aufzählt (Vorname aus der Mitgliederverwaltung, Art des Angebots, Abfahrtsbereich,
+Arbeitsdienst), weiterhin über ihr steht.
+
+Der Preis ist die Lesereihenfolge, und er wird hier nicht wegdiskutiert: Eine Einwilligung
+gehört sonst ans Ende eines Formulars, und jemand, der erst am Ende abklicken wollte, muss
+bis zum Ende der Seite blättern. Auf der anderen Seite nennt dieses Formular als einziges
+der drei zwei Werte, die **nicht** veröffentlicht werden, und beide stehen unter der
+Einwilligung.
+
+Am Stylesheet ändert sich nichts, die Zelle ist dieselbe (`fg-field-full`) und wandert nur
+im Raster nach oben. Die Fassung wächst trotzdem auf 1.18.0, weil sie die ausgelieferte
+Fassung kennzeichnet und sich das Formular geändert hat; das Schema bleibt 1.5.0.
+
+Geprüft wird die Reihenfolge über das gerenderte Markup und über **Positionen**, nicht über
+die Anwesenheit der drei Teile: Abfahrtsbereich, Einwilligung, Nummer, Adresse. Eine
+Prüfung, die nur nach den Feldern gesucht hätte, wäre grün gewesen, mit der Checkbox wieder
+unten — das ist an einer Stelle des Codes so geschehen und mit einer Gegenprobe belegt.

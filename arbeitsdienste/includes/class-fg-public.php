@@ -135,6 +135,19 @@ final class FG_Public {
 								<span class="fg-hint"><?php esc_html_e( 'Abfahrtsort, Stadtteil, z. B. Langwasser, Nürnberg Nord, S-Bahnstation Ostring.', 'arbeitsdienste' ); ?></span>
 							</div>
 
+							<div class="fg-field fg-field-full">
+								<label class="fg-consent" for="fg-consent">
+									<input id="fg-consent" type="checkbox" name="fg_consent" value="1" required>
+									<span>
+										<?php // The consent names what becomes public. It has to name the first name from the member administration, because that is what appears in the list and nobody is asked for it here. Naming the source of the name is what makes the sentence checkable: a member who does not recognise the name in the list can see that it came from the club's own records. The box stands above the two fields of the member, not below them, because its own last sentence is about those two: a member who reads before typing knows what the form does with the pair, and the two values are the only ones in this form that are not published. The word "oben" in the sentence is still right — everything the consent lists is still above the box. ?>
+										<?php esc_html_e( 'Ich möchte die oben gemachten Angaben zur Organisation der Fahrgemeinschaft öffentlich anzeigen lassen. Dazu gehören mein Vorname aus der Mitgliederverwaltung, die Art des Angebots, der Abfahrtsbereich und der Arbeitsdienst. Meine E-Mail-Adresse und meine Mitgliedsnummer werden dabei nicht öffentlich angezeigt.', 'arbeitsdienste' ); ?>
+										<?php if ( $privacy ) : ?>
+											<a href="<?php echo esc_url( $privacy ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'arbeitsdienste' ); ?></a>
+										<?php endif; ?>
+									</span>
+								</label>
+							</div>
+
 							<div class="fg-field">
 								<label for="fg-ride-member-no"><?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?></label>
 								<input type="text" id="fg-ride-member-no" name="fg_member_no" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_NO_MAX ); ?>" required>
@@ -144,22 +157,9 @@ final class FG_Public {
 								<label for="fg-ride-member-email"><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></label>
 								<input type="email" id="fg-ride-member-email" name="fg_member_email" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_EMAIL_MAX ); ?>" autocomplete="email" required>
 							</div>
-
-							<div class="fg-field fg-field-full">
-								<label class="fg-consent" for="fg-consent">
-									<input id="fg-consent" type="checkbox" name="fg_consent" value="1" required>
-									<span>
-										<?php // The consent names what becomes public. It has to name the first name from the member administration, because that is what appears in the list and nobody is asked for it here. Naming the source of the name is what makes the sentence checkable: a member who does not recognise the name in the list can see that it came from the club's own records. ?>
-										<?php esc_html_e( 'Ich möchte die oben gemachten Angaben zur Organisation der Fahrgemeinschaft öffentlich anzeigen lassen. Dazu gehören mein Vorname aus der Mitgliederverwaltung, die Art des Angebots, der Abfahrtsbereich und der Arbeitsdienst. Meine E-Mail-Adresse und meine Mitgliedsnummer werden dabei nicht öffentlich angezeigt.', 'arbeitsdienste' ); ?>
-										<?php if ( $privacy ) : ?>
-											<a href="<?php echo esc_url( $privacy ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'arbeitsdienste' ); ?></a>
-										<?php endif; ?>
-									</span>
-								</label>
-							</div>
 						</div>
 
-						<?php // The note about the pair stands on its own line, over the full width of the form and above the button. In the two other forms of the plugin it is a paragraph under the pair, and the same question gets the same place: a note that hangs in a half-width cell under one of the two fields reads as if it belonged to that field alone, and the two fields are one question. The sentence names what becomes public, because the consent below names the same things in the same words. ?>
+						<?php // The note about the pair stands on its own line, over the full width of the form and above the button. In the two other forms of the plugin it is a paragraph under the pair, and the same question gets the same place: a note that hangs in a half-width cell under one of the two fields reads as if it belonged to that field alone, and the two fields are one question. The sentence names what becomes public, because the consent above names the same things in the same words. ?>
 						<p class="fg-hint fg-hint-row"><?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat. Dein Vorname steht in der Liste öffentlich; E-Mail-Adresse und Mitgliedsnummer nicht. Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst.', 'arbeitsdienste' ); ?></p>
 
 						<div class="fg-actions">
