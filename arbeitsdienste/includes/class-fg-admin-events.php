@@ -557,6 +557,15 @@ final class FG_Admin_Events {
 	 * straightened out here, so the text has one and the same form whether it
 	 * came from Windows, from a phone or from a script.
 	 *
+	 * The order of the two replacements is the whole point, and the wrong order
+	 * was in here until version 1.19.0: `str_replace( "\r", "\n", … )` turns
+	 * every CRLF into two line breaks, because it replaces the CR and leaves the
+	 * LF of the pair alone. A description with three lines then had five, the
+	 * next save eight, the next sixteen — the text grew at every save and the
+	 * public page showed the empty lines, because it prints the description with
+	 * nl2br(). What the older tests did not notice is that they sent a bare LF,
+	 * which is a payload no browser produces.
+	 *
 	 * @param string $value Submitted text.
 	 * @return string
 	 */
@@ -565,7 +574,7 @@ final class FG_Admin_Events {
 			return '';
 		}
 
-		return trim( str_replace( "\r", "\n", $value ) );
+		return trim( str_replace( array( "\r\n", "\r" ), "\n", $value ) );
 	}
 
 	/**

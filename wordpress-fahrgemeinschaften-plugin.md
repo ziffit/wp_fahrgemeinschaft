@@ -756,3 +756,60 @@ Geprüft wird die Reihenfolge über das gerenderte Markup und über **Positionen
 die Anwesenheit der drei Teile: Abfahrtsbereich, Einwilligung, Nummer, Adresse. Eine
 Prüfung, die nur nach den Feldern gesucht hätte, wäre grün gewesen, mit der Checkbox wieder
 unten — das ist an einer Stelle des Codes so geschehen und mit einer Gegenprobe belegt.
+
+## Umsetzungsstand: Die Beschreibung verdoppelt ihre Zeilenumbrüche nicht mehr (1.19.0)
+
+Ergänzt um den Fehlerbefund vom 28.09.2026: Beim Speichern eines Arbeitsdienstes kamen
+ständig mehr Leerzeilen in das Freitextfeld.
+
+### Die Ursache
+
+```php
+// bis 1.19.0, FG_Admin_Events::read_text()
+return trim( str_replace( "\r", "\n", $value ) );
+```
+
+Ein Browser schickt die Zeilen eines `<textarea>` mit `CRLF`. `str_replace( "\r", "\n", … )`
+ersetzt das `CR` und lässt das `LF` des Paares stehen, aus **einem** Umbruch werden also
+**zwei**:
+
+| | Zeilenumbrüche | Leerzeilen |
+| --- | --- | --- |
+| Eingabe „Zeile eins␍␊Zeile zwei␍␊␍␊Absatz zwei“ | 3 | 1 |
+| nach `read_text()` bis 1.19.0 | 6 | 3 |
+| seit 1.19.0 | 3 | 1 |
+
+Weil das Formular den gespeicherten Wert wieder in dasselbe Feld schreibt, verdoppelt
+sich der Text bei jedem Speichern: 2, 4, 8, 16 Zeilenumbrüche. Öffentlich sichtbar, weil die
+Dienstseite die Beschreibung mit `nl2br()` ausgibt, und mit Folgen für die Länge, weil
+`DESCRIPTION_MAX` 500 ist — ein oft gespeicherter Text wird irgendwann mit „Beschreibung ist
+zu lang“ abgelehnt, und der letzte Stand bleibt stehen, obwohl niemand etwas hinzugefügt hat.
+
+Der Kommentar derselben Methode beschrieb die richtige Absicht und nannte die richtige
+Regel („A browser sends the lines of a textarea separated by CRLF. Only that is straightened
+out here …“); der Code tat das Gegenteil.
+
+### Die Korrektur
+
+```php
+return trim( str_replace( array( "\r\n", "\r" ), "\n", $value ) );
+```
+
+Das ist die Schreibweise, die `FG_Member_Import` im selben Plugin seit Anfang an benutzt.
+`FG_Mail_Templates` macht es mit `str_replace( "\r\n", "\n", … )` ohne das einzelne `CR`; für
+einen Text aus einem Formular ist das nicht erreichbar, für einen aus der Datenbank auch
+nicht, und deshalb bleibt es so.
+
+Warum die beiden anderen Freitextfelder nicht betroffen waren: Die Mailtexte und die
+Fußzeile werden über `sanitize_textarea_field()` gelesen, das `CRLF` bereits richtig zu `LF`
+macht. Die Gruppenbezeichnung lief durch dieselbe Methode wie die Beschreibung, ersetzt aber
+direkt danach jedes `LF` durch ein Leerzeichen — das Verdoppeln blieb unsichtbar.
+
+### Die Bestandsdaten
+
+Bereits gespeicherte Beschreibungen tragen die Leerzeilen weiter in sich. Sie werden **nicht**
+automatisch bereinigt: Die Anzahl der Umbrüche ist ein Vielfaches des ursprünglichen, ein Text
+mit einer gewollten Absatzleerzeile ist von einem ohne nicht unterscheidbar, und jede
+automatische Bereinigung — ob beim Speichern oder einmalig — würde genau die Leerzeilen
+zerstören, die jemand gewollt hat. Der Verein löscht die überzähligen Leerzeilen von Hand.
+Ab 1.19.0 wächst der Text nicht mehr.

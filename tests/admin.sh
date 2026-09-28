@@ -216,6 +216,18 @@ else:
     fehlt=[a for a in $2 if not any(a in t for t in tags)]
     print('ok' if not fehlt else 'fehlt: ' + ','.join(fehlt))"; }
 
+# The content of a textarea, as a browser would send it back: what stands
+# between the tags, with the entities resolved. val() reads an attribute, and a
+# textarea carries its value in the content — looking for it in the whole page
+# would find the hint that belongs to the field. sys.stdout.write and not print,
+# because a newline added by print would be a change to the very value this is
+# meant to read.
+flaeche() { python3 -c "
+import html,re,sys
+h=sys.stdin.read()
+m=re.search(r'<textarea[^>]*name=\"$1\"[^>]*>(.*?)</textarea>', h, re.S)
+sys.stdout.write(html.unescape(m.group(1)) if m else 'kein-feld')"; }
+
 # The card of one work duty on the public list, as text. The list shows every
 # visible duty, so a check that asks the whole page whether a word appears is
 # answered by whichever duty happens to carry it — and on an installation with
@@ -538,8 +550,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/saved.html" -w '%{url_effective}'
 	--data-urlencode "fg_group_name=Gartenpflege Nord" \
 	--data-urlencode "fg_demand=8" \
 	--data-urlencode "fg_duration_hours=4" \
-	--data-urlencode "fg_description=Bitte festes Schuhwerk mitbringen.
-Handschuhe sind vorhanden." \
+	--data-urlencode "fg_description=$(printf 'Bitte festes Schuhwerk mitbringen.\r\nHandschuhe sind vorhanden.')" \
 	)
 saved=$(cat "$DIR/saved.html")
 has "save confirms the new record" "$saved" "Der Arbeitsdienst wurde angelegt."
@@ -562,6 +573,48 @@ has "group is filled in" "$back" 'value="Gartenpflege Nord"'
 has "demand is filled in" "$back" 'value="8"'
 has "duration is filled in" "$back" 'value="4"'
 has "description is filled in" "$back" "Bitte festes Schuhwerk mitbringen."
+# Saving the form again must not change the text, and the check is made the way
+# a browser makes it: the text is read out of the form, sent back unchanged with
+# the line breaks the way a browser sends them, and the table is read again. The
+# claim is not that a line break survives one save, it is that the text is the
+# same after the second save as after the first. Nothing else in this suite
+# compares a field with itself over a save, and that is exactly where a doubling
+# of the line breaks could hide: the check "description stored with its line
+# break" was green for years because the save above sent a bare LF, which is a
+# payload no browser produces.
+BESCHREIBUNG=$(flaeche fg_description <<< "$back")
+ANONCE=$(val /dev/stdin fg_event_nonce <<< "$back")
+# Both values have to be there before the second save is sent. Without that, an
+# empty nonce makes the server refuse the save, the table keeps the value of the
+# first save, and the comparison below finds two identical values and calls it a
+# pass — a green line that measured nothing. That is not a guess: this line was
+# written with the wrong argument order first, and the check was green.
+if [ -n "$ANONCE" ] && [ -n "$BESCHREIBUNG" ] && [ "$BESCHREIBUNG" != "kein-feld" ]; then
+	ok "the form hands out a nonce and the text to send back"
+else
+	bad "the form hands out a nonce and the text to send back" "nonce: '$ANONCE' / text: '$BESCHREIBUNG'"
+fi
+curl -sk -b "$JAR" -L -c "$JAR" -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_event" \
+	--data-urlencode "fg_event_id=$NEW_ID" \
+	--data-urlencode "fg_event_nonce=$ANONCE" \
+	--data-urlencode "fg_title=Neuer Dienst aus dem Admin" \
+	--data-urlencode "fg_event_date=2027-03-04" \
+	--data-urlencode "fg_event_time=07:30" \
+	--data-urlencode "fg_group_name=Gartenpflege Nord" \
+	--data-urlencode "fg_demand=8" \
+	--data-urlencode "fg_duration_hours=4" \
+	--data-urlencode "fg_description=$(printf '%s' "$BESCHREIBUNG" | sed 's/$/\r/')"
+if [ "$(s event "$NEW_ID" description)" = "$BESCHREIBUNG" ]; then
+	ok "saving the form again does not change the description"
+else
+	bad "saving the form again does not change the description" "$(s event "$NEW_ID" description)"
+fi
+if [ "$(s event "$NEW_ID" title)" = "Neuer Dienst aus dem Admin" ] && [ "$(s event "$NEW_ID" demand)" = "8" ]; then
+	ok "and the other fields are still the ones of the form"
+else
+	bad "and the other fields are still the ones of the form" "$(s event "$NEW_ID" title) / $(s event "$NEW_ID" demand)"
+fi
 clean "$back" "form after the four fields"
 
 echo "[5b] editing the new work duty"

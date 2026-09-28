@@ -4,8 +4,8 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **öffentliches HTTP 224, Mail-Ebene 116, Admin-Ebene 561,
-0 Fehler**, gegen den Stand **Plugin 1.18.0, Schema 1.5.0**, dazu **fünf Gegenproben, alle
+Letzter Lauf: 28.09.2026 — **öffentliches HTTP 224, Mail-Ebene 116, Admin-Ebene 564,
+0 Fehler**, gegen den Stand **Plugin 1.19.0, Schema 1.5.0**, dazu **sechs Gegenproben, alle
 mit dem gestellten Fehlerbild rot**. Die Mail-Ebene 116 ist die Summe aus 57 Prüfungen im
 Shell-Satz `mail.sh` und 59 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
 gibt 116 aus.
@@ -399,7 +399,7 @@ läuft aus `/tmp/opencode/fg/`:
 
 | Datei | Zweck |
 | --- | --- |
-| `gegenproben.txt` | Eine Zeile je Gegenprobe: `Suite ~~~ Datei ~~~ alte Stelle ~~~ neue Stelle ~~~ Muster`. Der Trenner der Felder ist die Dreier-Tilde, weil in einer Bruchstelle auch Pipes vorkommen; `\n` steht für einen Zeilenumbruch |
+| `gegenproben.txt` | Eine Zeile je Gegenprobe: `Suite ~~~ Datei ~~~ alte Stelle ~~~ neue Stelle ~~~ Muster`. Der Trenner der Felder ist die Dreier-Tilde, weil in einer Bruchstelle auch Pipes vorkommen; `@N@` steht für einen Zeilenumbruch und **nicht** `\n`, weil fast jede Bruchstelle in einer PHP-Zeichenkette liegt und dort `\n` zwei Zeichen für sich sind |
 | `gegenprobe.sh` | Sichert die Datei, baut die Bruchstelle ein, kopiert das Plugin in den Container, lässt die Suite laufen, stellt die Datei wieder her. Er nimmt `admin`, `http` und `mail`; `smoke.php` steht nicht darin, weil die Suite am Anfang Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht und das nicht in ein Werkzeug gehört, das eine Datei vorsätzlich kaputt macht |
 | `alle-gegenproben.sh` | Fährt die Liste der Reihe nach ab und schreibt ein Protokoll |
 
@@ -422,11 +422,19 @@ sind billig und beide sind beim Schreiben nicht vorherzusehen; ein Werkzeug, das
 selbst prüft, findet sie erst, wenn es läuft.
 
 Derselbe Lauf hat einen zweiten Fehler derselben Art gezeigt, nämlich in der Liste
-selbst: Eine Bruchstelle über mehrere Zeilen muss als die zwei Zeichen `\n` in der
-Listendatei stehen und nicht als echter Zeilenumbruch. Sonst zerfällt eine Gegenprobe in
-so viele Zeilen, wie ihre Bruchstelle Zeilen hat, und der Leser meldet für jede „Feldzahl
-3 statt 5“ — das war eindeutig genug, aber die Meldung beweist nur, dass die Liste
-kaputt ist, nicht welche Gegenprobe gemeint war.
+selbst: Eine Bruchstelle über mehrere Zeilen muss als ein Platzhalter in der Listendatei
+stehen und nicht als echter Zeilenumbruch. Sonst zerfällt eine Gegenprobe in so viele Zeilen,
+wie ihre Bruchstelle Zeilen hat, und der Leser meldet für jede „Feldzahl 3 statt 5“.
+
+Der Platzhalter war anfangs `\n`, und damit war die Liste bei der Gegenprobe zu Fassung
+1.19.0 **nicht in der Lage, den Bruchpunkt auszudrücken**: Fast jede Bruchstelle in diesem
+Plugin liegt in einer PHP-Zeichenkette, und dort steht `\n` als zwei Zeichen für sich da. Ein
+Leser, der beide nicht unterscheiden kann, verwandelt beim Einlesen den Quelltext in einen
+Syntaxfehler und meldet „nur 0 Fundstellen“. Der Platzhalter ist jetzt `@N@`, und die
+Unterscheidung ist in der Datei `gegenproben-119.txt` derselbe Bruchpunkt, der vorher nicht
+darstellbar war. Das ist keine Feinheit des Werkzeugs, sondern eine Einschränkung, die eine
+Gegenprobe unmöglich machte: Ein Werkzeug, das eine Frage nicht stellen kann, meldet die
+Abwesenheit einer Antwort nicht.
 
 Dasselbe Schema hat beim Auswerten des Ergebnisses den einen Fehlbefund dieser Reihe
 erzeugt, den es weiter unten als solchen gibt: Das Werkzeug erkennt eine Gegenprobe, die
@@ -1345,6 +1353,81 @@ sehen, haben das mitbekommen. Hier gibt es keinen Text, der mitwandert — die B
 verschiebt drei Blöcke und sonst nichts. Eine Gegenprobe, die nur eine Prüfung rot macht,
 ist der Fall, in dem man sich das Fehlerbild noch einmal ansieht; sie ist der Beweis dafür,
 dass die übrigen 223 Prüfungen an dieser Stelle nichts zu tun haben.
+
+## Fassung 1.19.0: die Beschreibung verdoppelt ihre Zeilenumbrüche nicht mehr
+
+Der Fehler kam aus dem Verein: Beim Speichern eines Arbeitsdienstes kamen mehr und mehr
+Leerzeilen in das Freitextfeld. Die Ursache ist eine Zeile, `FG_Admin_Events::read_text()`:
+
+```php
+trim( str_replace( "\r", "\n", $value ) )   // bis 1.19.0
+```
+
+Ein Browser schickt die Zeilen eines `<textarea>` mit `CRLF`. `str_replace( "\r", "\n", … )`
+ersetzt das `CR` und lässt das `LF` daneben stehen, aus einem Umbruch werden zwei. Weil das
+Formular den gespeicherten Wert in dasselbe Feld zurückschreibt, verdoppelt sich der Text bei
+jedem Speichern: 2, 4, 8, 16 Umbrüche. Der Kommentar derselben Methode hatte die richtige
+Absicht notiert („A browser sends the lines of a textarea separated by CRLF. Only that is
+straightened out here …“) — der Code tat das Gegenteil.
+
+### Warum keine Prüfung es gesehen hat
+
+`admin.sh` schickte die Beschreibung mit einem **nackten LF** im Shell-String. Mit dieser
+Nutzlast ist `str_replace( "\r", "\n", … )` unschuldig, und die Prüfung „description stored
+with its line break“ war grün und sah belastbar aus. Das ist die dritte Art von Fehler, die
+diese Reihe schon kennt: nicht ein Muster, das zu eng ist, sondern eine **Nutzlast, die es in
+der Praxis nicht gibt**. Solange eine Prüfung eine Eingabe schickt, die kein Browser schickt,
+prüft sie den Zustand neben dem Ding, das sie prüft.
+
+Dazu kam eine zweite Lücke, und die ist die wichtigere: Es gab keine einzige Prüfung, die
+**denselben Datensatz zweimal speichert und danach vergleicht**. Die Behauptung, um die es hier
+geht, ist nicht „ein Zeilenumbruch übersteht ein Speichern“, sondern „**Speichern ändert den
+Text nicht**“ — und die war nirgends gemessen.
+
+### Was dazugekommen ist
+
+| Prüfung | Was sie behauptet |
+| --- | --- |
+| `description stored with its line break` (unverändert, aber mit CRLF gespeist) | drei Zeilen bleiben drei Zeilen, auch über ein Formular hinweg |
+| `the form hands out a nonce and the text to send back` | beide Werte für das zweite Speichern sind da, bevor gesendet wird |
+| `saving the form again does not change the description` | der Text aus dem Formular, als Browser mit CRLF zurückgesendet, ergibt in der Tabelle **denselben** Wert |
+| `and the other fields are still the ones of the form` | das zweite Speichern hat an den übrigen Feldern nichts geändert |
+
+Der neue Helfer `flaeche()` liest den **Inhalt** eines `<textarea>` aus der gerenderten Seite
+(`sys.stdout.write`, nicht `print`: ein von `print` angehängter Zeilenumbruch wäre genau die
+Änderung, die man messen will).
+
+### Eine Prüfung, die grün war, ohne zu messen
+
+Die dritte Prüfung oben ist zuerst **falsch grün** gewesen, und das gehört hierher: Sie rief
+`val` mit einem Argument auf, während `val` in `admin.sh` Datei und Feldnamen braucht. Die
+Folge war ein leerer Nonce, das zweite Speichern wurde abgelehnt, die Tabelle behielt den Wert
+des ersten Speicherns — und der Vergleich fand zweimal denselben Wert und nannte es einen
+Durchgang. Die Meldung `Zeile 28: $2 ist nicht gesetzt` stand im Protokoll und wurde zunächst
+übersehen, weil die Prüfung grün war.
+
+Zwei Lehren daraus, beide im Werkzeug festgeschrieben: **Ein Schritt, der einen leeren Wert
+erzeugen kann, braucht eine eigene rote Zeile, bevor er weitergeht** — deshalb prüft
+`the form hands out a nonce and the text to send back` beide Werte. Und **das Protokoll wird
+gelesen, wenn eine Prüfung grün ist, die es vorher nicht war**: Diese Prüfung war vorher
+grün, sie ist es immer noch, und nur die Meldung neben ihr hat es aufgedeckt.
+
+### Gegenprobe
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| `read_text()` wieder auf `str_replace( "\r", "\n", … )` | Speichern ändert den Text nicht | 2 Prüfungen: `saving the form again does not change the description` und `description stored with its line break` |
+
+**Eine Beobachtung ohne Erklärung.** In diesem einen Lauf meldeten zusätzlich drei Prüfungen
+aus den Abschnitten `[13b]` und der Anmeldung **KEINE-MAIL** — also: Es kam keine Nachricht
+an, die gelesen werden konnte. Derselbe Bruchpunkt, von Hand gebaut und `admin.sh` gefahren,
+gab zwei rote Zeilen und keine davon; drei weitere Läufe mit dem reparierten Code gaben
+564/0, einer davon mit `< /dev/null` an der Suite, weil das der Verdacht war. Der Auslöser ist
+nicht gefunden. Was die Prüfungen gemeinsam haben: Sie bauen ihre Mitglieder vorher selbst
+(`neu 7201 …`) und schicken eine echte Anfrage an einen echten Dienst; wenn das Anlegen des
+Mitglieds scheitert, entfällt die Nachricht und der Befehl meldet `KEINE-MAIL`. Für den nächsten
+Fall dieser Art ist der vollständige Lauf zu sichern, nicht nur die Zeilen mit `FAIL` — das
+Werkzeug der Gegenproben wirft genau den Teil weg, in dem die Antwort stünde.
 
 ## Mail-Auswertung
 
