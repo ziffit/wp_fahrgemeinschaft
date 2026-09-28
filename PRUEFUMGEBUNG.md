@@ -4,11 +4,28 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **CLI 511, Admin-Ebene 553, öffentliches HTTP 191,
-Mail-Ebene 166, 0 Fehler**. Alle vier Suiten sind an diesem Tag gegen denselben
-Stand gelaufen. Die CLI-Suite ist mit ausdrücklicher Zustimmung gefahren, weil
-sie am Anfang alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht.
-Sie sind von Hand nacheinander gefahren, nicht über `run-all.sh`.
+Letzter Lauf: 28.09.2026 — **CLI 527, Admin-Ebene 555, öffentliches HTTP 201,
+Mail-Ebene 113, 0 Fehler**, gegen den Stand **Plugin 1.15.0, Schema 1.5.0**, also
+gegen den Endstand ohne den Zustand vor der Veröffentlichung. Die Mail-Ebene
+113 ist die Summe aus 54 Prüfungen im Shell-Satz `mail.sh` und 59 im MIME-Satz
+`mail-mime.php`; `mail.sh` addiert beide selbst und gibt 113 aus. Die Zahl 166
+aus dem Kopf desselben Tages war falsch gezählt — der MIME-Satz stand ein
+zweites Mal darin. Nachgezählt am damaligen Stand: 47 Aufrufe im Shell-Satz plus
+59 im MIME-Satz, also 106. Das ist an den Zeilen der Suite nachgewiesen und nicht
+aus dem Log abgelesen, weil der damalige Lauf nicht wiederholbar ist, ohne das
+Plugin auf 1.14.0 zurückzusetzen.
+
+Alle vier Suiten sind an diesem Tag gegen denselben Stand gelaufen, zuerst die CLI
+über `WPDEV/setup.sh` und dann die drei HTTP-Suiten von Hand. Die CLI-Suite ist
+mit ausdrücklicher Zustimmung gefahren, weil sie am Anfang alle Arbeitsdienste,
+Fahrgemeinschaften und Mitglieder löscht. `run-all.sh` ist damit zum ersten Mal
+nicht der Weg dieses Tages gewesen, obwohl `setup.sh` inzwischen wieder läuft: Vor
+diesem Lauf trug es zwei Fehler, die beide den Abbruch vor der Installation
+verursachten — es spiegelte `fahrgemeinschaften/` statt `arbeitsdienste/` in das
+Plugin-Verzeichnis, und es zählte Fahrten über `FG_RIDE_STATUS_PENDING`, eine
+Konstante, die mit dem Zustand selbst verschwunden ist. Beide sind repariert; die
+zweite Zeile ist nicht umgeschrieben, sondern weggefallen, weil ein Filter auf
+einen Status, den jede Zeile hat, immer dasselbe zählt wie `count_rides()`.
 
 Der Lauf ist kein `run-all.sh`, und die CLI-Suite ist auch nicht über den normalen Weg
 gefahren: `smoke.php` kennt nur den Schritt `all`, und der löscht am Anfang alle
@@ -36,7 +53,12 @@ die andere Suite nicht vor ihm war, sagt nichts über den Adminbereich aus. Dies
 Erkenntnis stand schon bei `[4b]`, wo der Filter „veröffentlicht“ vorher die Fahrt aus
 der fremden Fixture las; die HTTP-Suite beweist, dass sie genau diese Fahrt löschen
 kann. Die Reihenfolge Admin vor HTTP war damit keine Vorliebe, sondern eine
-Fehlerquelle, die sich als Fehlschlag zeigte.
+Fehlerquelle, die sich als Fehlschlag zeigte. Seit 1.15.0 gibt es den zweiten
+Filter der Fahrtliste nicht mehr, also ist auch der Fall aus dieser Zeit nicht mehr
+da: Es bleibt der Filter nach dem Arbeitsdienst, und der wird in `[4b]` geprüft —
+die Fahrt des gewählten Dienstes bleibt stehen, die des zweiten verschwindet, und
+ohne Parameter stehen beide da. Der Filter ist mit dem Zustand weggekommen, weil
+er zwei Zeilen nicht hätte unterscheiden können.
 
 Der Test braucht für zwei Prüfungen weiterhin Zustand, den er selbst herstellt: Der
 Dienst in Abschnitt `[3]` trägt ein Mitglied aus demselben Lauf, weil der Satz über die
@@ -118,7 +140,7 @@ Das Skript ist idempotent und in fünf Schritten aufgeteilt:
   Cron und den Mail-Recorder und meldet, was fehlt.
 
 Nach dem Setup ist die Umgebung in dem Zustand, den die Tests erwarten: Plugin aktiv,
-`fg_schema_version` auf `1.4.0`, die fünf Tabellen `wp_fg_events`, `wp_fg_rides`,
+`fg_schema_version` auf `1.5.0`, die fünf Tabellen `wp_fg_events`, `wp_fg_rides`,
 `wp_fg_members`, `wp_fg_event_members` und `wp_fg_mail_templates` vorhanden, die Spalte
 `member_id` in `wp_fg_rides` angelegt, `fg_daily_cleanup` geplant, keine
 Rollenberechtigung des Plugins, Mail-Log leer.
@@ -135,10 +157,10 @@ Fahrgemeinschaften und Mitglieder sowie die Statistik-Option, es gibt also keine
 
 | Suite | Datei | Vorgehen |
 | --- | --- | --- |
-| CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–20: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene und die Mitgliederverwaltung; dazu die Abschnitte `[2a]` (die vier freiwilligen Angaben eines Arbeitsdienstes), `[3c]` (die Liste der Arbeitsdienste) und `[1b]` (die Migration von Schema 1.4.0: eine Fahrt mit einer Adresse, die zu einem Mitglied gehört, wird über einen JOIN an dieses Mitglied gehängt; eine mit einer fremden Adresse wird gelöscht und gezählt; beide Alt-Spalten werden geleert; eine Fahrt ohne Adresse und ohne Mitglied bleibt stehen) |
+| CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–20: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene und die Mitgliederverwaltung; dazu die Abschnitte `[2a]` (die vier freiwilligen Angaben eines Arbeitsdienstes), `[3c]` (die Liste der Arbeitsdienste) und `[1b]` (die Migration: eine Fahrt mit einer Adresse, die zu einem Mitglied gehört, wird über einen JOIN an dieses Mitglied gehängt; eine mit einer fremden Adresse wird gelöscht und gezählt; beide Alt-Spalten werden geleert; eine Fahrt ohne Adresse und ohne Mitglied bleibt stehen; eine Zeile im Zustand vor der Veröffentlichung wird gelöscht und im selben Zähler gemeldet) |
 | Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Abfahrtsbereich gegen Kontaktdaten über den Zähler `publish_personal_data`, Verhalten der Schaltflächen im Stylesheet; dazu die Abschnitte `[5e]` (die Mitgliedsnummer als Schlüssel: das Formular fragt Nummer und Adresse, nennt keinen Namen mehr, und beide Längenbegrenzungen stehen im HTML), `[8]` für die Arbeitsdienstliste auf einer eigenen Seite und `[9]` für den vollständigen Weg von der Anmeldung über die E-Mail bis zum Abmelden |
 | Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo`, und die Links beider Teile: im HTML ein `<a href>` mit einem Wortlaut, der die Handlung nennt, im Text die Adresse in Klarschrift |
-| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der sechs Unterseiten auf jeder Seite, die neue Seite E-Mails eingeschlossen), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die Abschnitte `[9]` (Mitgliederverwaltung), `[10]` (CSV-Import), `[11]` (Anmeldung zu einem Dienst) und `[12]` (Aufräumen um alle Mitglieder ohne Arbeitsdienst) und `[13]` mit `[13b]` (Anrede der Nachrichten) und `[13c]` (Zurückhaltung bei einem unbekannten Platzhalter) — Wortlaut der fünf E-Mails, Platzhalter je Nachricht, Vorschau, Zurücksetzen |
+| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der sechs Unterseiten auf jeder Seite, die neue Seite E-Mails eingeschlossen), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die Abschnitte `[9]` (Mitgliederverwaltung), `[10]` (CSV-Import), `[11]` (Anmeldung zu einem Dienst) und `[12]` (Aufräumen um alle Mitglieder ohne Arbeitsdienst) und `[13]` mit `[13b]` (Anrede der Nachrichten) und `[13c]` (Zurückhaltung bei einem unbekannten Platzhalter) — Wortlaut der vier E-Mails, Platzhalter je Nachricht, Vorschau, Zurücksetzen |
 
 Zwei Eigenheiten der Suiten, die man kennen muss, bevor man einem Fehlschlag traut:
 
@@ -155,7 +177,11 @@ ein paar Zählerstände das Mitglied `0042` in der Datenbank und liest die Fixtu
 - **Eine Suite, die man zur Fehlersuche zweimal fährt, verbraucht ihre Fixture
   selbst.** Am 28.09.2026 ist das mit 18 roten Zeilen in `http.sh` passiert: Der
   erste Lauf hatte die Vormerkung der Fixture bestätigt und die veröffentlichte Fahrt
-  gelöscht, der zweite las diese Werte erneut und meldete sie als Fehler. Der Grund war
+  gelöscht, der zweite las diese Werte erneut und meldete sie als Fehler. Seit
+  1.15.0 sind es die Löschungen in `[7]`, `[7b]` und `[7c]`, die eine Fixture
+  verbrauchen, und die drei teilen sich ihre Werte absichtlich: Zwei Einträge der
+  Fixture und der über das Formular eingereichte, jeder mit seinem eigenen Link.
+  Wer `[7]` zweimal fährt, trifft denselben roten Bild. Der Grund war
   nicht im Plugin, sondern im Ablauf. Zwei Regeln daraus: Vor **jedem** Lauf
   `http_setup.php`, und die Ausgabe **einmal** in eine Datei statt zweimal auf den
   Bildschirm, weil ein zweiter Blick auf dasselbe Log kein zweiter Lauf ist, sondern
@@ -231,8 +257,8 @@ blieb grün. Mit der eigenen Rechnung wurde dieselbe Änderung sofort rot.
 
 `[9]` in `http.sh` ist der ganze Weg eines Mitglieds über HTTP, und zwar in der
 Reihenfolge, in der es stattfindet: Anmeldung abschicken, Meldung lesen, Tabellenstand
-prüfen, E-Mail öffnen, Link folgen, Seite lesen, Bestätigung abschicken, zweite
-Bestätigung schicken, nachsehen, dass nichts passiert. Der Abmeldelink wird aus dem
+prüfen, E-Mail öffnen, Link folgen, Seite lesen, Abmeldung abschicken, zweite
+Abmeldung schicken, nachsehen, dass nichts passiert. Der Abmeldelink wird aus dem
 Text der E-Mail gelesen und nicht zusammengebaut, und Token wie Nonce kommen
 aussehends von der gerenderten Seite, nie aus einer eigenen Rechnung: Ein Test, der
 den Wert selbst bildet, den er sendet, beweist nur, dass der gebildete Wert der
@@ -266,11 +292,11 @@ dasselbe: Geprüft wird der **ganze** Text, nicht ein Wort daraus — die Seite 
 Abschnitt darüber in Worten, dass gelöscht wird, eine Prüfung, die die Seite liest, ist
 also immer grün.
 
-`[13]` in `admin.sh` ist der Wortlaut der fünf E-Mails. Drei Dinge darin sind nicht
+`[13]` in `admin.sh` ist der Wortlaut der vier E-Mails. Drei Dinge darin sind nicht
 selbstverständlich und deshalb hier festgehalten:
 
 **Der Vorschau-Link wird nach seiner Nachricht gewählt, nicht als erster genommen.** Die
-Seite trägt fünf Vorschau-Links — einen je Zeile der Liste — und der erste gehört zur
+Seite trägt vier Vorschau-Links — einen je Zeile der Liste — und der erste gehört zur
 ersten Nachricht, nicht zu der, deren Formular offen ist. Ein Test, der den ersten nimmt,
 prüft eine andere Nachricht und bleibt grün. Das ist beim ersten Lauf des Abschnitts
 passiert: Die Prüfung auf den fertigen Betreff schlug fehl, während die auf den Textteil
@@ -385,7 +411,11 @@ Eine dritte Gegenprobe hat nichts gefunden, und das ist kein Fehlbefund: Der Abm
 prüft das Token zweimal, einmal vor dem Löschen und einmal im `DELETE … WHERE id AND
 unregister_hash`. Nimmt man nur eine der beiden Prüfungen weg, bleibt die andere, und das
 für den Besucher sichtbare Verhalten — ein zweiter Klick auf denselben Link tut nichts —
-bleibt unverändert. Dasselbe gilt für den Bestätigungslink der Fahrgemeinschaften. Was
+bleibt unverändert. Dasselbe gilt seit 1.15.0 für den Löschlink der
+Fahrgemeinschaften: `claim_delete_token()` beansprucht das Token mit einem
+`UPDATE … WHERE id AND delete_hash AND delete_expires`, und danach wird die Zeile
+noch einmal gelesen. Nimmt man eine der beiden Prüfungen weg, bleibt die andere,
+und für den Besucher sichtbar ändert sich nichts. Was
 sich nicht testen lässt, ist der Gleichstand zweier Anfragen, und genau dafür ist die
 zweite Prüfung da. Sie ist damit nicht überflüssig, nur nicht von hier aus beweisbar;
 im Werkzeug ist dieser Fall mit einem `!` vor dem Muster als „muss grün bleiben“
@@ -916,7 +946,7 @@ Eine Prüfung in dieser Reihe ist **keine** Prüfung, sondern eine Bedingung fü
 die anderen: Der Vorgabewortlaut eines Links steht in zwei Listen derselben
 Definition, `links` und `placeholders`, und ein Name, der nur in einer davon
 steht, ist ein Link, den die Nachricht gar nicht anbietet. `mail-mime.php`
-vergleicht die beiden Listen für alle fünf Nachrichten und verlangt zusätzlich
+vergleicht die beiden Listen für alle vier Nachrichten und verlangt zusätzlich
 einen Wortlaut und eine Beispieladresse. Ohne diese Prüfung wären die Zeilen
 darüber grün, während die Vorschau im Adminbereich einen Link zeigt, der
 nirgends hingesetzt wird.
@@ -1004,6 +1034,50 @@ stehen, und die Zahl in der Option verschwindet nach dem ersten Lesen. Die Reihe
 diese Prüfungen ist wichtig — sie lesen denselben Zustand, und wer sie umstellt, prüft
 eine Option, die schon geleert ist, und meldet zu Recht eine Null.
 
+## Der Zustand vor der Veröffentlichung ist weg (Schema 1.5.0)
+
+Bis `1.14.0` stand eine Fahrt erst im Zustand `pending` und wurde erst durch einen Klick
+in der Mail veröffentlicht; die Tabelle hatte dafür vier Spalten, die Liste im
+Adminbereich eine Statusspalte und einen Statusfilter, und es gab zwei E-Mails zu einer
+Fahrt statt einer. Seit `1.15.0` wird die Zeile in dem einen Statement geschrieben, in dem
+sie sichtbar wird, und der Zustand davor hat keinen Leser und keinen Schreiber mehr.
+
+```php
+FG_Schema::clear_pending_rides();         // DELETE … WHERE status = 'pending'
+FG_Schema::take_dropped_rides_notice();   // Zahl in dieselbe Option wie oben, danach weg
+```
+
+Dass die Fahrten im Zustand `pending` **gelöscht** und nicht veröffentlicht werden, ist
+eine Entscheidung und keine Nebensache: Eine solche Zeile ist eine Einreichung, auf die
+niemand geantwortet hat, und ein Verein kann die Stille nicht als Zustimmung zu einem
+öffentlichen Eintrag lesen. Wer sie wollte, hat sie mit einem Formular angeboten. Ihre Zahl
+kommt in dieselbe Option wie die der Fahrten ohne Mitglied, damit der Verein **einmal**
+über beides unterrichtet wird und nicht zweimal.
+
+Der Zähler wird von zwei Schritten gefüllt, `clear_legacy_ride_contacts()` und
+`clear_pending_rides()`. `add_option()` wäre hier falsch gewesen, weil es nichts tut, wenn
+die Option schon steht; stattdessen gibt es einen privaten Akkumulator
+`count_dropped_rides()`, der mit `update_option()` addiert. Die Suite liest die Option
+zweimal, um den Fall „es wurde nichts gezählt" überhaupt erst herstellen zu können, und
+prüft dann beide Zähler getrennt.
+
+Die vier Spalten `pending_*` bleiben im DDL stehen, obwohl sie niemand mehr liest und
+niemand mehr schreibt. Sie sind der Rückfall für eine zurückgerollte Fassung, aus
+demselben Grund wie `alias`, `contact_email` und `participants`. Der Unterschied ist nur
+der, dass hier das `DEFAULT 'published'` in der Spalte `status` mitentscheidet: Eine
+zurückgerollte Fassung, die eine Zeile anlegt, ohne einen Status zu schreiben, bekommt
+damit einen öffentlichen Eintrag und keinen vorgemerkten — was nach dem Wegfall des
+Zustands das Richtige ist, aber aus einem anderen Grund als beabsichtigt. Der Kommentar
+über `$statements` in `class-fg-schema.php` sagt das an der Stelle, an der es jemand
+liest, der das DDL anfasst.
+
+Der Abschnitt `[1b]` prüft die Migration mit einer rohen Zeile, weil für den Zustand
+`pending` kein Schreiber mehr existiert: Die Zeile wird direkt in die Tabelle geschrieben,
+die Option vorher gelöscht, `FG_Schema::install()` gelaufen, und danach geprüft, dass die
+Zeile weg ist, die Option 1 trägt und `count_rides( array( 'status' => 'pending' ) )` null
+antwortet. Der Status wird dabei als **Literal** verglichen und nicht über eine Konstante,
+denn die Konstante ist mit dem Zustand weg.
+
 ## Mail-Auswertung
 
 `tests/mail-log.php` wird als `wp-content/mu-plugins/fg-mail-log.php` eingespielt. Es
@@ -1025,9 +1099,16 @@ die drei Felder der Fassung davor, die beim Lesen zu einem Block verbunden werde
 Sache, dass ein gespeichertes Feld nicht zu einem liegengebliebenen der alten drei addiert
 wird.
 
-Die Option `fg_test_mail_fail=1` lässt die Zustellung fehlschlagen. Damit werden die
-Fehlerpfade `email_failed` und `publish_failed` über echtes HTTP geprüft, inklusive
-Rücknahme der Veröffentlichung und der Wiederverwendbarkeit desselben Bestätigungslinks.
+Die Option `fg_test_mail_fail=1` lässt die Zustellung fehlschlagen. Damit wird seit
+1.15.0 ein einziger Fehlerpfad geprüft, `email_failed`: Die Zeile ist geschrieben,
+der Eintrag steht in der Liste, und die Mail mit dem Löschlink ist nicht
+angekommen. Die Suite prüft getrennt, dass der Zähler `mail_send_failed` steigt,
+dass `publish_published` *nicht* steigt, dass der Eintrag öffentlich bleibt, und
+dass ein zweiter Versuch mit derselben Nummer eine ganz normale Fahrt mit einem
+eigenen Löschlink wird und als Veröffentlichung gezählt wird. Vor 1.15.0 kam ein
+zweiter Pfad dazu, `publish_failed`, samt Rücknahme der Veröffentlichung und
+Wiederverwendbarkeit desselben Bestätigungslinks; beide sind mit dem Zustand vor
+der Veröffentlichung weggefallen, denn es gibt nichts mehr zurückzunehmen.
 Dieselbe Option prüft den dritten Fehlerpfad, den es erst mit der Mitgliederverwaltung
 gibt: Geht die E-Mail mit dem Abmeldelink nicht raus, nimmt `register_member()` die
 Anmeldung wieder aus der Tabelle (`delete_registration_by_pair()`), der Zähler
@@ -1077,15 +1158,18 @@ Simulation versendet nichts.
 Damit die Nachrichten dort ankommen, muss der Mail-Recorder ausgeschaltet sein (siehe oben).
 Der Zustand ist die Voraussetzung für:
 
-1. Eine echte Einreichung über das öffentliche Formular. Der Bestätigungslink steht dann
-   im Mail-Log unter SureMails → Email Log, Spalte „Body“.
+1. Eine echte Einreichung über das öffentliche Formular. Der Löschlink steht dann
+   im Mail-Log unter SureMails → Email Log, Spalte „Body“; es ist die einzige
+   Nachricht zu der Fahrt, und der Eintrag steht im selben Moment öffentlich.
 2. Eine echte Anmeldung zu einem Arbeitsdienst auf der `[arbeitsdienste]`-Seite. Die
    Nachricht mit dem Abmeldelink steht dort unter demselben Ersteller; sie nennt keinen
    Namen, nur den Dienst und den Link.
 3. Ein Kontaktaufruf zwischen zwei Mitgliedern desselben Dienstes. Erwartet werden zwei
    Einträge: einer an den Ersteller, einer an den Anfragenden.
-4. Ein Klick auf den Bestätigungslink einer Fahrgemeinschaft. Der Status `sent` erscheint,
-   und die Meldung zur Veröffentlichung mit dem Lösch-Link wird geloggt.
+4. Ein Klick auf den Löschlink einer Fahrgemeinschaft. Die Rückfrageseite erscheint
+   mit dem Namen des Eintrags, dem Abfahrtsbereich und einem Knopf; erst der
+   zweite Klick löscht, und danach erscheint kein Status im Log, weil keine
+   Nachricht mehr gesendet wird.
 5. Ein Klick auf den Abmeldelink einer Anmeldung. Erwartet wird zuerst die Rückfrage und
    keine Löschung; gelöscht wird erst nach dem zweiten Klick.
 

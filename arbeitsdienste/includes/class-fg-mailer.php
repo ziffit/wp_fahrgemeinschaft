@@ -32,53 +32,16 @@ final class FG_Mailer {
 	}
 
 	/**
-	 * Send the publication confirmation for a pending ride.
+	 * Send the mail that belongs to a published ride.
 	 *
-	 * @param int    $ride_id       Ride ID.
-	 * @param string $confirm_url   Confirmation action URL.
-	 * @param string $discard_url   Discard action URL.
-	 * @return bool
-	 */
-	public function send_pending_confirmation( $ride_id, $confirm_url, $discard_url ) {
-		$ride = $this->repository->get_ride( $ride_id );
-		if ( ! $ride ) {
-			return false;
-		}
-
-		$data   = $this->repository->get_ride_display_data( $ride );
-		$member = $data['member'];
-		$to     = $this->repository->get_ride_contact_email( $ride, $member );
-		if ( ! $to || ! $member ) {
-			return false;
-		}
-
-		$mail = FG_Mail_Texts::compose(
-			FG_Mail_Texts::RIDE_PENDING,
-			array_merge(
-				$this->person_from_member( $member ),
-				array(
-					'Art'                  => $this->mode_label( $data['mode'] ),
-					'Arbeitsdienst'        => (string) $data['event_label'],
-					'Arbeitsdienstdetails' => $data['event_label'] . ( $data['event_date'] ? ' (' . $data['event_date'] . ')' : '' ),
-					'Abfahrtsbereich'     => (string) $data['origin'],
-					'Bestaetigungslink'   => (string) $confirm_url,
-					'Verwerfungslink'     => (string) $discard_url,
-				)
-			)
-		);
-
-		if ( ! $mail ) {
-			return false;
-		}
-
-		return $this->send( $to, $mail['subject'], $mail['body'], null, $mail['links'] );
-	}
-
-	/**
-	 * Send the successful publication e-mail with the final delete link.
+	 * One ride means one mail. It says the entry is in the list, repeats what
+	 * became public, and carries the link that takes it down again. There is no
+	 * second mail and nothing to confirm: the form is the consent, the entry is
+	 * visible at once, and this mail is the receipt that also works as the way
+	 * out.
 	 *
-	 * @param int    $ride_id     Ride ID.
-	 * @param string $delete_url  Final delete action URL.
+	 * @param int    $ride_id    Ride ID.
+	 * @param string $delete_url Deletion action URL.
 	 * @return bool
 	 */
 	public function send_published_confirmation( $ride_id, $delete_url ) {
@@ -99,8 +62,11 @@ final class FG_Mailer {
 			array_merge(
 				$this->person_from_member( $member ),
 				array(
-					'Arbeitsdienst' => (string) $data['event_label'],
-					'Loeschlink'    => (string) $delete_url,
+					'Art'                  => $this->mode_label( $data['mode'] ),
+					'Arbeitsdienst'        => (string) $data['event_label'],
+					'Arbeitsdienstdetails' => $data['event_label'] . ( $data['event_date'] ? ' (' . $data['event_date'] . ')' : '' ),
+					'Abfahrtsbereich'     => (string) $data['origin'],
+					'Loeschlink'           => (string) $delete_url,
 				)
 			)
 		);

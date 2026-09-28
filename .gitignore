@@ -2,7 +2,7 @@
 #
 # tests/cookies.txt   enthält ein echtes WordPress-Session-Cookie des
 #                     Administrators (wordpress_logged_in_...)
-# tests/fixture.json  Nonces sowie Bestätigungs- und Lösch-Token
+# tests/fixture.json  Nonces sowie Lösch-Token (seit 1.15.0 gibt es nur noch diese)
 # tests/*.html        abgelegte Antworten des Adminbereichs mit _wpnonce
 tests/cookies.txt
 tests/fixture.json

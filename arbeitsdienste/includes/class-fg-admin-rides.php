@@ -10,11 +10,11 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Read-only list and detail screen for rides.
  *
- * A ride is created by a member through the public form and can only be
- * published or withdrawn by the person who created it, through the link in the
- * confirmation mail. That is why there is no edit form here: the plugin offers
- * an administrator no way to rewrite what someone else published, only to view
- * it and to delete it.
+ * A ride is created by a member through the public form, is visible as soon as
+ * it is written, and can only be withdrawn by the person who created it, through
+ * the link in the mail about it. That is why there is no edit form here: the
+ * plugin offers an administrator no way to rewrite what someone else published,
+ * only to view it and to delete it.
  */
 final class FG_Admin_Rides {
 	/**
@@ -80,7 +80,7 @@ final class FG_Admin_Rides {
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Fahrgemeinschaften', 'arbeitsdienste' ); ?></h1>
-			<p><?php esc_html_e( 'Eintragungen werden von den Beteiligten selbst bestätigt oder zurückgezogen. Hier lassen sie sich nur ansehen und löschen.', 'arbeitsdienste' ); ?></p>
+			<p><?php esc_html_e( 'Eintragungen stehen sofort in der Liste und werden von den Beteiligten selbst zurückgezogen. Hier lassen sie sich nur ansehen und löschen.', 'arbeitsdienste' ); ?></p>
 
 			<form method="get">
 				<input type="hidden" name="page" value="<?php echo esc_attr( FG_RIDES_PAGE_SLUG ); ?>">
@@ -93,12 +93,7 @@ final class FG_Admin_Rides {
 						</option>
 					<?php endforeach; ?>
 				</select>
-				<label class="screen-reader-text" for="fg-status-filter"><?php esc_html_e( 'Nach Status filtern', 'arbeitsdienste' ); ?></label>
-				<select name="fg_status_filter" id="fg-status-filter">
-					<option value=""><?php esc_html_e( 'Alle Status', 'arbeitsdienste' ); ?></option>
-					<option value="<?php echo esc_attr( FG_RIDE_STATUS_PUBLISHED ); ?>" <?php selected( $filters['status'], FG_RIDE_STATUS_PUBLISHED ); ?>><?php esc_html_e( 'Veröffentlicht', 'arbeitsdienste' ); ?></option>
-					<option value="<?php echo esc_attr( FG_RIDE_STATUS_PENDING ); ?>" <?php selected( $filters['status'], FG_RIDE_STATUS_PENDING ); ?>><?php esc_html_e( 'Vorgemerkt', 'arbeitsdienste' ); ?></option>
-				</select>
+				<?php // There is no status filter next to the work service one: since 1.15.0 every entry is published, and a filter with one value is a control that cannot do anything. ?>
 				<?php submit_button( __( 'Filtern', 'arbeitsdienste' ), 'secondary', '', false ); ?>
 			</form>
 
@@ -110,13 +105,12 @@ final class FG_Admin_Rides {
 						<th><?php esc_html_e( 'Arbeitsdienst', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Abfahrtsbereich', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Mitglied', 'arbeitsdienste' ); ?></th>
-						<th><?php esc_html_e( 'Status', 'arbeitsdienste' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
 					<?php if ( empty( $rides ) ) : ?>
 						<tr>
-							<td colspan="6"><?php esc_html_e( 'Es liegen keine Eintragungen vor.', 'arbeitsdienste' ); ?></td>
+							<td colspan="5"><?php esc_html_e( 'Es liegen keine Eintragungen vor.', 'arbeitsdienste' ); ?></td>
 						</tr>
 					<?php endif; ?>
 					<?php foreach ( $rides as $ride ) : ?>
@@ -142,7 +136,6 @@ final class FG_Admin_Rides {
 									<em><?php esc_html_e( 'Mitglied nicht mehr vorhanden', 'arbeitsdienste' ); ?></em>
 								<?php endif; ?>
 							</td>
-							<td><?php echo esc_html( $this->status_label( $ride->status ) ); ?></td>
 						</tr>
 					<?php endforeach; ?>
 				</tbody>
@@ -178,7 +171,6 @@ final class FG_Admin_Rides {
 
 		$rows = array_merge(
 			array(
-				array( __( 'Status', 'arbeitsdienste' ), $this->status_label( $ride->status ) ),
 				array( __( 'Art', 'arbeitsdienste' ), $this->mode_label( $ride->mode ) ),
 			),
 			$mitglied,
@@ -186,8 +178,7 @@ final class FG_Admin_Rides {
 				array( __( 'Arbeitsdienst', 'arbeitsdienste' ), $data['event_label'] ),
 				array( __( 'Datum', 'arbeitsdienste' ), $data['event_date'] ),
 				array( __( 'Abfahrtsbereich', 'arbeitsdienste' ), $ride->origin ),
-				array( __( 'Angemeldet am', 'arbeitsdienste' ), $ride->created_at ),
-				array( __( 'Bestätigt am', 'arbeitsdienste' ), '' !== $ride->confirmed_at ? $ride->confirmed_at : __( 'noch nicht', 'arbeitsdienste' ) ),
+				array( __( 'Eingetragen am', 'arbeitsdienste' ), $ride->created_at ),
 				array( __( 'Einwilligung', 'arbeitsdienste' ), $ride->consent_version . ' (' . $ride->consented_at . ')' ),
 				array( __( 'Öffentliche Referenz', 'arbeitsdienste' ), $ride->public_ref ),
 			)
@@ -226,14 +217,16 @@ final class FG_Admin_Rides {
 	/**
 	 * Collect the validated list filters from the request.
 	 *
-	 * @return array{event_id: int, status: string}
+	 * The status is not among them. Since 1.15.0 every entry is published, and
+	 * a filter that can only be set to one value is a control the operator can
+	 * only get wrong; an old link carrying fg_status_filter is ignored instead of
+	 * quietly narrowing the list.
+	 *
+	 * @return array{event_id: int}
 	 */
 	private function filters() {
-		$status = FG_Admin::query_key( 'fg_status_filter' );
-
 		return array(
 			'event_id' => FG_Admin::query_int( 'fg_event_filter' ),
-			'status'   => in_array( $status, array( FG_RIDE_STATUS_PENDING, FG_RIDE_STATUS_PUBLISHED ), true ) ? $status : '',
 		);
 	}
 
@@ -254,24 +247,6 @@ final class FG_Admin_Rides {
 		}
 
 		return __( 'Fahrgemeinschaft ohne Mitglied', 'arbeitsdienste' );
-	}
-
-	/**
-	 * Human-readable status.
-	 *
-	 * @param string $status Stored status.
-	 * @return string
-	 */
-	private function status_label( $status ) {
-		if ( FG_RIDE_STATUS_PUBLISHED === $status ) {
-			return __( 'Veröffentlicht', 'arbeitsdienste' );
-		}
-
-		if ( FG_RIDE_STATUS_PENDING === $status ) {
-			return __( 'Vorgemerkt', 'arbeitsdienste' );
-		}
-
-		return (string) $status;
 	}
 
 	/**

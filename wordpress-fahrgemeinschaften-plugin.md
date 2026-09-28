@@ -28,6 +28,15 @@
 > geht damit an ein Mitglied. Die betroffenen Stellen sind an Ort und Stelle als
 > überholt markiert; was daraus geworden ist, steht unten unter
 > „Umsetzungsstand: Mitgliedsnummer als Schlüssel (1.14.0)“.
+>
+> **Hinweis (28.09.2026, zweiter Umschlag desselben Tages):** Der Auftrag ist ein viertes
+> Mal umgestellt worden (Plugin 1.15.0, Schema 1.5.0). Der Zustand vor der Veröffentlichung
+> ist weg: Eine Fahrt steht in dem Moment öffentlich, in dem das Formular sie abschickt, es
+> gibt keine zweite Nachricht zu einer Fahrt und damit auch keine Bestätigungs- und keine
+> Verwerf-Adresse. Der Löschlink ist der einzige Link, den die E-Mail trägt. Fahrten, die
+> zum Zeitpunkt der Aktualisierung noch vorgemerkt waren, werden von der Migration
+> **gelöscht**, nicht veröffentlicht — siehe unten „Umsetzungsstand: Kein vorgemerkter
+> Zustand (1.15.0, Schema 1.5.0)“.
 
 ## Ziel
 
@@ -37,7 +46,7 @@ Ein schlankes WordPress-Plugin für Vereinsmitglieder, das öffentlich sichtbare
 
 - Keine WordPress-Anmeldung für die öffentliche Nutzung.
 - ~~Gültige Teilnehmeradressen werden vorab je Arbeitsdienst durch Administratoren eingetragen.~~ **Überholt seit 1.9.0:** Die Anmeldung macht das Mitglied selbst; siehe „Umsetzungsstand: Mitgliederverwaltung (1.9.0)“.
-- Eine Veröffentlichung wird nur nach Bestätigung des E-Mail-Links öffentlich angezeigt.
+- ~~Eine Veröffentlichung wird nur nach Bestätigung des E-Mail-Links öffentlich angezeigt.~~ **Überholt seit 1.15.0:** Ein Eintrag wird beim Absenden des Formulars öffentlich, und die E-Mail trägt nur noch den Löschlink. Der Grund ist derselbe wie bei der Anmeldung: Der Verein ist nicht der Arbeitgeber eines Dienstes, und niemand hat jemanden um Erlaubnis gefragt, der eine Fahrgemeinschaft anbietet — es gab also nichts, was bestätigt werden musste.
 - Die Kontaktaufnahme benötigt keine E-Mail-Bestätigung.
 - Keine Mengenbegrenzung und keine automatische Bot-Sperre.
 - Keine öffentliche Anzeige von E-Mail-Adressen, internen IDs, UUIDs oder Lösch-Tokens.
@@ -102,6 +111,15 @@ Vergangene Arbeitsdienste werden sofort anhand von Datum/Uhrzeit und Zeitzone au
 
 ### 3. Veröffentlichung mit E-Mail-Bestätigung
 
+> **Überholt seit 1.15.0 (Plugin 1.15.0, Schema 1.5.0).** Der Ablauf ist der um Zeile 5
+> gekürzte: Statt „Eintrag als `pending` speichern, aber nicht veröffentlichen“ steht
+> „Eintrag als `published` speichern“. Statt zweier getrennter Tokens gibt es einen, der
+> Löschtoken; statt der Bestätigungs-E-Mail und der Erfolgs-E-Mail gibt es eine Nachricht.
+> Die Absätze über Vorschau, Löschung der Vormerkung und Laufzeit der
+> Vormerkungs-Links gehören zu diesem Zustand und sind mit ihm weggefallen. Alles andere
+> in diesem Abschnitt — Pflichtfelder, Einwilligung, Honeypot, Handhabungsseite vor jeder
+> Aktion — gilt unverändert und steht deshalb noch hier.
+
 Ablauf:
 
 1. Pflichtfelder, Höchstlängen, E-Mail-Format und Datumszustand prüfen.
@@ -151,8 +169,8 @@ Keine vollständige Benutzerhistorie. Nur tägliche aggregierte Zähler, beispie
 
 - Veröffentlichungsformulare gesamt,
 - gültige/ungültige E-Mail-Adressen,
-- vorgemerkte Einträge,
-- bestätigte Veröffentlichungen,
+- ~~vorgemerkte Einträge,~~ **Seit 1.15.0:** veröffentlichte Einträge — `publish_published`
+- ~~bestätigte Veröffentlichungen,~~ **Seit 1.15.0:** gelöschte Einträge — `publish_deleted`,
 - Kontaktversuche gesamt,
 - gültige/ungültige Kontaktadressen,
 - zugestellte E-Mail-Versuche,
@@ -163,7 +181,7 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 ### 6. E-Mails
 
 - E-Mails als `multipart/alternative` mit festem Absender auf der Vereinsdomain: der Text als Plain-Text in der ersten Alternative, das Layout als HTML in der zweiten.
-- Das Layout, das Logo und die Fußzeile stehen in jeder Mail des Plugins. Das Layout wird im Plugin mitgeliefert und ist nicht über den Adminbereich änderbar; konfigurierbar sind Logo, Fußzeile und der Wortlaut (Betreff und Text) der fünf Nachrichten — der Rahmen um den Wortlaut nicht. Die Fußzeile steht in **beiden** Alternativen, im HTML und im reinen Text — sie nennt Absender, Kontakt und den rechtlichen Hinweis, und genau diese Angaben bleiben als Klartext am längsten hängen. Das Logo steht nur im HTML-Teil: ein Textteil hat keine Bilder, und der `From:`-Header nennt den Verein ohnehin.
+- Das Layout, das Logo und die Fußzeile stehen in jeder Mail des Plugins. Das Layout wird im Plugin mitgeliefert und ist nicht über den Adminbereich änderbar; konfigurierbar sind Logo, Fußzeile und der Wortlaut (Betreff und Text) der vier Nachrichten — der Rahmen um den Wortlaut nicht. Die Fußzeile steht in **beiden** Alternativen, im HTML und im reinen Text — sie nennt Absender, Kontakt und den rechtlichen Hinweis, und genau diese Angaben bleiben als Klartext am längsten hängen. Das Logo steht nur im HTML-Teil: ein Textteil hat keine Bilder, und der `From:`-Header nennt den Verein ohnehin.
 - Keine aus Benutzereingaben erzeugten HTML-Inhalte oder Mailheader: Benutzereingaben stehen im HTML-Teil ausschließlich escaped. Für die Links der Nachricht heißt das: Der Wortlaut des Ankers wird wie jeder andere Wert escaped, und er entsteht nicht aus dem Text, sondern aus einem der im Code hinterlegten Vorgabewortlaute oder einem Wortlaut, den `FG_Mail_Templates::mark_links()` gegen genau die Links dieser Nachricht geprüft hat. Die Adresse selbst geht durch `esc_url()`.
 - Jeder Link einer Nachricht ist ein `<a href>` im HTML-Teil, und sein Text nennt die Handlung. Bis 1.13.0 stand die Adresse als Klartext im Wortlaut, den `paragraphs()` Zeile für Zeile escaped; im HTML-Teil war sie damit weder klickbar noch kürzbar. Der Text, der an `wp_mail()` geht, ist trotzdem der fertige Textteil, nicht der Wortlaut mit den Marken: `FG_Mailer::send()` übergibt `FG_Mail_Templates::text_part()` an `wp_mail()` und den unaufgelösten Wortlaut an `phpmailer_init`. Filter auf `wp_mail()` — der Protokollierer dieses Plugins, ein Mail-Log, ein Plugin, das seine eigene Fußzeile anhängt — sehen also eine fertige Nachricht.
 - Ein Link-Platzhalter darf einen eigenen Wortlaut hinter einem Doppelpunkt mitbringen, `{{Loeschlink:Fahrgemeinschaft löschen}}`. Ohne den Doppelpunkt gilt der Vorgabewortlaut der Nachricht, damit ein vor 1.13.0 gespeicherter Text nicht bricht. Diese Form wird nur für die Links der jeweiligen Nachricht zugelassen.
@@ -198,8 +216,12 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 
 ### Fahrgemeinschaften
 
-- alle vorgemerkten und veröffentlichten Einträge
-- Filter nach Arbeitsdienst und Status
+- ~~alle vorgemerkten und veröffentlichten Einträge~~ **Seit 1.15.0:** alle Einträge der
+  Liste sind veröffentlicht; der Status hat keinen Leser mehr und die Liste braucht ihn nicht
+- ~~Filter nach Arbeitsdienst und Status~~ **Seit 1.15.0:** nur der Filter nach dem
+  Arbeitsdienst. Ein Statusfilter, der alle Zeilen behalten und keine unterscheiden würde,
+  wäre eine Spalte, die nur aussieht — und eine, die jemand anklickt und sich wundert, warum
+  sich nichts geändert hat
 - öffentliche Felder, dazu die Mitgliedsnummer des anbietenden Mitglieds; die
   E-Mail-Adresse des Mitglieds nur auf der Detailseite, nicht in der Liste
 - Ändern und Löschen
@@ -207,14 +229,21 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 
 ## Abnahmekriterien
 
-- Nur bestätigte Einträge sind öffentlich sichtbar.
+- ~~Nur bestätigte Einträge sind öffentlich sichtbar.~~ **Seit 1.15.0:** Jeder
+  eingetragene Eintrag ist sofort öffentlich sichtbar. Nicht bestätigt wird nichts, weil
+  niemand gefragt wurde.
 - E-Mail-Adressen, UUIDs, interne IDs und Tokens sind im öffentlichen Quellcode nicht vorhanden.
 - ~~Ungültige oder fremde E-Mail-Adressen können keinen Eintrag veröffentlichen.~~
   **Seit 1.14.0 verschärft:** Es genügt nicht, dass eine Adresse zu einem Mitglied
   gehört, es muss auch die Nummer dazugehören — und die E-Mail-Adresse wird an der
   Fahrt überhaupt nicht gespeichert.
-- Bestätigungs- und Löschen-Links funktionieren einmalig und laufen korrekt ab.
-- Eine Vormerkung kann gelöscht und anschließend neu erstellt werden.
+- ~~Bestätigungs- und Löschen-Links funktionieren einmalig und laufen korrekt ab.~~
+  **Seit 1.15.0:** Der Löschlink funktioniert einmalig und läuft korrekt ab; ein zweiter
+  Klick mit demselben Link tut nichts und löscht nichts.
+- ~~Eine Vormerkung kann gelöscht und anschließend neu erstellt werden.~~ **Seit 1.15.0
+  gegenstandslos:** Es gibt keine Vormerkung. Der entsprechende Fall heißt jetzt: Ein
+  gelöschter Eintrag kann jederzeit neu eingetragen werden, und der neue Eintrag hat einen
+  eigenen Löschlink.
 - Der Kontakt erzeugt unabhängig von der Adressgültigkeit dieselbe öffentliche Antwort.
 - ~~Nur gültige Teilnehmeradressen lösen Kontakt-E-Mails aus.~~ **Seit 1.9.0 verschärft:** Es genügt nicht, dass eine Adresse zu einem Mitglied gehört — das Mitglied muss für genau den Arbeitsdienst eingetragen sein, um dessen Eintrag zu kontaktieren. Auf beiden Seiten des Kontakts, Anfragender wie das anbietende Mitglied.
 - Vergangene Arbeitsdienste verschwinden automatisch aus der öffentlichen Anzeige.
@@ -256,9 +285,9 @@ Die Umsetzung folgt dem Plan, ergänzt ihn aber an den folgenden Stellen. Die au
 - Alle drei öffentlichen Mutationen verlangen `POST`. Alle anderen Methoden beantworten WordPress mit Status 405 und `Allow: POST`, ohne etwas zu verändern.
 - Die HTTPS-Erzwingung setzt voraus, dass die Website überhaupt mit `https://` konfiguriert ist (`FG_Security::site_uses_https()`). Nur dann werden öffentliche Seiten umgeleitet, das Formular gesperrt und Mutationen abgewiesen. Auf einer Installation ohne TLS gibt es keine erreichbare HTTPS-Variante; eine erzwungene Umleitung dorthin erzeugt im Browser einen Protokollfehler und macht die Seite unbenutzbar. Ohne TLS wird die Anfrage deshalb normal bearbeitet und der Adminbereich weist auf den fehlenden HTTPS-Betrieb hin.
 - Ein abgelaufenes oder manipuliertes Formular-Token führt zu `form_expired`, ohne eine Aktion auszuführen.
-- Kann die Vormerkungs-E-Mail nicht zugestellt werden, wird der eben angelegte Eintrag wieder gelöscht (`email_failed`).
-- Kann die E-Mail mit dem Löschlink nach der Bestätigung nicht zugestellt werden, wird die Veröffentlichung zurückgenommen; die Vormerkungs-Token bleiben gültig, damit derselbe Bestätigungslink erneut funktioniert (`publish_failed`).
-- Die Bestätigungs-Mails enthalten weiterhin wörtlich „Ist der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.“, die Antwortmail an den Anfragenden ~~„Wir haben den Ersteller der Fahrgemeinschaft
+- ~~Kann die Vormerkungs-E-Mail nicht zugestellt werden, wird der eben angelegte Eintrag wieder gelöscht (`email_failed`).~~ **Seit 1.15.0:** Die E-Mail des frisch eingetragenen Eintrags geht nicht raus, der Eintrag bleibt stehen und bleibt öffentlich, `mail_send_failed` steigt und `publish_published` steigt nicht. Gelöscht wird nichts mehr: Es gibt keinen Zustand zurückzunehmen, in dem die Zeile unsichtbar gewesen wäre, und der Besitzer verliert durch einen stehengebliebenen Eintrag nichts gegenüber einem gelöschten.
+- ~~Kann die E-Mail mit dem Löschlink nach der Bestätigung nicht zugestellt werden, wird die Veröffentlichung zurückgenommen; die Vormerkungs-Token bleiben gültig, damit derselbe Bestätigungslink erneut funktioniert (`publish_failed`).~~ **Seit 1.15.0 entfallen:** Der Pfad gab es nur, weil die Veröffentlichung noch zurücknehmbar war.
+- Die E-Mail zur eingetragenen Fahrgemeinschaft enthält weiterhin wörtlich „Ist der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.“, die Antwortmail an den Anfragenden ~~„Wir haben den Ersteller der Fahrgemeinschaft
   benachrichtigt.“~~ **Seit 1.14.0 überholt:** Sie lautet „Wir haben das Mitglied
   benachrichtigt, das die Fahrgemeinschaft angeboten hat.“
 
@@ -454,3 +483,99 @@ Eine Sperre „eine Fahrt je Mitglied und Dienst“ ist mit dieser Fassung **nic
 eingeführt. Sie ist im Auftrag nicht verlangt worden und wäre eine eigene Entscheidung mit
 eigenen Folgen für den öffentlichen Text; sie gehört in einen eigenen Schritt, nicht in
 diesen.
+
+## Umsetzungsstand: Kein vorgemerkter Zustand (1.15.0, Schema 1.5.0)
+
+Ergänzt um den Auftrag vom 28.09.2026, am selben Tag wie die Mitgliedsnummer als Schlüssel.
+Der Auftrag hieß: Fahrten sofort veröffentlichen, nur die Infomail mit dem Löschlink
+schicken, und die Vormerkung soll weg. Das ist kein Refactoring, es ist eine Änderung am
+Ablauf — und sie hat eine Entscheidung, die man nicht aus dem Auftrag ableiten kann und die
+deshalb hier steht: **Was mit den Zeilen passiert, die zum Zeitpunkt der Aktualisierung noch
+vorgemerkt waren.**
+
+### Der Ablauf
+
+| Vorher (bis 1.14.0) | Jetzt (ab 1.15.0) |
+| --- | --- |
+| Pflichtfelder, Einwilligung, Honeypot prüfen | unverändert |
+| Zeile als `pending` schreiben | Zeile als `published` schreiben |
+| zwei Tokens erzeugen (`confirm`, `discard`) | ein Token erzeugen (`delete`) |
+| Bestätigungs-E-Mail mit zwei Links | Infomail mit einem Link |
+| Klick auf `confirm` → `published`, zweite Mail | entfällt |
+| Klick auf `discard` → Zeile weg | entfällt |
+| — | Klick auf `delete` → Rückfrageseite, dann POST → Zeile weg |
+
+Status, Zeitstempel und Löschtoken stehen in **einem** Statement. Das ist der ganze
+Mechanismus von 1.15.0: Es gibt kein Fenster, in dem die Zeile geschrieben, aber noch nicht
+sichtbar ist, und keinen Pfad, auf dem sie sichtbar wäre, ohne einen Löschlink zu haben.
+
+### Die Migration: löschen, nicht veröffentlichen
+
+```php
+FG_Schema::clear_pending_rides();         // DELETE … WHERE status = 'pending'
+FG_Schema::take_dropped_rides_notice();   // Zahl in dieselbe Option wie die Migration von 1.4.0
+```
+
+Eine vorgemerkte Zeile ist eine Einreichung, auf die niemand geantwortet hat. Ein Verein kann
+diese Stille nicht als Zustimmung zu einem öffentlichen Eintrag lesen, und er hat auch kein
+Werkzeug, sie zu prüfen: Der Bestätigungslink, den es dafür gäbe, ist mit dem Zustand weg.
+Die Alternativen waren **veröffentlichen** (aus einer unbeantworteten Einreichung wird ein
+öffentlicher Eintrag — nicht vertretbar) und **löschen** (der, der es wollte, bietet es mit
+einem Formular noch einmal an). Gewählt ist das Löschen, und die Zahl geht in dieselbe Option
+wie die der Fahrten ohne Mitglied aus der Migration von 1.4.0, damit der Verein **einmal**
+über beide Sorten von Verlust unterrichtet wird.
+
+Der Zähler wird von zwei Schritten gefüllt. `add_option()` wäre falsch: Es tut nichts, wenn
+die Option schon steht, und der zweite Schritt ginge verloren. Stattdessen addiert ein
+privater Akkumulator `count_dropped_rides()` per `update_option()`.
+
+### Was am Gerüst bleibt
+
+Die vier Spalten `pending_confirm_hash`, `pending_confirm_expires`,
+`pending_discard_hash` und `pending_discard_expires` bleiben im DDL. Sie werden weder
+gelesen noch geschrieben. Der Grund ist derselbe wie bei `alias`, `contact_email` und
+`participants`, und er ist in diesem Dokument schon einmal begründet worden: Ein
+zurückgerolltes Plugin darf nicht an einem unbekannten Feld scheitern. Die Begründung steht
+im Kommentarblock über `$statements` in `class-fg-schema.php`, weil das DDL sonst
+wegoptimiert wird und der Grund mit ihm.
+
+Eine Besonderheit gibt es nur hier, und sie wird in der DDL-Datei ausdrücklich genannt: Die
+Spalte `status` behält `DEFAULT 'published'`. Eine zurückgerollte Fassung, die eine Zeile
+anlegt, ohne einen Status zu schreiben, bekommt damit einen **öffentlichen** Eintrag statt
+einen vorgemerkten. Nach dem Wegfall des Zustands ist das die richtige Folge, aber aus
+anderem Grund als beabsichtigt, und wer das DDL anfasst, muss das wissen.
+
+### Der Menschen
+
+- **Eine E-Mail zu einer Fahrt statt zwei.** Ihr Betreff ist „Deine Fahrgemeinschaft ist
+  eingetragen – {{Arbeitsdienst}}“, sie nennt die öffentlichen Angaben und sagt ausdrücklich,
+  dass nichts mehr zu bestätigen ist. Der einzige Link trägt den Wortlaut „Fahrgemeinschaft
+  löschen“.
+- **Der Löschlink ist nicht ungefährlicher als vorher.** Er öffnet eine Handhabungsseite, die
+  den Eintrag benennt und den Knopf erst danach zeigt, und erst der POST löscht. Ein Link
+  in einer Mail wird von Scannern und von Menschen geklickt, die alles anklicken; die Seite
+  steht deshalb noch zwischen dem Klick und der Wirkung.
+- **Ein Fehler beim Mailversand löscht nichts mehr.** Die Zeile bleibt stehen und bleibt
+  öffentlich, `mail_send_failed` steigt, `publish_published` steigt nicht, und der Besitzer
+  kann den Eintrag über den Adminbereich löschen. Vorher wäre derselbe Fehler ein Grund
+  gewesen, den frisch veröffentlichten Eintrag wieder zu nehmen.
+- **Die Adminliste hat keine Statusspalte und keinen Statusfilter mehr.** Beide sind mit dem
+  Zustand weg; die Detailseite nennt **Eingetragen am** statt „Bestätigt am“.
+
+### Die Zähler
+
+| Vorher | Jetzt |
+| --- | --- |
+| `publish_pending` — Vormerkungen | `publish_published` — veröffentlichte Einträge |
+| `publish_confirmed` — aus Vormerkungen gewordene Einträge | `publish_deleted` — gelöschte Einträge |
+| `publish_failed` — misslungene Veröffentlichung | entfällt |
+
+Die beiden Namen sind nicht umbenannt, sondern ersetzt: `publish_pending` hätte seit dieser
+Fassung nichts mehr gezählt, und eine Tabelle im Adminbereich, die eine Zahl zeigt, die nie
+wächst, ist schlechter als eine, die es nicht gibt. `publish_deleted` zählt den Weg über den
+Löschlink, `publish_published` jeden Eintrag beim Absenden des Formulars.
+
+### Was offen bleibt
+
+Die echte CSV-Kopfzeile des Vereinsprogramms ist weiterhin offen und wird mit dem Import
+nachgezogen. Sie ist keine Frage dieser Fassung, sondern eine offene Angabe aus dem Auftrag.

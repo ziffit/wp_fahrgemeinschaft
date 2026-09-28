@@ -150,13 +150,16 @@ $ohne_bedarf_id = $repo->insert_event(
 	)
 );
 
-// Pending ride with a known confirmation token. A ride belongs to a member
-// since schema 1.4.0, so the fixture names a member, not an address and not a
-// label of its own: what the public list shows is the first name of that
-// member, so a check for a name has to look for "Anton" and not for a word that
-// only the fixture knows.
-$confirm_token = 'httpconfirmtoken0000000000000000000000A';
-$pending       = $repo->create_pending_ride(
+// A ride belongs to a member since schema 1.4.0, so the fixture names a member,
+// not an address and not a label of its own: what the public list shows is the
+// first name of that member, so a check for a name has to look for "Anton" and
+// not for a word that only the fixture knows.
+//
+// Both rides are published. create_ride() hands out a deletion token of its own
+// in the same write, and that token is what this fixture knows: the suite walks
+// the token page and the deletion path over the first ride, and the second one
+// stays in the list while that happens.
+$erste_id = $repo->create_ride(
 	array(
 		'event_id'  => $event_id,
 		'mode'      => FG_RIDE_MODE_OFFER,
@@ -164,22 +167,20 @@ $pending       = $repo->create_pending_ride(
 		'member_id' => $mitglied_ids['0042'],
 	)
 );
-$pending_id = $pending['id'];
+$erste_id = $erste_id['id'];
+$erste_token = 'httpdeletetoken00000000000000000000000A';
 $repo->update_ride(
-	$pending_id,
+	$erste_id,
 	array(
-		'pending_confirm_hash'    => FG_Security::hash_token( $confirm_token ),
-		'pending_confirm_expires' => time() + 3600,
-		'pending_discard_hash'    => FG_Security::hash_token( 'httpdiscardtoken0000000000000000000000B' ),
-		'pending_discard_expires' => time() + 3600,
+		'delete_hash'    => FG_Security::hash_token( $erste_token ),
+		'delete_expires' => time() + 30 * DAY_IN_SECONDS,
 	)
 );
 
-// Published ride with a known delete token. It belongs to the second member, so
-// that the two entries in the list carry two different names and a check cannot
-// pass on one of them by accident.
-$delete_token = 'httpdeletetoken00000000000000000000000C';
-$published    = $repo->create_pending_ride(
+// The second ride belongs to the second member, so that the two entries in the
+// list carry two different names and a check cannot pass on one of them by
+// accident.
+$zweite = $repo->create_ride(
 	array(
 		'event_id'  => $event_id,
 		'mode'      => FG_RIDE_MODE_SEARCH,
@@ -187,18 +188,13 @@ $published    = $repo->create_pending_ride(
 		'member_id' => $mitglied_ids['0043'],
 	)
 );
-$published_id = $published['id'];
+$published_id = $zweite['id'];
+$zweite_token = 'httpdeletetoken00000000000000000000000C';
 $repo->update_ride(
 	$published_id,
 	array(
-		'status'                  => FG_RIDE_STATUS_PUBLISHED,
-		'confirmed_at'            => current_time( 'mysql' ),
-		'pending_confirm_hash'    => '',
-		'pending_confirm_expires' => 0,
-		'pending_discard_hash'    => '',
-		'pending_discard_expires' => 0,
-		'delete_hash'             => FG_Security::hash_token( $delete_token ),
-		'delete_expires'          => time() + 30 * DAY_IN_SECONDS,
+		'delete_hash'    => FG_Security::hash_token( $zweite_token ),
+		'delete_expires' => time() + 30 * DAY_IN_SECONDS,
 	)
 );
 
@@ -211,16 +207,14 @@ $output = array(
 	'event_id'        => $event_id,
 	'event_ref'       => $event->public_ref,
 	'event_uuid'      => $event->event_uuid,
-	'pending_id'      => $pending_id,
-	'pending_ref'     => $repo->get_ride( $pending_id )->public_ref,
-	'confirm_token'   => $confirm_token,
-	'confirm_nonce'   => hash_hmac( 'sha256', 'confirm|' . $confirm_token, wp_salt( 'nonce' ) ),
-	'discard_token'   => 'httpdiscardtoken0000000000000000000000B',
-	'discard_nonce'   => hash_hmac( 'sha256', 'discard|httpdiscardtoken0000000000000000000000B', wp_salt( 'nonce' ) ),
+	'first_id'        => $erste_id,
+	'first_ref'       => $repo->get_ride( $erste_id )->public_ref,
+	'first_token'     => $erste_token,
+	'first_nonce'     => hash_hmac( 'sha256', 'delete|' . $erste_token, wp_salt( 'nonce' ) ),
 	'published_id'    => $published_id,
 	'published_ref'   => $repo->get_ride( $published_id )->public_ref,
-	'delete_token'    => $delete_token,
-	'delete_nonce'    => hash_hmac( 'sha256', 'delete|' . $delete_token, wp_salt( 'nonce' ) ),
+	'second_token'    => $zweite_token,
+	'second_nonce'    => hash_hmac( 'sha256', 'delete|' . $zweite_token, wp_salt( 'nonce' ) ),
 	'home'            => home_url( '/' ),
 	'admin_post'      => admin_url( 'admin-post.php' ),
 	'member_free_no'  => '0044',

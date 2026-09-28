@@ -123,11 +123,15 @@ final class FG_Ride {
 	public $event_id = 0;
 
 	/**
-	 * `pending` until the creator confirmed by mail, then `published`.
+	 * `published` — a ride is visible from the moment it is written.
+	 *
+	 * The column stays because a version of this plugin that is rolled back
+	 * reads it, and because is_valid_public_ride() asks for it rather than
+	 * trusting that every row was written by the current code.
 	 *
 	 * @var string
 	 */
-	public $status = FG_RIDE_STATUS_PENDING;
+	public $status = FG_RIDE_STATUS_PUBLISHED;
 
 	/**
 	 * `offer` or `search`.
@@ -151,7 +155,11 @@ final class FG_Ride {
 	public $public_ref = '';
 
 	/**
-	 * Confirmation time, empty while the ride is only a suggestion.
+	 * Time the ride was published, which since 1.15.0 is its creation time.
+	 *
+	 * The column is named after the confirmation it used to wait for. It is
+	 * written in the same statement that writes the row, so it is never empty on
+	 * a ride this version created.
 	 *
 	 * @var string
 	 */
@@ -177,34 +185,6 @@ final class FG_Ride {
 	 * @var string
 	 */
 	public $created_at = '';
-
-	/**
-	 * Hash of the confirmation token.
-	 *
-	 * @var string
-	 */
-	public $pending_confirm_hash = '';
-
-	/**
-	 * Confirmation token expiry as unix timestamp.
-	 *
-	 * @var int
-	 */
-	public $pending_confirm_expires = 0;
-
-	/**
-	 * Hash of the discard token.
-	 *
-	 * @var string
-	 */
-	public $pending_discard_hash = '';
-
-	/**
-	 * Discard token expiry as unix timestamp.
-	 *
-	 * @var int
-	 */
-	public $pending_discard_expires = 0;
 
 	/**
 	 * Hash of the deletion token of a published ride.

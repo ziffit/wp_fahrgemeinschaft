@@ -28,14 +28,7 @@ defined( 'ABSPATH' ) || exit;
  */
 final class FG_Mail_Texts {
 	/**
-	 * The message that asks a new ride to be published.
-	 *
-	 * @var string
-	 */
-	const RIDE_PENDING = 'ride_pending';
-
-	/**
-	 * The message after a ride has been published.
+	 * The message that tells a member their ride is in the list.
 	 *
 	 * @var string
 	 */
@@ -70,7 +63,7 @@ final class FG_Mail_Texts {
 	const NOTICE_OPTION = 'fg_mail_text_notices';
 
 	/**
-	 * All five messages with their defaults and their placeholders.
+	 * All four messages with their defaults and their placeholders.
 	 *
 	 * A message is a list rather than a single string because it is three
 	 * things at once: what a reader sees, what a club may change, and what a
@@ -95,25 +88,23 @@ final class FG_Mail_Texts {
 	 */
 	public static function mails() {
 		return array(
-			self::RIDE_PENDING     => array(
-				'label'        => __( 'Fahrgemeinschaft bestätigen', 'arbeitsdienste' ),
-				'description'  => __( 'Geht an die E-Mail-Adresse des Mitglieds, das die Fahrgemeinschaft angeboten hat, direkt nach dem Absenden des Formulars. Sie enthält den Bestätigen- und den Verwerfen-Link.', 'arbeitsdienste' ),
-				'subject'      => 'Fahrgemeinschaft bestätigen – {{Arbeitsdienst}}',
-				'body'         => "{{Anrede}},\n\nDeine Eintragung wurde vorgemerkt, aber noch nicht veröffentlicht.\n\nDiese Angaben würden öffentlich erscheinen:\n\nArt: {{Art}}\nVorname: {{Vorname}}\nArbeitsdienst: {{Arbeitsdienstdetails}}\nAbfahrtsbereich: {{Abfahrtsbereich}}\n\nDein Vorname steht dabei öffentlich. Er stammt aus der Mitgliederverwaltung des Vereins, nicht aus deiner Eingabe. Der Abfahrtsbereich ist das Einzige, was du selbst einträgst: Gib dort keine genaue Adresse, keine Telefonnummer und kein Kennzeichen an.\n\nVERÖFFENTLICHUNG BESTÄTIGEN:\n{{Bestaetigungslink}}\n\nDu hast einen Fehler gemacht oder möchtest die Eintragung nicht veröffentlichen?\nEintrag löschen und nicht veröffentlichen:\n{{Verwerfungslink}}\n\nBitte leite diese E-Mail mit den enthaltenen Links nicht weiter.\n\nBei Fragen nutze das Kontaktformular auf der Webseite.",
+			self::RIDE_PUBLISHED   => array(
+				'label'        => __( 'Fahrgemeinschaft eingetragen', 'arbeitsdienste' ),
+				'description'  => __( 'Geht an das Mitglied, das die Fahrgemeinschaft angeboten hat, direkt nach dem Absenden des Formulars. Sie ist die einzige Mail zu einer Fahrgemeinschaft, nennt die Angaben, die öffentlich stehen, und enthält den Lösch-Link.', 'arbeitsdienste' ),
+				'subject'      => 'Deine Fahrgemeinschaft ist eingetragen – {{Arbeitsdienst}}',
+				'body'         => "{{Anrede}},\n\ndeine Fahrgemeinschaft steht in der Liste. Sie ist sofort öffentlich, es ist nichts mehr zu bestätigen.\n\nDiese Angaben stehen öffentlich:\n\nArt: {{Art}}\nVorname: {{Vorname}}\nArbeitsdienst: {{Arbeitsdienstdetails}}\nAbfahrtsbereich: {{Abfahrtsbereich}}\n\nDein Vorname steht dabei öffentlich. Er stammt aus der Mitgliederverwaltung des Vereins, nicht aus deiner Eingabe. Der Abfahrtsbereich ist das Einzige, was du selbst einträgst.\n\nDu kannst deine Eintragung löschen, wenn du diesen Link aufrufst:\n{{Loeschlink}}\n\nAchtung: Beim endgültigen Löschen erfolgt keine weitere Rückfrage.\n\nWenn sich jemand zu deiner Eintragung meldet, erhältst du eine E-Mail.\nJetzt könnt ihr euch direkt austauschen, zum Beispiel auch über Telefonnummern.\n\nIst der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.\n\nBitte leite diese E-Mail mit dem enthaltenen Link nicht weiter.\n\nBei Fragen nutze das Kontaktformular auf der Webseite.",
 				'placeholders' => array(
-					'{{Anrede}}'           => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Die Mail geht an das Mitglied, das die Fahrgemeinschaft angeboten hat, und ein Mitglied hat immer einen Vornamen — hier steht also immer ein Name.', 'arbeitsdienste' ),
+					'{{Anrede}}'           => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Die Mail geht an dasselbe Mitglied, das die Fahrgemeinschaft angeboten hat, und ein Mitglied hat immer einen Vornamen.', 'arbeitsdienste' ),
 					'{{Vorname}}'          => __( 'Vorname des Mitglieds, aus der Mitgliederverwaltung. Dieser Name steht öffentlich in der Liste, und niemand kann einen anderen eintragen.', 'arbeitsdienste' ),
 					'{{Name}}'             => __( 'Nachname des Mitglieds, aus der Mitgliederverwaltung. Ein Mitglied hat immer einen, der Platzhalter bleibt also nie leer.', 'arbeitsdienste' ),
 					'{{Art}}'              => __( 'Ob gesucht oder geboten wird, als „Ich suche“ oder „Ich biete“.', 'arbeitsdienste' ),
 					'{{Arbeitsdienst}}'    => __( 'Titel des Arbeitsdienstes, an den die Fahrgemeinschaft gehört.', 'arbeitsdienste' ),
 					'{{Arbeitsdienstdetails}}' => __( 'Titel und Datum des Arbeitsdienstes in einer Zeile, zum Beispiel „Flussaktion (2027-06-12)“. Steht der Arbeitsdienst ohne Datum dort, steht hier nur der Titel.', 'arbeitsdienste' ),
 					'{{Abfahrtsbereich}}'  => __( 'Der Ort oder das Gebiet, das das Mitglied angegeben hat.', 'arbeitsdienste' ),
-					'{{Bestaetigungslink}}' => __( 'Link, mit dem die Eintragung veröffentlicht wird. Ohne diesen Link passiert nichts. Mit einem Doppelpunkt und eigenem Wortlaut dahinter wird daraus der Text des Links: {{Bestaetigungslink:Fahrgemeinschaft bestätigen}}}.', 'arbeitsdienste' ),
-					'{{Verwerfungslink}}'  => __( 'Link, mit dem die Eintragung gelöscht wird, ohne veröffentlicht zu werden. Mit einem Doppelpunkt und eigenem Wortlaut dahinter wird daraus der Text des Links: {{Verwerfungslink:Eintragung verwerfen}}}.', 'arbeitsdienste' ),
+					'{{Loeschlink}}'       => __( 'Link, mit dem die Eintragung endgültig gelöscht wird. Das Löschen erfolgt ohne weitere Rückfrage. Mit einem Doppelpunkt und eigenem Wortlaut dahinter wird daraus der Text des Links: {{Loeschlink:Fahrgemeinschaft löschen}}}.', 'arbeitsdienste' ),
 				),
 				'links'        => array(
-					'{{Bestaetigungslink}}' => __( 'Fahrgemeinschaft bestätigen', 'arbeitsdienste' ),
-					'{{Verwerfungslink}}'   => __( 'Eintragung verwerfen', 'arbeitsdienste' ),
+					'{{Loeschlink}}' => __( 'Fahrgemeinschaft löschen', 'arbeitsdienste' ),
 				),
 				'sample'       => array(
 					'Anrede'              => 'Hallo Anton',
@@ -123,31 +114,7 @@ final class FG_Mail_Texts {
 					'Arbeitsdienst'       => 'Flussaktion',
 					'Arbeitsdienstdetails' => 'Flussaktion (2027-06-12)',
 					'Abfahrtsbereich'     => 'Innenstadt',
-					'Bestaetigungslink'   => 'https://example.org/?fg_ride_action=view&ride_ref=8a1f0c2b&token=9d41b0c7a5e64f2f8c3b7a1e0d6f92b48',
-					'Verwerfungslink'     => 'https://example.org/?fg_ride_action=view&ride_ref=8a1f0c2b&token=3c9e5a71b8d24f60ae5b1c7d93f28a04',
-				),
-			),
-			self::RIDE_PUBLISHED   => array(
-				'label'        => __( 'Fahrgemeinschaft veröffentlicht', 'arbeitsdienste' ),
-				'description'  => __( 'Geht an die E-Mail-Adresse desselben Mitglieds, sobald die Veröffentlichung bestätigt wurde. Sie enthält den endgültigen Lösch-Link.', 'arbeitsdienste' ),
-				'subject'      => 'Fahrgemeinschaft veröffentlicht – {{Arbeitsdienst}}',
-				'body'         => "{{Anrede}},\n\ndanke für die Veröffentlichung deiner Eintragung.\n\nDu kannst deine Eintragung löschen, wenn du diesen Link aufrufst:\n{{Loeschlink}}\n\nAchtung: Beim endgültigen Löschen erfolgt keine weitere Rückfrage.\n\nWenn sich jemand zu deiner Eintragung meldet, erhältst du eine E-Mail.\nJetzt könnt ihr euch direkt austauschen, zum Beispiel auch über Telefonnummern.\n\nIst der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.\n\nBei Fragen nutze das Kontaktformular auf der Webseite.",
-				'placeholders' => array(
-					'{{Anrede}}'        => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Die Mail geht an dasselbe Mitglied, das die Fahrgemeinschaft angeboten hat, und ein Mitglied hat immer einen Vornamen.', 'arbeitsdienste' ),
-					'{{Vorname}}'       => __( 'Vorname des Mitglieds, aus der Mitgliederverwaltung. Ein Mitglied hat immer einen, der Platzhalter bleibt also nie leer.', 'arbeitsdienste' ),
-					'{{Name}}'          => __( 'Nachname des Mitglieds, aus der Mitgliederverwaltung. Ein Mitglied hat immer einen, der Platzhalter bleibt also nie leer.', 'arbeitsdienste' ),
-					'{{Arbeitsdienst}}' => __( 'Titel des Arbeitsdienstes, an den die Fahrgemeinschaft gehört.', 'arbeitsdienste' ),
-					'{{Loeschlink}}'    => __( 'Link, mit dem die Eintragung endgültig gelöscht wird. Das Löschen erfolgt ohne weitere Rückfrage. Mit einem Doppelpunkt und eigenem Wortlaut dahinter wird daraus der Text des Links: {{Loeschlink:Fahrgemeinschaft löschen}}}.', 'arbeitsdienste' ),
-				),
-				'links'        => array(
-					'{{Loeschlink}}' => __( 'Fahrgemeinschaft löschen', 'arbeitsdienste' ),
-				),
-				'sample'       => array(
-					'Anrede'        => 'Hallo Anton',
-					'Vorname'       => 'Anton',
-					'Name'          => 'Berger',
-					'Arbeitsdienst' => 'Flussaktion',
-					'Loeschlink'    => 'https://example.org/?fg_ride_action=view&ride_ref=8a1f0c2b&token=e57b0c93f2a148d6b8e0c37a1d94f652',
+					'Loeschlink'          => 'https://example.org/?fg_ride_action=view&ride_ref=8a1f0c2b&token=e57b0c93f2a148d6b8e0c37a1d94f652',
 				),
 			),
 			self::CONTACT_CREATOR => array(

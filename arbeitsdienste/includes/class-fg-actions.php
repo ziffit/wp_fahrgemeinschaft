@@ -8,13 +8,13 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Handles ride submission, confirmation, deletion and contact requests, and the
- * registration of a member for a work service together with its reversal.
+ * Handles ride submission, deletion and contact requests, and the registration
+ * of a member for a work service together with its reversal.
  *
- * The two flows are kept apart on purpose. A ride is a public entry that has to
- * be confirmed and can be deleted again, so it carries status, two pending
- * tokens and one deletion token. A registration is made against the club's
- * member administration, so there is nothing left to confirm and only one way
+ * The two flows are kept apart on purpose. A ride is a public entry that is
+ * visible as soon as it is written and can be deleted again by mail, so it
+ * carries a status and one deletion token. A registration is made against the
+ * club's member administration, so it has nothing to confirm and only one way
  * back out. They share the helpers below and nothing else.
  */
 final class FG_Actions {
@@ -68,7 +68,7 @@ final class FG_Actions {
 	}
 
 	/**
-	 * Store a new pending ride and send its confirmation e-mail.
+	 * Publish a new ride and send the one mail that belongs to it.
 	 *
 	 * @return void
 	 */
@@ -133,7 +133,7 @@ final class FG_Actions {
 
 		$this->stats->increment( 'publish_valid_email' );
 
-		$ride = $this->repository->create_pending_ride(
+		$ride = $this->repository->create_ride(
 			array(
 				'event_id'   => $event->id,
 				'mode'       => $mode,
@@ -147,19 +147,25 @@ final class FG_Actions {
 			FG_Security::redirect_with_notice( 'not_created', $source );
 		}
 
-		$ride_id     = $ride['id'];
-		$public_ref  = $this->repository->get_ride( $ride_id )->public_ref;
-		$confirm_url = $this->action_url( $public_ref, 'confirm', $ride['confirm_token'] );
-		$discard_url = $this->action_url( $public_ref, 'discard', $ride['discard_token'] );
+		$ride_id    = $ride['id'];
+		$public_ref = $this->repository->get_ride( $ride_id )->public_ref;
+		$delete_url = $this->action_url( $public_ref, 'delete', $ride['delete_token'] );
 
-		if ( ! $this->mailer->send_pending_confirmation( $ride_id, $confirm_url, $discard_url ) ) {
+		// A ride whose mail did not go out is taken back out again. The entry is
+		// in the public list from this moment on, and the mail is the only way its
+		// author learns that it is there — an entry nobody can take down is worse
+		// than a missing one, so the row goes and the visitor is told the mail
+		// failed. This is the same trade the code made before, only the window in
+		// which it applied was smaller: the row was pending then, and the person
+		// was still expected to confirm it.
+		if ( ! $this->mailer->send_published_confirmation( $ride_id, $delete_url ) ) {
 			$this->repository->delete_ride( $ride_id );
 			$this->stats->increment( 'mail_send_failed' );
 			FG_Security::redirect_with_notice( 'email_failed', $source );
 		}
 
-		$this->stats->increment( 'publish_pending' );
-		FG_Security::redirect_with_notice( 'pending', $source );
+		$this->stats->increment( 'publish_published' );
+		FG_Security::redirect_with_notice( 'published', $source );
 	}
 
 	/**
@@ -311,26 +317,18 @@ final class FG_Actions {
 			);
 		}
 
-		$data      = $this->repository->get_ride_display_data( $ride );
-		$mode      = 'search' === $data['mode'] ? __( 'Ich suche', 'arbeitsdienste' ) : __( 'Ich biete', 'arbeitsdienste' );
-		$mitglied  = $data['member'];
-		$is_delete = 'delete' === $intent;
-		$heading   = $is_delete
-			? __( 'Veröffentlichte Fahrgemeinschaft löschen', 'arbeitsdienste' )
-			: ( 'discard' === $intent
-				? __( 'Vorgemerkte Eintragung löschen', 'arbeitsdienste' )
-				: __( 'Veröffentlichung bestätigen', 'arbeitsdienste' ) );
-		$button    = $is_delete
-			? __( 'Endgültig löschen', 'arbeitsdienste' )
-			: ( 'discard' === $intent
-				? __( 'Eintragung löschen und nicht veröffentlichen', 'arbeitsdienste' )
-				: __( 'Veröffentlichung bestätigen', 'arbeitsdienste' ) );
-		$warning   = 'confirm' === $intent
-			? __( 'Mit der Bestätigung werden die unten stehenden Angaben öffentlich angezeigt. Bitte prüfe sie sorgfältig.', 'arbeitsdienste' )
-			: __( 'Achtung: Diese Aktion ist sofort und ohne weitere Rückfrage wirksam.', 'arbeitsdienste' );
+		$data     = $this->repository->get_ride_display_data( $ride );
+		$mode     = 'search' === $data['mode'] ? __( 'Ich suche', 'arbeitsdienste' ) : __( 'Ich biete', 'arbeitsdienste' );
+		$mitglied = $data['member'];
 
-		$body  = '<h1>' . esc_html( $heading ) . '</h1>';
-		$body .= '<div class="warning"><p>' . esc_html( $warning ) . '</p></div>';
+		// The deletion token is the only token a ride has, so this page has one
+		// job: name the entry before it is removed. It exists because a link in a
+		// mail is followed by scanners and by people who click everything, and a
+		// single button on a bare page would be one of those. The list below says
+		// which entry is meant, the warning says what is about to happen, and only
+		// then does the button appear.
+		$body  = '<h1>' . esc_html__( 'Fahrgemeinschaft löschen', 'arbeitsdienste' ) . '</h1>';
+		$body .= '<div class="warning"><p>' . esc_html__( 'Achtung: Diese Aktion ist sofort und ohne weitere Rückfrage wirksam.', 'arbeitsdienste' ) . '</p></div>';
 		$body .= '<dl>';
 		$body .= '<dt>' . esc_html__( 'Art', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $mode ) . '</dd>';
 		// The member is named in one line or in none. A ride whose member has
@@ -345,21 +343,21 @@ final class FG_Actions {
 		$body .= '<dt>' . esc_html__( 'Arbeitsdienst', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $data['event_label'] . ( $data['event_date'] ? ' (' . $data['event_date'] . ')' : '' ) ) . '</dd>';
 		$body .= '<dt>' . esc_html__( 'Abfahrtsbereich', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $data['origin'] ) . '</dd>';
 		$body .= '</dl>';
-		$body .= '<p><strong>' . esc_html__( 'Vorname, Mitgliedsnummer und E-Mail-Adresse werden nicht öffentlich angezeigt.', 'arbeitsdienste' ) . '</strong></p>';
+		$body .= '<p><strong>' . esc_html__( 'Die E-Mail-Adresse des Mitglieds steht nicht auf dieser Seite.', 'arbeitsdienste' ) . '</strong></p>';
 		$body .= '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
 		$body .= '<input type="hidden" name="action" value="fg_process_ride_token">';
 		$body .= '<input type="hidden" name="ride_ref" value="' . esc_attr( $data['public_ref'] ) . '">';
 		$body .= '<input type="hidden" name="intent" value="' . esc_attr( $intent ) . '">';
 		$body .= '<input type="hidden" name="token" value="' . esc_attr( $token ) . '">';
 		$body .= '<input type="hidden" name="token_nonce" value="' . esc_attr( $this->token_form_nonce( $intent, $token ) ) . '">';
-		$body .= '<div class="actions"><button type="submit" class="' . ( $is_delete || 'discard' === $intent ? 'secondary' : '' ) . '">' . esc_html( $button ) . '</button></div>';
+		$body .= '<div class="actions"><button type="submit" class="secondary">' . esc_html__( 'Endgültig löschen', 'arbeitsdienste' ) . '</button></div>';
 		$body .= '</form>';
 
-		FG_Security::render_standalone_page( $heading, $body );
+		FG_Security::render_standalone_page( __( 'Fahrgemeinschaft löschen', 'arbeitsdienste' ), $body );
 	}
 
 	/**
-	 * Process confirmation, discard or published-delete POST requests.
+	 * Process a published-delete POST request.
 	 *
 	 * @return void
 	 */
@@ -386,66 +384,12 @@ final class FG_Actions {
 			FG_Security::redirect_with_notice( 'form_expired', $source );
 		}
 
-		$pending_tokens = array(
-			'confirm_hash'    => $ride->pending_confirm_hash,
-			'confirm_expires' => $ride->pending_confirm_expires,
-			'discard_hash'    => $ride->pending_discard_hash,
-			'discard_expires' => $ride->pending_discard_expires,
-		);
-
-		if ( ! $this->claim_token( $ride, $intent, $token ) ) {
+		// The token is claimed before the row is touched, so two parallel clicks
+		// cannot both count as one deletion. The row is read again afterwards: a
+		// request that lost the race finds the ride gone and is refused, which is
+		// the same answer as an invalid link.
+		if ( ! $this->claim_delete_token( $ride, $token ) ) {
 			FG_Security::redirect_with_notice( 'invalid_token', $source );
-		}
-
-		if ( 'confirm' === $intent ) {
-			// The member is re-read here rather than trusted from the row. A
-			// member who was removed from the club between submitting the form
-			// and clicking the link must not publish an entry that names them,
-			// and the address the mail goes to has to be one that still exists.
-			$member = $this->repository->get_member( $ride->member_id );
-			if (
-				! $this->repository->is_event_active( $ride->event_id )
-				|| ! $this->repository->is_displayable_member( $member )
-				|| ! $this->repository->is_event_participant( $ride->event_id, $ride->member_id )
-				|| '' === $ride->consent_version
-			) {
-				$this->restore_token( $ride, $intent, $token );
-				FG_Security::redirect_with_notice( 'invalid_token', $source );
-			}
-
-			$delete_token   = FG_Security::create_token();
-			$delete_expires = $this->published_delete_expiry( $ride->event_id );
-
-			// A single write publishes the ride and hands out the deletion
-			// token, so there is no state in which a published ride exists
-			// without a working self-service deletion link.
-			$published = $this->repository->update_ride(
-				$ride->id,
-				array(
-					'status'                  => FG_RIDE_STATUS_PUBLISHED,
-					'confirmed_at'            => current_time( 'mysql' ),
-					'pending_confirm_hash'    => '',
-					'pending_confirm_expires' => 0,
-					'pending_discard_hash'    => '',
-					'pending_discard_expires' => 0,
-					'delete_hash'             => FG_Security::hash_token( $delete_token ),
-					'delete_expires'          => $delete_expires,
-				)
-			);
-
-			if ( ! $published ) {
-				FG_Security::redirect_with_notice( 'invalid_token', $source );
-			}
-
-			$delete_url = $this->action_url( $ride->public_ref, 'delete', $delete_token );
-			if ( ! $this->mailer->send_published_confirmation( $ride->id, $delete_url ) ) {
-				$this->stats->increment( 'mail_send_failed' );
-				$this->rollback_confirmation( $ride, $pending_tokens );
-				FG_Security::redirect_with_notice( 'publish_failed', $source );
-			}
-
-			$this->stats->increment( 'publish_confirmed' );
-			FG_Security::redirect_with_notice( 'published', $source );
 		}
 
 		$this->stats->increment( 'publish_deleted' );
@@ -649,48 +593,11 @@ final class FG_Actions {
 	}
 
 	/**
-	 * Undo a confirmation when the delete link could not be delivered.
-	 *
-	 * The pending tokens are restored so the same confirmation link still
-	 * works; without them the entry is removed instead of being published
-	 * without a working self-service deletion path.
-	 *
-	 * @param FG_Ride $ride    Ride record.
-	 * @param array   $pending Stored pending token data.
-	 * @return void
-	 */
-	private function rollback_confirmation( $ride, $pending ) {
-		if ( '' === $pending['confirm_hash'] || '' === $pending['discard_hash'] ) {
-			$this->repository->delete_ride( $ride->id );
-			return;
-		}
-
-		$this->repository->update_ride(
-			$ride->id,
-			array(
-				'status'                  => FG_RIDE_STATUS_PENDING,
-				'confirmed_at'            => null,
-				'delete_hash'             => '',
-				'delete_expires'          => 0,
-				'pending_confirm_hash'    => $pending['confirm_hash'],
-				'pending_confirm_expires' => (int) $pending['confirm_expires'],
-				'pending_discard_hash'    => $pending['discard_hash'],
-				'pending_discard_expires' => (int) $pending['discard_expires'],
-			)
-		);
-	}
-
-	/**
-	 * Delete expired pending rides and old aggregate statistics.
+	 * Delete expired tokens and old aggregate statistics.
 	 *
 	 * @return void
 	 */
 	public function daily_cleanup() {
-		foreach ( $this->repository->get_expired_pending_ride_ids() as $ride_id ) {
-			$this->repository->delete_ride( $ride_id );
-			$this->stats->increment( 'publish_deleted' );
-		}
-
 		foreach ( $this->repository->get_expired_published_token_ride_ids() as $ride_id ) {
 			$this->repository->update_ride(
 				$ride_id,
@@ -845,16 +752,14 @@ final class FG_Actions {
 	}
 
 	/**
-	 * Return required status and meta keys for a token intent.
+	 * Return the status and the token columns of the only token intent.
 	 *
 	 * @param string $intent Action intent.
 	 * @return array<int, string>|null
 	 */
 	private function token_definition( $intent ) {
 		$map = array(
-			'confirm' => array( FG_RIDE_STATUS_PENDING, 'pending_confirm_hash', 'pending_confirm_expires' ),
-			'discard' => array( FG_RIDE_STATUS_PENDING, 'pending_discard_hash', 'pending_discard_expires' ),
-			'delete'  => array( FG_RIDE_STATUS_PUBLISHED, 'delete_hash', 'delete_expires' ),
+			'delete' => array( FG_RIDE_STATUS_PUBLISHED, 'delete_hash', 'delete_expires' ),
 		);
 
 		return isset( $map[ $intent ] ) ? $map[ $intent ] : null;
@@ -880,63 +785,35 @@ final class FG_Actions {
 	}
 
 	/**
-	 * Consume a token before acting on it.
+	 * Consume the deletion token before acting on it.
 	 *
-	 * The conditional update is a compare-and-swap on the stored hash, so a
-	 * link that is opened twice is only ever processed once. The row is read
-	 * again afterwards: if a competing request already moved the ride on (a
-	 * confirmation while a discard was still in flight), the claim is released
-	 * again and the request is refused.
+	 * The conditional update is a compare-and-swap on the stored hash, so a link
+	 * that is opened twice is only ever processed once. The row is read again
+	 * afterwards: a request that lost the race finds the ride already gone and is
+	 * refused.
 	 *
-	 * @param FG_Ride $ride   Ride record.
-	 * @param string  $intent Action intent.
-	 * @param string  $token  Raw token.
+	 * There is no counterpart that hands the token back. The claim used to exist
+	 * to undo a confirmation that could not be delivered; a deletion is not
+	 * undone, and a competing deletion needs no repair — the row is gone either
+	 * way.
+	 *
+	 * @param FG_Ride $ride  Ride record.
+	 * @param string  $token Raw token.
 	 * @return bool
 	 */
-	private function claim_token( $ride, $intent, $token ) {
-		$definition = $this->token_definition( $intent );
-		if ( ! $definition || ! $ride instanceof FG_Ride ) {
+	private function claim_delete_token( $ride, $token ) {
+		if ( ! $ride instanceof FG_Ride ) {
 			return false;
 		}
 
 		$claimed = $this->repository->claim_token(
 			$ride->id,
-			$definition[1],
-			$definition[2],
+			'delete_hash',
+			'delete_expires',
 			FG_Security::hash_token( $token )
 		);
 
-		if ( ! $claimed ) {
-			return false;
-		}
-
-		$fresh = $this->repository->get_ride( $ride->id );
-		if ( ! $fresh || $fresh->status !== $definition[0] ) {
-			$this->restore_token( $ride, $intent, $token );
-			return false;
-		}
-
-		return true;
-	}
-
-	/**
-	 * Hand a claimed token back to the ride.
-	 *
-	 * @param FG_Ride $ride   Ride record.
-	 * @param string  $intent Action intent.
-	 * @param string  $token  Raw token.
-	 * @return void
-	 */
-	private function restore_token( $ride, $intent, $token ) {
-		$definition = $this->token_definition( $intent );
-		if ( ! $definition || ! $ride instanceof FG_Ride ) {
-			return;
-		}
-
-		$this->repository->update_ride(
-			$ride->id,
-			array( $definition[1] => FG_Security::hash_token( $token ) )
-		);
+		return $claimed && null !== $this->repository->get_ride( $ride->id );
 	}
 
 	/**
@@ -983,30 +860,6 @@ final class FG_Actions {
 	}
 
 	/**
-	 * Return an expiry at least 30 days after the event display cut-off.
-	 *
-	 * @param int $event_id Event ID.
-	 * @return int
-	 */
-	private function published_delete_expiry( $event_id ) {
-		$event = $this->repository->get_event( $event_id );
-		$now   = time() + DAY_IN_SECONDS;
-
-		if ( ! $event || ! FG_Repository::is_valid_date( $event->event_date ) ) {
-			return $now + FG_PUBLISHED_DELETE_TOKEN_TTL;
-		}
-
-		$time      = FG_Repository::is_valid_time( $event->event_time ) ? $event->event_time : '23:59';
-		$zone      = wp_timezone();
-		$date_time = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $event->event_date . ' ' . $time, $zone );
-		if ( ! $date_time instanceof DateTimeImmutable ) {
-			return $now + FG_PUBLISHED_DELETE_TOKEN_TTL;
-		}
-
-		return max( $now, $date_time->getTimestamp() + FG_PUBLISHED_DELETE_TOKEN_TTL );
-	}
-
-	/**
 	 * Record an unusually fast submission without blocking it.
 	 *
 	 * @param int $started_at Client-provided start timestamp.
@@ -1031,15 +884,22 @@ final class FG_Actions {
 	/**
 	 * Detect contact details in a value that is published verbatim.
 	 *
-	 * A first name or a nickname is expected in the public list and is not
-	 * touched here. What is rejected are the details that do not belong in a
-	 * list anyone can read: e-mail addresses, phone numbers, and house numbers
-	 * together with a street name. The server therefore does not rely on the
-	 * hint text and the confirmation preview alone.
+	 * Only the pickup area is checked now. The name in the public list comes
+	 * from the member administration, so nothing a visitor types can put an
+	 * address into it. What is rejected are the details that do not belong in
+	 * a list anyone can read: e-mail addresses, phone numbers, and house
+	 * numbers together with a street name.
 	 *
-	 * A full name is not detected, because that cannot be done reliably. It
-	 * stays a matter of the confirmation preview, where the person reads back
-	 * exactly what becomes public before confirming.
+	 * Before 1.15.0 this ran over the name a visitor chose as well, and a
+	 * confirmation mail showed the person what would become public. Both are
+	 * gone: the name is not typed, and there is no confirmation to read. That is
+	 * why the area field carries its examples on the page and why the counter
+	 * behind this check is read by the test suite — the hint is advice, and
+	 * this is the part that decides.
+	 *
+	 * A full name is not detected, because that cannot be done reliably. It also
+	 * does not have to be: the only free text is an area, and a name is not a
+	 * contact detail that would be read by anyone.
 	 *
 	 * @param string $value Submitted value.
 	 * @return bool

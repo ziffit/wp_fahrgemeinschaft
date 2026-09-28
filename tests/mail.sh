@@ -79,8 +79,8 @@ if ( '1' !== (string) get_option( 'fg_test_mail_enabled', '0' ) ) {
 
 echo "== Mail level tests =="
 
-# --- 1. submission produces exactly one confirmation mail
-echo "[1] confirmation mail for a new entry"
+# --- 1. a submission produces exactly one mail, and the entry is public
+echo "[1] the mail for a new entry"
 before=$(count_mails)
 submit_nonce=$(curl -sk "$BASE/?page_id=$PAGE_ID" | grep -o 'name="fg_submit_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
@@ -94,7 +94,7 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 	--data-urlencode "fg_submit_nonce=$submit_nonce")
-has "submission is accepted" "$loc" "fg_notice=pending"
+has "submission is accepted" "$loc" "fg_notice=published"
 after=$(count_mails)
 if [ "$((after - before))" = "1" ]; then ok "exactly one mail was sent"; else bad "exactly one mail was sent" "$((after - before))"; fi
 
@@ -104,50 +104,43 @@ MAIL_TYPE=$(mail_type)
 MAIL_HEADERS=$(mail_headers)
 MAIL_BODY=$(mail_body)
 if [ "$MAIL_TO" = "$EINREICHER_MAIL" ]; then ok "mail goes to the address of the member number"; else bad "mail goes to the address of the member number" "$MAIL_TO"; fi
-has "subject names the work duty" "$MAIL_SUBJECT" "Fahrgemeinschaft bestätigen – Arbeitsdienst Laber"
-has "body announces the pre-registration" "$MAIL_BODY" "noch nicht veröffentlicht"
+has "subject names the work duty" "$MAIL_SUBJECT" "Deine Fahrgemeinschaft ist eingetragen – Arbeitsdienst Laber"
+has "body says the entry is in the list" "$MAIL_BODY" "deine Fahrgemeinschaft steht in der Liste"
+has "body says nothing is left to confirm" "$MAIL_BODY" "es ist nichts mehr zu bestätigen"
+has "body names the area the member gave" "$MAIL_BODY" "Abfahrtsbereich: Oststadt"
 has "body names the first name from the member list" "$MAIL_BODY" "Vorname: Anton"
 has "body says where the name comes from" "$MAIL_BODY" "Er stammt aus der Mitgliederverwaltung"
+has "dictated sentence about the end of the work duty" "$MAIL_BODY" "Ist der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt."
+has "the mail offers the delete link" "$MAIL_BODY" "Du kannst deine Eintragung löschen, wenn du diesen Link aufrufst:"
+has "the mail explains the deletion" "$MAIL_BODY" "Achtung: Beim endgültigen Löschen erfolgt keine weitere Rückfrage."
 if [ "$MAIL_TYPE" = "text/plain" ]; then ok "plugin forces no content type ($MAIL_TYPE)"; else bad "plugin forces no content type" "$MAIL_TYPE"; fi
 hasnt "headers carry no content type" "$MAIL_HEADERS" "Content-Type"
 hasnt "plain text alternative has no html" "$MAIL_BODY" "<html"
 hasnt "plain text alternative has no html links" "$MAIL_BODY" "<a href"
-has "confirm link uses the https site" "$MAIL_BODY" "$BASE/?fg_ride_action=view&ride_ref="
-hasnt "confirm link carries no post id" "$MAIL_BODY" "fg_fahrgemeinschaft="
-hasnt "confirm link has no uuid" "$MAIL_BODY" "$(python3 -c "import json;print(json.load(open('$F'))['event_uuid'])")"
+has "the link uses the https site" "$MAIL_BODY" "$BASE/?fg_ride_action=view&ride_ref="
+hasnt "the link carries no post id" "$MAIL_BODY" "fg_fahrgemeinschaft="
+hasnt "the link has no uuid" "$MAIL_BODY" "$(python3 -c "import json;print(json.load(open('$F'))['event_uuid'])")"
 
-echo "[1b] the link in the mail is the only way in"
-confirm_url=$(printf '%s' "$MAIL_BODY" | grep -o "$BASE/?fg_ride_action=view&ride_ref=[^ ]*" | head -1)
-if [ -n "$confirm_url" ]; then ok "confirm link extracted"; else bad "confirm link extracted" "none"; fi
-html=$(curl -sk "$confirm_url")
-has "link opens the confirmation page" "$html" "Veröffentlichung bestätigen"
-has "confirmation page names the first name of the member" "$html" "Anton"
-hasnt "confirmation page shows no other entry" "$html" "Berta"
-
-# --- 2. confirming sends the publication mail with the dictated sentence
-echo "[2] publication mail"
-ride_ref=$(printf '%s' "$html" | grep -o 'name="ride_ref" value="[^"]*"' | sed 's/.*value="//;s/"//')
-token=$(printf '%s' "$html" | grep -o 'name="token" value="[^"]*"' | sed 's/.*value="//;s/"//')
-token_nonce=$(printf '%s' "$html" | grep -o 'name="token_nonce" value="[^"]*"' | sed 's/.*value="//;s/"//')
-loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
-	--data-urlencode "action=fg_process_ride_token" \
-	--data-urlencode "ride_ref=$ride_ref" \
-	--data-urlencode "intent=confirm" \
-	--data-urlencode "token=$token" \
-	--data-urlencode "token_nonce=$token_nonce")
-has "confirmation succeeds" "$loc" "fg_notice=published"
-MAIL_TO=$(mail_to)
-MAIL_BODY=$(mail_body)
-if [ "$MAIL_TO" = "anton@angeln.example.org" ]; then ok "publication mail to the same address"; else bad "publication mail to the same address" "$MAIL_TO"; fi
-has "dictated sentence about the end of the work duty" "$MAIL_BODY" "Ist der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt."
-has "publication mail offers the delete link" "$MAIL_BODY" "Du kannst deine Eintragung löschen, wenn du diesen Link aufrufst:"
-has "publication mail explains the deletion" "$MAIL_BODY" "Achtung: Beim endgültigen Löschen erfolgt keine weitere Rückfrage."
+echo "[1b] the link in the mail, and the entry without it"
+# The mail is the receipt and the way out, not the thing that publishes the
+# entry. So the entry is in the list before the link is opened, and the link
+# leads to a page that removes it.
+has "the entry is in the list without the link being opened" "$(curl -sk "$BASE/?page_id=$PAGE_ID")" "Oststadt"
+hasnt "and the mail never calls it a pre-registration" "$MAIL_BODY" "vorgemerkt"
+hasnt "the mail carries no confirmation intent" "$MAIL_BODY" "intent=confirm"
+hasnt "the mail carries no discard intent" "$MAIL_BODY" "intent=discard"
+delete_url=$(printf '%s' "$MAIL_BODY" | grep -o "$BASE/?fg_ride_action=view&ride_ref=[^ ]*intent=delete[^ ]*" | head -1)
+if [ -n "$delete_url" ]; then ok "delete link extracted"; else bad "delete link extracted" "none"; fi
+html=$(curl -sk "$delete_url")
+has "link opens the deletion page" "$html" "Fahrgemeinschaft löschen"
+has "the deletion page names the first name of the member" "$html" "Anton"
+hasnt "the deletion page shows no other entry" "$html" "Berta"
 
 # --- 3. deletion through the mail link
 echo "[3] deletion through the mail link"
 delete_url=$(printf '%s' "$MAIL_BODY" | grep -o "$BASE/?fg_ride_action=view&ride_ref=[^ ]*intent=delete[^ ]*" | head -1)
 html=$(curl -sk "$delete_url")
-has "delete page renders" "$html" "Veröffentlichte Fahrgemeinschaft löschen"
+has "delete page renders" "$html" "Fahrgemeinschaft löschen"
 ride_ref=$(printf '%s' "$html" | grep -o 'name="ride_ref" value="[^"]*"' | sed 's/.*value="//;s/"//')
 token=$(printf '%s' "$html" | grep -o 'name="token" value="[^"]*"' | sed 's/.*value="//;s/"//')
 token_nonce=$(printf '%s' "$html" | grep -o 'name="token_nonce" value="[^"]*"' | sed 's/.*value="//;s/"//')
@@ -234,6 +227,13 @@ if ( '1' === \$value ) { update_option( 'fg_test_mail_fail', '1' ); }
 "; }
 submit_nonce=$(curl -sk "$BASE/?page_id=$PAGE_ID" | grep -o 'name="fg_submit_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
 
+# The counters are read before the failure and after it. The entry is written
+# first and taken back out again when the mail does not go out, so the question
+# the counters answer is whether the failure is counted as what it is: a failed
+# mail, and not a publication. Both are read as a difference, so the check
+# cannot pass on a number that was already there.
+veroeffentlicht_vorher=$(s stat publish_published)
+fehlgeschlagen_vorher=$(s stat mail_send_failed)
 mail_fail 1
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_submit_ride" \
@@ -251,7 +251,15 @@ body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
 hasnt "undelivered entry is gone again" "$body" "Oststadt-Ausfall"
 left=$(s count-origin "Oststadt-Ausfall")
 if [ "$left" = "0" ]; then ok "no record is left in the database"; else bad "no record is left in the database" "$left"; fi
+fehlgeschlagen_nachher=$(s stat mail_send_failed)
+if [ "$fehlgeschlagen_nachher" -gt "$fehlgeschlagen_vorher" ]; then ok "and the failed mail is counted ($fehlgeschlagen_vorher -> $fehlgeschlagen_nachher)"; else bad "the failed mail is counted" "$fehlgeschlagen_vorher -> $fehlgeschlagen_nachher"; fi
+if [ "$(s stat publish_published)" = "$veroeffentlicht_vorher" ]; then ok "while no publication is counted ($(s stat publish_published))"; else bad "a failed mail counts as no publication" "$veroeffentlicht_vorher -> $(s stat publish_published)"; fi
 
+# A ride is published when the form is sent, so an undeliverable mail leaves one
+# way out and no other: the entry is taken back and the visitor is told to try
+# again. What the previous code did instead — undo a publication when its mail
+# failed — is gone with the second mail that made it necessary, and what replaces
+# it as the case worth a check is that the member can simply submit again.
 mail_fail 0
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_submit_ride" \
@@ -264,34 +272,15 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 	--data-urlencode "fg_submit_nonce=$submit_nonce")
-has "second submission is pending" "$loc" "fg_notice=pending"
-confirm_url=$(mail_body | grep -o "$BASE/?fg_ride_action=view&ride_ref=[^ ]*" | head -1)
-html=$(curl -sk "$confirm_url")
-ride_ref=$(printf '%s' "$html" | grep -o 'name="ride_ref" value="[^"]*"' | sed 's/.*value="//;s/"//')
-token=$(printf '%s' "$html" | grep -o 'name="token" value="[^"]*"' | sed 's/.*value="//;s/"//')
-token_nonce=$(printf '%s' "$html" | grep -o 'name="token_nonce" value="[^"]*"' | sed 's/.*value="//;s/"//')
-
-mail_fail 1
-loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
-	--data-urlencode "action=fg_process_ride_token" \
-	--data-urlencode "ride_ref=$ride_ref" \
-	--data-urlencode "intent=confirm" \
-	--data-urlencode "token=$token" \
-	--data-urlencode "token_nonce=$token_nonce")
-has "confirmation reports the failed delivery" "$loc" "fg_notice=publish_failed"
+has "a second attempt after the failure is published" "$loc" "fg_notice=published"
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-hasnt "unpublished entry stays out of the list" "$body" "Oststadt-Ruecknahme"
-
-mail_fail 0
-loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
-	--data-urlencode "action=fg_process_ride_token" \
-	--data-urlencode "ride_ref=$ride_ref" \
-	--data-urlencode "intent=confirm" \
-	--data-urlencode "token=$token" \
-	--data-urlencode "token_nonce=$token_nonce")
-has "the same link works again after the failure" "$loc" "fg_notice=published"
-body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-has "entry is public after the retry" "$body" "Oststadt-Ruecknahme"
+has "and its entry is public at once" "$body" "Oststadt-Ruecknahme"
+if [ "$(s stat publish_published)" -gt "$veroeffentlicht_vorher" ]; then ok "and now a publication is counted ($(s stat publish_published))"; else bad "the retry counts as a publication" "$veroeffentlicht_vorher -> $(s stat publish_published)"; fi
+# The retry is only a way out of the failure if it comes with a working link of
+# its own, and not with the one of the attempt that was taken back.
+MAIL_BODY=$(mail_body)
+has "and the mail of the retry carries its own delete link" "$MAIL_BODY" "Du kannst deine Eintragung löschen, wenn du diesen Link aufrufst:"
+hasnt "and the mail of the failed attempt is still the newest" "$MAIL_BODY" "Oststadt-Ausfall"
 
 # clean up: remove the test entry again through its own link
 delete_url=$(mail_body | grep -o "$BASE/?fg_ride_action=view&ride_ref=[^ ]*intent=delete[^ ]*" | head -1)

@@ -332,7 +332,7 @@ else
 fi
 has "shows the retention note" "$stats" "nach 90 Tagen entfernt"
 has "shows the three periods" "$stats" "Letzte 30 Tage"
-has "shows counter labels" "$stats" "Vorgemerkte Einträge"
+has "shows counter labels" "$stats" "Veröffentlichte Einträge"
 hasnt "statistics show no address" "$stats" "@example"
 has "work duty screen is linked" "$stats" "page=fahrgemeinschaften-events"
 has "member screen is linked" "$stats" "page=fahrgemeinschaften-members"
@@ -447,11 +447,10 @@ echo "[4] ride screens"
 # environment happens to hold.
 neu 7301 fahrer@angeln.example.org Frieda Fahrlich
 RIDE_ID=$(s make-ride "$EVENT_ID" offer Innenstadt 7301)
-PUBLISHED_RIDE=$(s make-ride "$EVENT_ID" search Suedstadt 7301 published)
+PUBLISHED_RIDE=$(s make-ride "$EVENT_ID" search Suedstadt 7301)
 rides=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides")
 has "ride list renders" "$rides" "Fahrgemeinschaften"
 has "event filter present" "$rides" 'name="fg_event_filter"'
-has "status filter present" "$rides" 'name="fg_status_filter"'
 has "the list names the ride after the first name of its member" "$rides" "Frieda"
 has "the list names the member by number" "$rides" "7301"
 has "the list names the member by first and last name" "$rides" "Frieda Fahrlich"
@@ -462,7 +461,9 @@ clean "$rides" "ride list"
 
 detail=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&ride=$RIDE_ID")
 has "detail screen renders" "$detail" "Innenstadt"
-has "detail shows the status" "$detail" "Vorgemerkt"
+has "detail shows when the entry was made" "$detail" "Eingetragen am"
+hasnt "detail shows no confirmation date any more" "$detail" "Bestätigt am"
+hasnt "detail shows no status any more" "$detail" "Vorgemerkt"
 has "detail shows the first name of the member" "$detail" "Frieda"
 has "detail shows the last name of the member" "$detail" "Fahrlich"
 has "detail shows the member number" "$detail" "7301"
@@ -472,17 +473,26 @@ hasnt "detail has no save button" "$detail" 'name="fg_alias"'
 clean "$detail" "ride detail screen"
 
 echo "[4b] filtering the ride list"
-# The two rides of this section sit in different areas, because the area is the
-# only free text a ride has left and the filter check counts on being able to
-# tell them apart. Both belong to the same member, so the name column is the
-# same on both rows and cannot serve as the marker.
-filtered=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&fg_status_filter=pending&fg_event_filter=$EVENT_ID")
-has "pending filter keeps the pending ride" "$filtered" "Innenstadt"
-hasnt "pending filter hides the published ride" "$filtered" "Suedstadt"
-other=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&fg_status_filter=published")
-has "published filter keeps the published ride" "$other" "Suedstadt"
-hasnt "published filter hides the pending ride" "$other" "Innenstadt"
-clean "$other" "filtered ride list"
+# Since 1.15.0 the list carries one filter instead of two: the work duty. Every
+# entry in the list is published, so a filter by status could not have kept two
+# rows apart, and a field that cannot do its job is decoration. The checks below
+# therefore filter by duty — the rides of that duty stay, the ride of the other
+# duty is gone, and without a parameter both duties are on the page again.
+#
+# The ride of the second duty belongs to the same member as the other two, so the
+# name column is the same on all three rows and cannot serve as the marker. Only
+# the area can, and it is the one free text a ride has.
+ZWEITER=$(s make-event "Zweiter Arbeitsdienst" "$(date -d '+50 days' +%Y-%m-%d)" 4 "10:00")
+FREMDE_RIDE=$(s make-ride "$ZWEITER" search Fernstadt 7301)
+filtered=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&fg_event_filter=$EVENT_ID")
+has "the duty filter keeps the offered ride of that duty" "$filtered" "Innenstadt"
+has "and the searched ride of the same duty" "$filtered" "Suedstadt"
+hasnt "the duty filter hides the ride of the other duty" "$filtered" "Fernstadt"
+alle=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides")
+has "without a parameter the list carries both duties" "$alle" "Fernstadt"
+has "and the duty of the first rides as well" "$alle" "Innenstadt"
+hasnt "and the page carries no status filter" "$alle" 'name="fg_status_filter"'
+clean "$alle" "filtered ride list"
 
 echo "[4c] a member who left the club after offering a ride"
 # The ride row is complete and points at a member that is not there any more.
@@ -2025,7 +2035,7 @@ s delete-member "$(s member-by-no 0900 id)" >/dev/null
 s delete-member "$EVENTMITGLIED" >/dev/null
 
 
-# --- the wording of the five messages
+# --- the wording of the four messages
 echo "[13] the wording of the messages"
 
 ANREDE=$(s make-event "Anrede der Mails" "$(date -d '+40 days' +%Y-%m-%d)" 6 "09:00")
@@ -2038,26 +2048,26 @@ clean "$list" "E-Mails screen"
 # a word cannot do: the label of one message is not in another row, but both
 # would be found on the page.
 zeilen=$(printf '%s' "$list" | grep -c '<tr>')
-if [ "$zeilen" -eq 6 ]; then
+if [ "$zeilen" -eq 5 ]; then
 	ok "the list has one row per message and a header ($zeilen rows)"
 else
 	bad "the list has one row per message and a header" "$zeilen rows"
 fi
 
-for BESCHRIFTUNG in "Fahrgemeinschaft bestätigen" "Fahrgemeinschaft veröffentlicht" "Kontaktanfrage an das Mitglied" "Bestätigung an die anfragende Person" "Anmeldung zu einem Arbeitsdienst"; do
+for BESCHRIFTUNG in "Fahrgemeinschaft eingetragen" "Kontaktanfrage an das Mitglied" "Bestätigung an die anfragende Person" "Anmeldung zu einem Arbeitsdienst"; do
 	has "the list names: $BESCHRIFTUNG" "$list" "$BESCHRIFTUNG"
 done
 
-# A message that nobody changed says so. Four of the five are untouched at the
-# start of this section, and the fifth is put back to its default at the end of
-# it, so all five rows carry the word and no row carries a date. The word is
-# counted on a line of its own, because the page also says "Auf Standard
+# A message that nobody changed says so. All four are untouched at the start of
+# this section, and the one this section writes is put back to its default at
+# the end of it, so all four rows carry the word and no row carries a date. The
+# word is counted on a line of its own, because the page also says "Auf Standard
 # zurücksetzen" below the list and that one is not a row.
 standard=$(printf '%s' "$list" | grep -cE 'Standard[[:space:]]*</td>')
-if [ "$standard" -eq 5 ]; then
+if [ "$standard" -eq 4 ]; then
 	ok "an untouched message says Standard ($standard rows)"
 else
-	bad "an untouched message says Standard" "$standard of 5 rows"
+	bad "an untouched message says Standard" "$standard of 4 rows"
 fi
 hasnt "an untouched message does not carry a date" "$list" "geändert am 1970"
 
@@ -2210,7 +2220,7 @@ fi
 rm -f "$DIR/fg-mail-body.txt"
 
 # --- the preview shows both parts, with invented names
-# The link is the one that names this message. The page carries five of them,
+# The link is the one that names this message. The page carries four of them,
 # one per row of the list above the form, and taking the first hands back the
 # preview of the first message — which is a different text with a different
 # subject, and every check below it would then be about the wrong message
@@ -2220,9 +2230,9 @@ import re, sys, html
 links = [html.unescape(u) for u in re.findall(r'href=\"([^\"]*fg_mail_text_preview[^\"]*)\"', sys.stdin.read())]
 print(next((u for u in links if 'mail=duty_signup' in u), ''))")
 if [ -n "$vorschau_url" ]; then
-	ok "the preview link of this message is findable among the five"
+	ok "the preview link of this message is findable among the four"
 else
-	bad "the preview link of this message is findable among the five" "no link with mail=duty_signup"
+	bad "the preview link of this message is findable among the four" "no link with mail=duty_signup"
 fi
 vorschau=$(curl -sk -b "$JAR" "$vorschau_url")
 clean "$vorschau" "mail preview"
@@ -2361,16 +2371,16 @@ has "a wrong nonce does not change the text" "$(s mail-text-body duty_signup)" "
 
 # --- one message is not the next
 NONCE=$(printf '%s' "$formular" | grep -o 'name="fg_mail_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
-curl -sk -b "$JAR" -o /dev/null -d "action=fg_save_mail&mail=ride_pending&fg_mail_nonce=$NONCE" \
+curl -sk -b "$JAR" -o /dev/null -d "action=fg_save_mail&mail=ride_published&fg_mail_nonce=$NONCE" \
 	--data-urlencode "fg_mail_subject=Fremd" --data-urlencode "fg_mail_body=Fremd" "$BASE/wp-admin/admin-post.php"
 
 # The nonce of the form of one message opens the save of another. It has to:
 # WordPress cannot know which message a form belongs to, and a nonce that
 # belonged to one key would let a club open a form and then be told its own
 # nonce is wrong for a message it never typed.
-has "the text of another message can be saved with the nonce of this form" "$(s mail-text-body ride_pending)" "Fremd"
+has "the text of another message can be saved with the nonce of this form" "$(s mail-text-body ride_published)" "Fremd"
 
-# A key that is not one of the five must not become a row of its own. The table
+# A key that is not one of the four must not become a row of its own. The table
 # has no foreign key to a list of keys, so this is the only thing that stops a
 # row that no screen can edit and no send path reads.
 fremd=$(s mail-text-rows fremde_mail)
@@ -2379,8 +2389,8 @@ if [ "$fremd" = "0" ]; then ok "an unknown key becomes no row"; else bad "an unk
 # The row above is put back now and not at the end of the section: the section
 # continues with a check that makes a message of its own, and a leftover from
 # this one would sit in the table as the state the section hands on.
-s mail-text-reset ride_pending > /dev/null
-if [ "$(s mail-text-rows ride_pending)" = "0" ]; then ok "the row of the other message is gone again"; else bad "the row of the other message is gone again" "$(s mail-text-rows ride_pending) rows"; fi
+s mail-text-reset ride_published > /dev/null
+if [ "$(s mail-text-rows ride_published)" = "0" ]; then ok "the row of the other message is gone again"; else bad "the row of the other message is gone again" "$(s mail-text-rows ride_published) rows"; fi
 
 # --- back to the standard
 formular_geaendert=$(curl -sk -b "$JAR" "$MAILS&mail=duty_signup")
@@ -2419,7 +2429,7 @@ has "the form shows the default text again" "$formular" "Der Link führt zu eine
 hasnt "an unchanged message is not offered the way back" "$formular" "Auf Standard zurücksetzen"
 s mail-text-body duty_signup | grep -q "{{Anrede}},$" && ok "the default text starts with the greeting" || bad "the default text starts with the greeting" "$(s mail-text-body duty_signup | head -1)"
 
-# --- a key that is not one of the five opens no form
+# --- a key that is not one of the four opens no form
 fremd_seite=$(curl -sk -b "$JAR" "$MAILS&mail=ganz_andere_mail")
 clean "$fremd_seite" "unknown message"
 hasnt "an unknown key opens no form" "$fremd_seite" 'name="fg_mail_body"'
@@ -2516,7 +2526,7 @@ fi
 meldung=$(kasten 'fg-mail-meldung' <<< "$(curl -sk -b "$JAR" "$MAILS")")
 pruef "$meldung" "the notice names the message" "
 import sys
-sys.exit(0 if 'Fahrgemeinschaft bestätigen' in sys.stdin.read() else 1)
+sys.exit(0 if 'Fahrgemeinschaft eingetragen' in sys.stdin.read() else 1)
 " "the box does not name the message"
 pruef "$meldung" "the notice says the message was not sent" "
 import sys
@@ -2538,7 +2548,7 @@ s mail-text-clear > /dev/null
 s delete-member "$(s member-by-no 7203 id)" > /dev/null
 if [ "$(s mail-text-notices)" = "0" ]; then ok "the notices can be cleared"; else bad "the notices can be cleared" "$(s mail-text-notices) left"; fi
 hasnt "a cleared notice is gone from the screen" "$(curl -sk -b "$JAR" "$MAILS")" "nicht verschickt"
-if [ "$(s mail-text-rows ride_pending)" = "0" ]; then ok "the held-back text is gone again"; else bad "the held-back text is gone again" "$(s mail-text-rows ride_pending) rows"; fi
+if [ "$(s mail-text-rows ride_published)" = "0" ]; then ok "the held-back text is gone again"; else bad "the held-back text is gone again" "$(s mail-text-rows ride_published) rows"; fi
 
 # Every work duty of this run is removed again, so a repeated run does not pile
 # them up in the offer form of a manual test afterwards. The list is written
@@ -2547,7 +2557,7 @@ if [ "$(s mail-text-rows ride_pending)" = "0" ]; then ok "the held-back text is 
 # section that created it is a duty that is left behind as soon as that
 # section changes, and that is how three of them survived a run that reported
 # itself clean.
-ALLEDIENSTE="$EVENT_ID $CASCADE $LOESCH $VOLLEDUTY $FREIES $OHNE $WEG $NEW_ID $ANREDE"
+ALLEDIENSTE="$EVENT_ID $CASCADE $LOESCH $VOLLEDUTY $FREIES $OHNE $WEG $NEW_ID $ANREDE $ZWEITER"
 ERWARTET=0
 GERAUMT=0
 for dienst in $ALLEDIENSTE; do

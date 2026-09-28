@@ -121,10 +121,14 @@ switch ( $command ) {
 		fg_state_out( $sum );
 		break;
 
-	case 'count-pending-token':
+	// Since 1.15.0 a ride is published when it is written, so there is no token
+	// that waits for a confirmation. The command is kept as the opposite of the
+	// check that a submission publishes something: a suite that wants to see a
+	// ride refuse its own deletion link asks for the count of empty hashes.
+	case 'count-delete-token':
 		$found = 0;
 		foreach ( $repo->get_rides_page( array(), 0, 0 ) as $ride ) {
-			if ( '' !== $ride->pending_confirm_hash ) {
+			if ( '' !== $ride->delete_hash ) {
 				++$found;
 			}
 		}
@@ -201,8 +205,6 @@ switch ( $command ) {
 			'consent_version',
 			'consented_at',
 			'created_at',
-			'pending_confirm_hash',
-			'pending_discard_hash',
 			'delete_hash',
 			'delete_expires',
 			'source_url',
@@ -389,16 +391,20 @@ switch ( $command ) {
 		}
 		break;
 
-	// make-ride <event_id> <mode> <origin> <member_no> [published]
+	// make-ride <event_id> <mode> <origin> <member_no>
 	//
 	// A ride belongs to a member since schema 1.4.0, so the name is looked up
 	// from a member number and not passed in. Callers that used to hand in an
 	// address of their own need a member row behind it now, which is the point:
 	// a ride whose member does not exist is a case the plugin has to survive,
 	// and the suites build it on purpose rather than by accident.
+	//
+	// The fifth argument used to publish the row. Since 1.15.0 there is nothing
+	// to publish afterwards — the row is written as published — so the argument
+	// is gone rather than kept and ignored.
 	case 'make-ride':
 		$mitglied = $repo->get_member_by_number( isset( $args[3] ) ? (string) $args[3] : '' );
-		$ride     = $repo->create_pending_ride(
+		$ride     = $repo->create_ride(
 			array(
 				'event_id'  => isset( $args[0] ) ? $args[0] : 0,
 				'mode'      => isset( $args[1] ) ? $args[1] : FG_RIDE_MODE_OFFER,
@@ -406,17 +412,7 @@ switch ( $command ) {
 				'member_id' => $mitglied ? $mitglied->id : 0,
 			)
 		);
-		$ride_id = $ride['id'];
-		if ( $ride_id && isset( $args[4] ) && FG_RIDE_STATUS_PUBLISHED === $args[4] ) {
-			$repo->update_ride(
-				$ride_id,
-				array(
-					'status'       => FG_RIDE_STATUS_PUBLISHED,
-					'confirmed_at' => current_time( 'mysql' ),
-				)
-			);
-		}
-		fg_state_out( $ride_id );
+		fg_state_out( $ride['id'] );
 		break;
 
 	case 'find-event':
@@ -580,7 +576,7 @@ switch ( $command ) {
 
 		fg_mail_text_write(
 			$mail_table,
-			FG_Mail_Texts::RIDE_PENDING,
+			FG_Mail_Texts::RIDE_PUBLISHED,
 			'Ein Platzhalter aus der Zukunft',
 			'Hallo {{Anrede}}, dein Eintrag ist da: {{Erfunden}}.'
 		);
@@ -589,7 +585,7 @@ switch ( $command ) {
 		// to. The wording in the table is the thing under test, not the ride.
 		$mitglied = $repo->get_member_by_number( isset( $args[1] ) ? (string) $args[1] : '' );
 
-		$ride = $repo->create_pending_ride(
+		$ride = $repo->create_ride(
 			array(
 				'event_id'  => isset( $args[0] ) ? (int) $args[0] : 0,
 				'mode'      => FG_RIDE_MODE_OFFER,
@@ -601,10 +597,9 @@ switch ( $command ) {
 		$vorher = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $log" );
 
 		$mailer = new FG_Mailer( $repo );
-		$weg    = $mailer->send_pending_confirmation(
+		$weg    = $mailer->send_published_confirmation(
 			$ride['id'],
-			'https://example.invalid/bestaetigen',
-			'https://example.invalid/verwerfen'
+			'https://example.invalid/loeschen'
 		);
 
 		$nachher = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $log" );
@@ -616,7 +611,7 @@ switch ( $command ) {
 		// has to see on the screen, and a command that cleaned it up would
 		// leave the caller nothing to read. FG_Mail_Texts::clear_notices() is
 		// the way out, and the suite checks that it is.
-		FG_Mail_Texts::reset( FG_Mail_Texts::RIDE_PENDING );
+		FG_Mail_Texts::reset( FG_Mail_Texts::RIDE_PUBLISHED );
 		$repo->delete_ride( $ride['id'] );
 
 		if ( '1' === $option_vor ) {
@@ -652,7 +647,7 @@ switch ( $command ) {
 		$fragend   = $repo->get_member_by_number( isset( $args[2] ) ? (string) $args[2] : '' );
 		$vorher_id = (int) $wpdb->get_var( "SELECT COALESCE( MAX( id ), 0 ) FROM $log" );
 
-		$ride = $repo->create_pending_ride(
+		$ride = $repo->create_ride(
 			array(
 				'event_id'  => isset( $args[0] ) ? (int) $args[0] : 0,
 				'mode'      => FG_RIDE_MODE_OFFER,

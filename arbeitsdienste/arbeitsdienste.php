@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Arbeitsdienste
  * Description:       Arbeitsdienste eines Vereins planen, Mitglieder eintragen und öffentlich anbieten, mit Anmeldung zum Dienst und zu den Fahrgemeinschaften je Dienst.
- * Version:           1.14.0
+ * Version:           1.15.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            Verein
@@ -31,7 +31,7 @@ defined( 'ABSPATH' ) || exit;
  * Verein eine neue Version, die es nicht gibt, und liefert beim Update die alte
  * Optik zur neuen. Beide Zahlen werden deshalb zusammen gesetzt.
  */
-define( 'FG_VERSION', '1.14.0' );
+define( 'FG_VERSION', '1.15.0' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
 /**
  * Name of the element that carries a message after a form was sent.
@@ -50,7 +50,6 @@ define( 'FG_MAILS_PAGE_SLUG', 'fahrgemeinschaften-mails' );
 define( 'FG_SETTINGS_OPTION', 'fg_settings' );
 define( 'FG_STATS_OPTION', 'fg_daily_statistics' );
 define( 'FG_CLEANUP_OPTION', 'fg_last_cleanup' );
-define( 'FG_PENDING_TOKEN_TTL', 48 * HOUR_IN_SECONDS );
 define( 'FG_PUBLISHED_DELETE_TOKEN_TTL', 30 * DAY_IN_SECONDS );
 define( 'FG_STATISTICS_RETENTION_DAYS', 90 );
 /**
@@ -74,7 +73,6 @@ define( 'FG_STATISTICS_RETENTION_DAYS', 90 );
  * the only field that disappeared is the one the visitor used to choose.
  */
 define( 'FG_CONSENT_VERSION', '1.2' );
-define( 'FG_RIDE_STATUS_PENDING', 'pending' );
 define( 'FG_RIDE_STATUS_PUBLISHED', 'published' );
 define( 'FG_RIDE_MODE_OFFER', 'offer' );
 define( 'FG_RIDE_MODE_SEARCH', 'search' );

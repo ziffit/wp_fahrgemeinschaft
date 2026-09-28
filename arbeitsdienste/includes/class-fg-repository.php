@@ -499,7 +499,7 @@ final class FG_Repository {
 	/**
 	 * Get a page of rides for the admin list.
 	 *
-	 * @param array $args   Filters: event_id, status.
+	 * @param array $args   Filters: event_id.
 	 * @param int   $offset Rows to skip.
 	 * @param int   $limit  Maximum rows.
 	 * @return FG_Ride[]
@@ -514,7 +514,7 @@ final class FG_Repository {
 	/**
 	 * Count rides matching the given filters.
 	 *
-	 * @param array $args Filters: event_id, status.
+	 * @param array $args Filters: event_id.
 	 * @return int
 	 */
 	public function count_rides( array $args = array() ) {
@@ -546,21 +546,29 @@ final class FG_Repository {
 	}
 
 	/**
-	 * Store a new ride in the pending state and return its tokens.
+	 * Store a new ride and return its deletion token.
 	 *
-	 * A public submission never becomes visible on its own. It starts as
-	 * pending with two one-time tokens: one to confirm, one to discard. The
-	 * raw tokens are returned once so the caller can put them into the
-	 * confirmation mail; only their hashes are stored.
+	 * A public submission is published when it is written. There is no state
+	 * between the form and the public list that a person has to confirm, and no
+	 * second mail: the one mail that goes out carries the deletion link and
+	 * serves as the receipt.
+	 *
+	 * The status, the publication time and the deletion token are written in a
+	 * single statement, so there is no moment in which a visible ride exists
+	 * without a working self-service deletion link. That was the same reason the
+	 * old confirmation step wrote status and token in one go; the guarantee
+	 * simply moved to the creation.
+	 *
+	 * The raw token is returned once so the caller can put it into the mail; only
+	 * its hash is stored.
 	 *
 	 * @param array $fields Ride fields: event_id, mode, member_id, origin, source_url.
-	 * @return array{id: int, confirm_token: string, discard_token: string}
+	 * @return array{id: int, delete_token: string}
 	 */
-	public function create_pending_ride( array $fields ) {
+	public function create_ride( array $fields ) {
 		$failed = array(
-			'id'            => 0,
-			'confirm_token' => '',
-			'discard_token' => '',
+			'id'           => 0,
+			'delete_token' => '',
 		);
 
 		$event_id  = isset( $fields['event_id'] ) ? absint( $fields['event_id'] ) : 0;
@@ -578,29 +586,23 @@ final class FG_Repository {
 			return $failed;
 		}
 
-		$confirm_token = FG_Security::create_token();
-		$discard_token = FG_Security::create_token();
-		$expires       = time() + FG_PENDING_TOKEN_TTL;
+		$delete_token = FG_Security::create_token();
 
 		$ride_id = $this->store->insert_ride(
 			array(
-				'event_id'                => $event_id,
-				'status'                  => FG_RIDE_STATUS_PENDING,
-				'mode'                    => $mode,
-				'origin'                  => $origin,
-				'member_id'               => $member_id,
-				'public_ref'              => $this->create_public_reference( 'rides' ),
-				'confirmed_at'            => null,
-				'consent_version'         => FG_CONSENT_VERSION,
-				'consented_at'            => $now,
-				'created_at'              => $now,
-				'pending_confirm_hash'    => FG_Security::hash_token( $confirm_token ),
-				'pending_confirm_expires' => $expires,
-				'pending_discard_hash'    => FG_Security::hash_token( $discard_token ),
-				'pending_discard_expires' => $expires,
-				'delete_hash'             => '',
-				'delete_expires'          => 0,
-				'source_url'              => FG_Security::safe_source_url( isset( $fields['source_url'] ) ? $fields['source_url'] : '' ),
+				'event_id'        => $event_id,
+				'status'          => FG_RIDE_STATUS_PUBLISHED,
+				'mode'            => $mode,
+				'origin'          => $origin,
+				'member_id'       => $member_id,
+				'public_ref'      => $this->create_public_reference( 'rides' ),
+				'confirmed_at'    => $now,
+				'consent_version' => FG_CONSENT_VERSION,
+				'consented_at'    => $now,
+				'created_at'      => $now,
+				'delete_hash'     => FG_Security::hash_token( $delete_token ),
+				'delete_expires'  => $this->published_delete_expiry( $event_id ),
+				'source_url'      => FG_Security::safe_source_url( isset( $fields['source_url'] ) ? $fields['source_url'] : '' ),
 			)
 		);
 
@@ -609,10 +611,39 @@ final class FG_Repository {
 		}
 
 		return array(
-			'id'            => $ride_id,
-			'confirm_token' => $confirm_token,
-			'discard_token' => $discard_token,
+			'id'           => $ride_id,
+			'delete_token' => $delete_token,
 		);
+	}
+
+	/**
+	 * Return an expiry at least 30 days after the event display cut-off.
+	 *
+	 * The deletion link of a published ride stays usable until long after the
+	 * work duty is over. Someone who reads the mail a month later must still be
+	 * able to take the entry down; a link that dies on the day of the duty would
+	 * leave the entry in the list of the next run of the same duty with no way to
+	 * remove it.
+	 *
+	 * @param int $event_id Event ID.
+	 * @return int
+	 */
+	public function published_delete_expiry( $event_id ) {
+		$event = $this->get_event( $event_id );
+		$now   = time() + DAY_IN_SECONDS;
+
+		if ( ! $event || ! self::is_valid_date( $event->event_date ) ) {
+			return $now + FG_PUBLISHED_DELETE_TOKEN_TTL;
+		}
+
+		$time      = self::is_valid_time( $event->event_time ) ? $event->event_time : '23:59';
+		$zone      = wp_timezone();
+		$date_time = DateTimeImmutable::createFromFormat( '!Y-m-d H:i', $event->event_date . ' ' . $time, $zone );
+		if ( ! $date_time instanceof DateTimeImmutable ) {
+			return $now + FG_PUBLISHED_DELETE_TOKEN_TTL;
+		}
+
+		return max( $now, $date_time->getTimestamp() + FG_PUBLISHED_DELETE_TOKEN_TTL );
 	}
 
 	/**
@@ -844,15 +875,6 @@ final class FG_Repository {
 		$member = $this->get_member_by_email( $email );
 
 		return $member ? $this->store->count_rides_by_member( $member->id ) : 0;
-	}
-
-	/**
-	 * Find pending rides whose confirmation window has ended.
-	 *
-	 * @return int[]
-	 */
-	public function get_expired_pending_ride_ids() {
-		return $this->store->expired_pending_ids( time() );
 	}
 
 	/**

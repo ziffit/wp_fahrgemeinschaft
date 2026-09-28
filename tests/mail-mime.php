@@ -136,19 +136,19 @@ function fg_mime_logo() {
 
 $previous = get_option( FG_SETTINGS_OPTION, null );
 
-$subject = 'Fahrgemeinschaft bestätigen – Arbeitsdienst Laber';
+$subject = 'Deine Fahrgemeinschaft ist eingetragen – Arbeitsdienst Laber';
 $text    = implode(
 	"\n",
 	array(
-		'Hallo Anton,',
+		'Hallo Anton Berger,',
 		'',
-		'Deine Eintragung wurde vorgemerkt, aber noch nicht veröffentlicht.',
+		'deine Fahrgemeinschaft steht in der Liste. Sie ist sofort öffentlich, es ist nichts mehr zu bestätigen.',
 		'',
 		'Bezeichnung: Amsel & Söhne <b>',
 		'',
 		'Ist der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.',
 		'',
-		'VERÖFFENTLICHUNG BESTÄTIGEN:',
+		'Du kannst deine Eintragung löschen, wenn du diesen Link aufrufst:',
 		'https://localhost:8443/?fg_ride_action=view&ride_ref=abc123&token=deadbeef',
 	)
 );
@@ -178,7 +178,7 @@ fg_mime_check( 'the plain text part was read on its own', '' !== $textteil );
 fg_mime_check( 'the html part was read on its own', false !== strpos( $htmlteil, '</html>' ) );
 fg_mime_check( 'the plain text is unchanged', false !== strpos( $textteil, 'ride_ref=abc123&token=deadbeef' ) );
 fg_mime_check( 'the html part escapes a visitor value', false !== strpos( $htmlteil, 'Amsel &amp; Söhne &lt;b&gt;' ) );
-fg_mime_check( 'the html part carries the subject as headline', false !== strpos( $htmlteil, 'Fahrgemeinschaft bestätigen – Arbeitsdienst Laber</h1>' ) );
+fg_mime_check( 'the html part carries the subject as headline', false !== strpos( $htmlteil, 'Deine Fahrgemeinschaft ist eingetragen – Arbeitsdienst Laber</h1>' ) );
 fg_mime_check( 'the html part carries the footer', false !== strpos( $htmlteil, 'Musterverein e.V.' ) && false !== strpos( $htmlteil, 'info@angeln.example.org' ) && false !== strpos( $htmlteil, '§ 5 TMG' ) );
 // The footer is the sender, the contact data and the legal notice. A client that
 // shows the text part, and every forwarded message for a long time, must carry
@@ -255,16 +255,22 @@ fg_mime_check( 'a carriage return from the browser never reaches the mail', fals
 // takes the column apart, so that the line after it starts somewhere else. This
 // section reads both parts of a message that carries two links and looks at
 // where the address stands.
+// Two links, although the mail about a ride has only one since 1.15.0: what is
+// under test is the renderer, which takes any number of links, and the second
+// link is the case a second link would produce. The two wordings are the ones
+// the plugin really uses, but in one synthetic message; no message of the
+// plugin carries both, and a check that claimed otherwise would name a
+// combination a club can never reach.
 echo "[5] the links in the html part\n";
 
 $links = array(
-	'Bestaetigungslink' => array(
+	'Ersterlink' => array(
 		'url'   => 'https://localhost:8443/?fg_ride_action=view&ride_ref=abc123&token=deadbeef',
-		'label' => 'Fahrgemeinschaft bestätigen',
+		'label' => 'Fahrgemeinschaft löschen',
 	),
-	'Verwerfungslink'   => array(
+	'Zweiterlink' => array(
 		'url'   => 'https://localhost:8443/?fg_ride_action=view&ride_ref=abc123&token=feedface',
-		'label' => 'Eintragung verwerfen',
+		'label' => 'Teilnahme am Arbeitsdienst abmelden',
 	),
 );
 
@@ -273,11 +279,11 @@ $linktext = implode(
 	array(
 		'Hallo Anton,',
 		'',
-		'VERÖFFENTLICHUNG BESTÄTIGEN:',
-		'{{Bestaetigungslink:Fahrgemeinschaft bestätigen}}',
+		'Die Eintragung löschen:',
+		'{{Ersterlink:Fahrgemeinschaft löschen}}',
 		'',
-		'Eintragung verwerfen:',
-		'{{Verwerfungslink}}',
+		'Die Anmeldung zurücknehmen:',
+		'{{Zweiterlink}}',
 	)
 );
 
@@ -296,14 +302,14 @@ foreach ( $anker as $eintrag ) {
 	$mit_anker[] = $eintrag;
 }
 fg_mime_check( 'the html part has one anchor per link', 2 === count( $mit_anker ), 'gefunden: ' . count( $mit_anker ) );
-fg_mime_check( 'the first anchor points at the confirmation address', isset( $mit_anker[0] ) && false !== strpos( $mit_anker[0][1], 'token=deadbeef' ) );
-fg_mime_check( 'the second anchor points at the discard address', isset( $mit_anker[1] ) && false !== strpos( $mit_anker[1][1], 'token=feedface' ) );
+fg_mime_check( 'the first anchor points at the first address', isset( $mit_anker[0] ) && false !== strpos( $mit_anker[0][1], 'token=deadbeef' ) );
+fg_mime_check( 'the second anchor points at the second address', isset( $mit_anker[1] ) && false !== strpos( $mit_anker[1][1], 'token=feedface' ) );
 fg_mime_check( 'an ampersand in an address is written as an entity', isset( $mit_anker[0] ) && false !== strpos( $mit_anker[0][1], 'ride_ref=abc123&#038;token=deadbeef' ) );
-fg_mime_check( 'the wording of the club is the text of the anchor', isset( $mit_anker[0] ) && 'Fahrgemeinschaft bestätigen' === trim( $mit_anker[0][2] ) );
+fg_mime_check( 'the wording of the club is the text of the anchor', isset( $mit_anker[0] ) && 'Fahrgemeinschaft löschen' === trim( $mit_anker[0][2] ) );
 // A link without a wording of its own takes the one the plugin carries, so a
 // text written before the wording existed still reads as a link and not as an
 // address.
-fg_mime_check( 'a link without a wording takes the one of the message', isset( $mit_anker[1] ) && 'Eintragung verwerfen' === trim( $mit_anker[1][2] ) );
+fg_mime_check( 'a link without a wording takes the one of the message', isset( $mit_anker[1] ) && 'Teilnahme am Arbeitsdienst abmelden' === trim( $mit_anker[1][2] ) );
 // The complaint of the club: an address that is only inside an href attribute
 // cannot break the layout, because a reader never sees it.
 $ohne_href = preg_replace( '#\shref="[^"]*"#', '', $htmlteil );
@@ -312,28 +318,28 @@ fg_mime_check( 'no placeholder is left standing in the html part', false === str
 // The text part has no links and must carry the address, or a reader who
 // answers from a text client has nothing to answer with.
 fg_mime_check( 'the text part has no link', false === strpos( $textteil, '<a' ) && false === strpos( $textteil, 'href' ) );
-fg_mime_check( 'the text part carries the address of the confirmation', false !== strpos( $textteil, 'token=deadbeef' ) );
-fg_mime_check( 'the text part carries the wording in front of the address', false !== strpos( $textteil, 'Fahrgemeinschaft bestätigen: https://localhost:8443/' ) );
+fg_mime_check( 'the text part carries the address of the first link', false !== strpos( $textteil, 'token=deadbeef' ) );
+fg_mime_check( 'the text part carries the wording in front of the address', false !== strpos( $textteil, 'Fahrgemeinschaft löschen: https://localhost:8443/' ) );
 fg_mime_check( 'the text part keeps the ampersand of the address', false !== strpos( $textteil, 'ride_ref=abc123&token=deadbeef' ) );
 
 // A wording typed by the club ends up inside the html. It is escaped like every
 // other value, so a stored text cannot bring markup into a message.
-$links['Bestaetigungslink']['label'] = 'Fahrgemeinschaft bestätigen';
-$mime     = fg_mime_build( $subject, 'Hier:\n{{Bestaetigungslink:<b>jetzt</b> öffnen & lesen}}', $links );
+$links['Ersterlink']['label'] = 'Fahrgemeinschaft löschen';
+$mime     = fg_mime_build( $subject, 'Hier:\n{{Ersterlink:<b>jetzt</b> öffnen & lesen}}', $links );
 $htmlteil = fg_mime_part( $mime, 'text/html' );
 fg_mime_check( 'a wording from the club is escaped in the html part', false !== strpos( $htmlteil, '&lt;b&gt;jetzt&lt;/b&gt; öffnen &amp; lesen' ) );
 fg_mime_check( 'a wording from the club brings no markup into the html part', ! preg_match( '#<a href="[^"]*"[^>]*>[^<]*<b>#', $htmlteil ) );
 
 // A link whose address is empty has no target. An anchor without one would be
 // a link to the page it stands on.
-$leer = FG_Mail_Templates::render( $subject, 'Hier:\n{{Bestaetigungslink:Eigener Wortlaut}}', '', array( 'Bestaetigungslink' => array( 'url' => '', 'label' => 'Vorgabe' ) ) );
+$leer = FG_Mail_Templates::render( $subject, 'Hier:\n{{Ersterlink:Eigener Wortlaut}}', '', array( 'Ersterlink' => array( 'url' => '', 'label' => 'Vorgabe' ) ) );
 fg_mime_check( 'a link without an address is no link', false === strpos( $leer, '<a href' ) );
 fg_mime_check( 'a link without an address keeps its wording', false !== strpos( $leer, 'Eigener Wortlaut' ) );
 
 // The body of a message still carries the token, and the two parts are what turn
 // it into a link and into an address. A token that was already replaced with the
 // address in the body could not be a link any more.
-$komponiert = FG_Mail_Texts::compose( 'ride_published', array( 'Arbeitsdienst' => 'Flussaktion', 'Loeschlink' => $links['Bestaetigungslink']['url'] ) );
+$komponiert = FG_Mail_Texts::compose( 'ride_published', array( 'Arbeitsdienst' => 'Flussaktion', 'Loeschlink' => $links['Ersterlink']['url'] ) );
 fg_mime_check( 'the body keeps the token until the parts are written', false !== strpos( $komponiert['body'], '{{Loeschlink}}' ) );
 fg_mime_check( 'the message carries the address of its link', 'https://localhost:8443/?fg_ride_action=view&ride_ref=abc123&token=deadbeef' === $komponiert['links']['Loeschlink']['url'] );
 fg_mime_check( 'the message carries the wording of its link', 'Fahrgemeinschaft löschen' === $komponiert['links']['Loeschlink']['label'] );

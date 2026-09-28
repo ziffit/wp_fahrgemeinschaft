@@ -308,13 +308,11 @@ final class FG_Public {
 			$notice_key = sanitize_key( wp_unslash( $_GET['fg_notice'] ) );
 		}
 		$notices    = array(
-			'pending'          => array( __( 'Deine Eintragung wurde vorgemerkt. Bitte prüfe deine E-Mail und bestätige die Veröffentlichung über den enthaltenen Link.', 'arbeitsdienste' ), false ),
-			'published'        => array( __( 'Deine Fahrgemeinschaft wurde erfolgreich veröffentlicht.', 'arbeitsdienste' ), false ),
+			'published'        => array( __( 'Deine Fahrgemeinschaft steht in der Liste. Die E-Mail dazu enthält den Link, mit dem du sie wieder löschen kannst.', 'arbeitsdienste' ), false ),
 			'deleted'          => array( __( 'Die Eintragung wurde gelöscht.', 'arbeitsdienste' ), false ),
 			'contact_received' => array( __( 'Vielen Dank für deine Anfrage. Wir informieren das Mitglied, das die Fahrgemeinschaft angeboten hat, sofern die angegebene Adresse zu einem Mitglied gehört, das sich für den gewählten Arbeitsdienst eingetragen hat.', 'arbeitsdienste' ), false ),
 			'not_created'      => array( __( 'Die Eintragung konnte nicht angelegt werden. Bitte prüfe die Eingaben und verwende die im Verein hinterlegte E-Mail-Adresse.', 'arbeitsdienste' ), true ),
-			'email_failed'     => array( __( 'Die Eintragung konnte nicht angelegt werden, weil die Bestätigungs-E-Mail nicht zugestellt werden konnte. Bitte versuche es später erneut.', 'arbeitsdienste' ), true ),
-			'publish_failed'   => array( __( 'Die Veröffentlichung wurde zurückgenommen, weil die E-Mail mit dem Lösch-Link nicht zugestellt werden konnte. Bitte bestätige die Veröffentlichung über den Link der ersten E-Mail erneut.', 'arbeitsdienste' ), true ),
+			'email_failed'     => array( __( 'Die Eintragung konnte nicht angelegt werden, weil die E-Mail mit dem Lösch-Link nicht zugestellt werden konnte. Bitte versuche es später erneut.', 'arbeitsdienste' ), true ),
 			'invalid_token'    => array( __( 'Der Link ist ungültig oder abgelaufen. Bitte kontaktiere uns, falls du Unterstützung benötigst.', 'arbeitsdienste' ), true ),
 			'form_expired'     => array( __( 'Das Formular ist nicht mehr gültig. Bitte lade die Seite neu und sende das Formular erneut ab.', 'arbeitsdienste' ), true ),
 		);

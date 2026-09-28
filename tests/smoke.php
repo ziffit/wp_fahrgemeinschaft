@@ -757,6 +757,36 @@ FG_Schema::install();
 fg_ok( null !== $fg_repo->get_ride( $verwaist ), 'a row the old version never wrote is not deleted', (string) $verwaist );
 fg_ok( ! $fg_repo->is_valid_public_ride( $fg_repo->get_ride( $verwaist ) ), 'but it is not valid in public either' );
 fg_ok( 0 === FG_Schema::take_dropped_rides_notice(), 'and it is not counted as a removed ride' );
+// A row in the state that is gone is a third case again. The migration of 1.4.0
+// wrote every row, so a pending row can only have been written after that — by
+// the version right before this one. It cannot be published: the person who
+// offered it was asked to confirm and never did, and a club has no way of
+// reading that silence as a consent to a public entry. So the row goes, and its
+// number goes into the same notice as the entries without a member.
+$wartend = $fg_rohe_fahrt(
+	array(
+		'event_id'      => 999001,
+		'status'        => 'pending',
+		'mode'          => FG_RIDE_MODE_OFFER,
+		'alias'         => '',
+		'origin'        => 'Nordstadt',
+		'contact_email' => '',
+		'public_ref'    => 'mig0000000000000000000000000000d',
+		'confirmed_at'  => '',
+		'created_at'    => $jetzt,
+		'member_id'     => (int) $mig_mitglied->id,
+	)
+);
+fg_ok( null !== $fg_repo->get_ride( $wartend ), 'a row in the old pending state was written', (string) $wartend );
+delete_option( FG_Schema::DROPPED_RIDES_OPTION );
+FG_Schema::install();
+fg_ok( null === $fg_repo->get_ride( $wartend ), 'and it does not survive the migration', (string) $wartend );
+// The notice is read once, so the number goes into a variable before the check
+// reports it — a second call would answer 0 and hide the number.
+$gemeldet_wartend = FG_Schema::take_dropped_rides_notice();
+fg_ok( 1 === $gemeldet_wartend, 'the club is told about it in the same notice', (string) $gemeldet_wartend );
+fg_ok( 0 === $fg_repo->count_rides( array( 'status' => 'pending' ) ), 'no row is left in the state that is gone', (string) $fg_repo->count_rides( array( 'status' => 'pending' ) ) );
+
 $fg_repo->delete_ride( $verwaist );
 $fg_repo->delete_ride( $mit_glied );
 
@@ -1353,102 +1383,98 @@ $fg_repo->delete_event( $bereits );
 $fg_repo->delete_event( $offen_event );
 
 /* ------------------------------------------------------------------ 4 */
-echo "[4] Submission with a valid participant address\n";
+echo "[4] Submission with a valid member pair\n";
 fg_mail_reset();
 list( $location ) = fg_call( array( $fg_actions, 'submit_ride' ), fg_submission_post() );
-fg_ok( 'pending' === fg_notice_of( $location ), 'submission redirects with pending notice', (string) $location );
+fg_ok( 'published' === fg_notice_of( $location ), 'submission redirects with published notice', (string) $location );
 
 $ride    = fg_newest_ride();
 $ride_id = $ride ? $ride->id : 0;
 fg_ok( $ride_id > 0, 'ride created' );
-fg_ok( FG_RIDE_STATUS_PENDING === $ride->status, 'ride is pending', (string) $ride->status );
+fg_ok( FG_RIDE_STATUS_PUBLISHED === $ride->status, 'ride is published at once', (string) $ride->status );
 fg_ok( (int) $ride->member_id === (int) $teilnehmer->id, 'the ride points at the member the form named', $ride->member_id . ' vs ' . $teilnehmer->id );
 fg_ok( FG_CONSENT_VERSION === $ride->consent_version, 'consent recorded' );
 fg_ok( '' !== $ride->public_ref, 'ride reference created' );
 $ride_ref = $ride->public_ref;
-fg_ok( '' === $ride->confirmed_at, 'not marked as confirmed' );
-fg_ok( '' !== $ride->pending_confirm_hash && '' !== $ride->pending_discard_hash, 'both pending tokens stored as hash' );
-fg_ok( count( $fg_repo->get_published_rides( $event_id ) ) === 0, 'pending ride is not public' );
+fg_ok( '' !== $ride->confirmed_at, 'the entry carries the time it was entered' );
+fg_ok( '' !== $ride->delete_hash, 'the deletion token is stored as hash' );
+fg_ok( 1 === count( $fg_repo->get_published_rides( $event_id ) ), 'the new entry is public right away' );
 
 fg_ok( 1 === count( $GLOBALS['fg_mail'] ), 'exactly one mail sent', wp_json_encode( fg_mail_recipients() ) );
-$pending_mail = fg_last_mail();
-fg_ok( 'teilnehmer@example.org' === $pending_mail['to'], 'mail sent to the submitter', $pending_mail['to'] );
+$entry_mail = fg_last_mail();
+fg_ok( 'teilnehmer@example.org' === $entry_mail['to'], 'mail sent to the member the form named', $entry_mail['to'] );
+fg_ok( false !== strpos( (string) $entry_mail['subject'], 'Deine Fahrgemeinschaft ist eingetragen' ), 'subject names the entry', (string) $entry_mail['subject'] );
 $body = fg_mail_bodies();
-fg_contains( 'vorgemerkt', $body, 'pending mail text' );
-fg_contains( 'noch nicht veröffentlicht', $body, 'pending mail explains the private phase' );
+fg_contains( 'steht in der Liste', $body, 'the mail says the entry is in the list' );
+fg_contains( 'es ist nichts mehr zu bestätigen', $body, 'the mail says that nothing is left to confirm' );
+// One link, and it is the way out. A mail that carried a link into a private
+// state would have to be counted here twice: once for the link and once for the
+// state it leads to, and the state is gone.
 $links = fg_extract_links( $body );
-fg_ok( isset( $links['confirm'] ), 'confirm link present in mail', wp_json_encode( array_keys( $links ) ) );
-fg_ok( isset( $links['discard'] ), 'discard link present in mail', wp_json_encode( array_keys( $links ) ) );
-$confirm_url = isset( $links['confirm'] ) ? $links['confirm'] : '';
-$discard_url = isset( $links['discard'] ) ? $links['discard'] : '';
+fg_ok( 1 === count( $links ), 'the mail carries exactly one link', wp_json_encode( array_keys( $links ) ) );
+fg_ok( isset( $links['delete'] ), 'and it is the deletion link', wp_json_encode( array_keys( $links ) ) );
+$delete_url = isset( $links['delete'] ) ? $links['delete'] : '';
 
-$GLOBALS['fg_state']['ride_id']    = $ride_id;
-$GLOBALS['fg_state']['ride_ref']   = $ride_ref;
-$GLOBALS['fg_state']['confirm_url'] = $confirm_url;
-$GLOBALS['fg_state']['discard_url'] = $discard_url;
-$GLOBALS['fg_state']['page_id']    = $page_id;
+$GLOBALS['fg_state']['ride_id']   = $ride_id;
+$GLOBALS['fg_state']['ride_ref']  = $ride_ref;
+$GLOBALS['fg_state']['delete_url'] = $delete_url;
+$GLOBALS['fg_state']['page_id']   = $page_id;
 
 /* ------------------------------------------------------------------ 5 */
-echo "[5] Token landing page (GET must not publish)\n";
+echo "[5] Token landing page (GET must not delete)\n";
 $parts = array();
-parse_str( (string) wp_parse_url( $confirm_url, PHP_URL_QUERY ), $parts );
-fg_ok( 'view' === $parts['fg_ride_action'] && 'confirm' === $parts['intent'], 'link uses view intent' );
+parse_str( (string) wp_parse_url( $delete_url, PHP_URL_QUERY ), $parts );
+fg_ok( 'view' === $parts['fg_ride_action'] && 'delete' === $parts['intent'], 'the link uses the view intent for a deletion' );
 
 list( $html, $err ) = fg_render_action_page( $parts );
 fg_ok( '' !== $html, 'standalone page rendered', $err );
 fg_not_contains( 'Fatal error', $html, 'no fatal error on token page' );
 fg_not_contains( 'Warning:', $html, 'no PHP warning on token page' );
-fg_contains( 'Veröffentlichung bestätigen', $html, 'confirm page heading' );
-fg_contains( 'Teilnehmer', $html, 'confirm page shows the first name of the member' );
-fg_contains( '100', $html, 'confirm page shows the member number' );
+fg_contains( 'Fahrgemeinschaft löschen', $html, 'delete page heading' );
+fg_contains( 'Teilnehmer', $html, 'delete page shows the first name of the member' );
+fg_contains( '100', $html, 'delete page shows the member number' );
 fg_not_contains( 'teilnehmer@example.org', $html, 'token page hides the address' );
 fg_contains( 'name="token_nonce"', $html, 'token form carries its verifier' );
-fg_contains( 'name="intent" value="confirm"', $html, 'token form carries the intent' );
-fg_ok( FG_RIDE_STATUS_PENDING === $fg_repo->get_ride( $ride_id )->status, 'GET did not change the status' );
+fg_contains( 'name="intent" value="delete"', $html, 'token form carries the intent' );
+fg_ok( FG_RIDE_STATUS_PUBLISHED === $fg_repo->get_ride( $ride_id )->status, 'GET did not change the status' );
+fg_ok( null !== $fg_repo->get_ride( $ride_id ), 'and it did not delete the entry' );
 
 list( $bad_html ) = fg_render_action_page(
 	array(
 		'fg_ride_action' => 'view',
 		'ride_ref'       => $ride_ref,
-		'intent'         => 'confirm',
+		'intent'         => 'delete',
 		'token'          => 'not-a-real-token',
 	)
 );
 fg_contains( 'Link nicht gültig', $bad_html, 'invalid token page' );
 
+// The two intents of the state that is gone, sent with the token of this very
+// entry, so the refusal cannot come from the token: only the intent is refused,
+// and that is what is checked.
+foreach ( array( 'confirm', 'discard' ) as $entfernter_intent ) {
+	list( $entfernte_html ) = fg_render_action_page(
+		array(
+			'fg_ride_action' => 'view',
+			'ride_ref'       => $ride_ref,
+			'intent'         => $entfernter_intent,
+			'token'          => $parts['token'],
+		)
+	);
+	fg_contains( 'Link nicht gültig', $entfernte_html, "the intent {$entfernter_intent} no longer exists" );
+}
+
 /* ------------------------------------------------------------------ 6 */
-echo "[6] Confirmation (POST)\n";
-$token        = $parts['token'];
-$token_nonce  = hash_hmac( 'sha256', 'confirm|' . $token, wp_salt( 'nonce' ) );
-fg_mail_reset();
-
-list( $location ) = fg_call(
-	array( $fg_actions, 'process_ride_token' ),
-	array(
-		'action'      => 'fg_process_ride_token',
-		'ride_ref'    => $ride_ref,
-		'intent'      => 'confirm',
-		'token'       => $token,
-		'token_nonce' => $token_nonce,
-		'source_url'  => home_url( '/fahrgemeinschaften/' ),
-	)
-);
-fg_ok( 'published' === fg_notice_of( $location ), 'confirmation succeeds', (string) $location );
-fg_ok( FG_RIDE_STATUS_PUBLISHED === $fg_repo->get_ride( $ride_id )->status, 'ride is published' );
-fg_ok( '' !== $fg_repo->get_ride( $ride_id )->confirmed_at, 'confirmation marker set' );
-fg_ok( 1 === count( $GLOBALS['fg_mail'] ), 'published mail sent', wp_json_encode( fg_mail_recipients() ) );
-
+echo "[6] The one mail of an entry that is public\n";
 $body = fg_mail_bodies();
-fg_contains( 'Löschen', $body, 'delete link mentioned' );
+fg_contains( 'Art: Ich biete', $body, 'the mail names the kind of entry' );
+fg_contains( 'Vorname: Teilnehmer', $body, 'the mail names the first name among the public entries' );
+fg_contains( 'Abfahrtsbereich: ', $body, 'the mail names the pickup area the member gave' );
+fg_contains( 'Du kannst deine Eintragung löschen, wenn du diesen Link aufrufst:', $body, 'the deletion link is announced' );
+fg_contains( 'Achtung: Beim endgültigen Löschen erfolgt keine weitere Rückfrage.', $body, 'the mail says the deletion is final' );
 fg_contains( 'Ist der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.', $body, 'exact required sentence present' );
-$links = fg_extract_links( $body );
-fg_ok( isset( $links['delete'] ), 'delete link present in mail', wp_json_encode( array_keys( $links ) ) );
-$delete_url = isset( $links['delete'] ) ? $links['delete'] : '';
-fg_ok( '' === $fg_repo->get_ride( $ride_id )->pending_confirm_hash, 'pending confirm token consumed' );
-fg_ok( '' === $fg_repo->get_ride( $ride_id )->pending_discard_hash, 'pending discard token consumed' );
-fg_ok( '' !== $fg_repo->get_ride( $ride_id )->delete_hash, 'deletion token stored as hash' );
-
-$GLOBALS['fg_state']['delete_url'] = $delete_url;
+fg_not_contains( 'vorgemerkt', $body, 'the mail never calls the entry a pre-registration' );
+fg_not_contains( 'Bestätigung', $body, 'the mail asks for no confirmation any more' );
 
 $html = $fg_public->render_shortcode();
 fg_contains( 'Teilnehmer', $html, 'published ride is listed under the first name of the member' );
@@ -1457,21 +1483,28 @@ fg_not_contains( $event_record->event_uuid, $html, 'no event UUID in the publish
 fg_not_contains( 'fg_fahrgemeinschaft=', $html, 'no ride permalink in the published list' );
 fg_not_contains( 'fg_arbeitsdienst=', $html, 'no event permalink in the published list' );
 
-echo "[6b] Replayed confirm token must be refused\n";
-list( $location ) = fg_call(
-	array( $fg_actions, 'process_ride_token' ),
-	array(
-		'action'      => 'fg_process_ride_token',
-		'ride_ref'    => $ride_ref,
-		'intent'      => 'confirm',
-		'token'       => $token,
-		'token_nonce' => $token_nonce,
-		'source_url'  => home_url( '/fahrgemeinschaften/' ),
-	)
-);
-fg_ok( 'invalid_token' === fg_notice_of( $location ), 'replay rejected', (string) $location );
-fg_ok( FG_RIDE_STATUS_PUBLISHED === $fg_repo->get_ride( $ride_id )->status, 'ride still published after replay' );
-
+echo "[6b] The removed intents are refused on the POST path too\n";
+// The landing page refuses an unknown intent. This walks the other way round: a
+// request that names one of the two removed intents together with the token of
+// the entry and a verifier that fits that intent exactly. Every value is right
+// except the one under test, so a refusal can only come from the intent.
+foreach ( array( 'confirm', 'discard' ) as $entfernter_intent ) {
+	$entfernte_nonce = hash_hmac( 'sha256', $entfernter_intent . '|' . $parts['token'], wp_salt( 'nonce' ) );
+	list( $location ) = fg_call(
+		array( $fg_actions, 'process_ride_token' ),
+		array(
+			'action'      => 'fg_process_ride_token',
+			'ride_ref'    => $ride_ref,
+			'intent'      => $entfernter_intent,
+			'token'       => $parts['token'],
+			'token_nonce' => $entfernte_nonce,
+			'source_url'  => home_url( '/fahrgemeinschaften/' ),
+		)
+	);
+	fg_ok( 'invalid_token' === fg_notice_of( $location ), "posting intent {$entfernter_intent} is refused", (string) $location );
+}
+fg_ok( null !== $fg_repo->get_ride( $ride_id ), 'and the entry is still there after both' );
+fg_ok( FG_RIDE_STATUS_PUBLISHED === $fg_repo->get_ride( $ride_id )->status, 'and still published' );
 /* ------------------------------------------------------------------ 7 */
 echo "[7] Contact requests\n";
 fg_mail_reset();
@@ -1548,36 +1581,44 @@ fg_ok( 'deleted' === fg_notice_of( $location ), 'delete succeeds', (string) $loc
 fg_ok( null === $fg_repo->get_ride( $ride_id ), 'ride permanently removed' );
 fg_ok( 0 === fg_count_rides(), 'no row of the deleted ride is left behind' );
 
-/* ------------------------------------------------------------------ 9 */
-echo "[9] Discard of a pending entry\n";
-fg_mail_reset();
-fg_call( array( $fg_actions, 'submit_ride' ), fg_submission_post( array( 'fg_origin' => 'Wegwerf-Bereich' ) ) );
-$discard_ride = fg_newest_ride();
-$discard_id   = $discard_ride ? $discard_ride->id : 0;
-$body         = fg_mail_bodies();
-$discard_ref  = $discard_ride ? $discard_ride->public_ref : '';
-$links        = fg_extract_links( $body );
-$discard_token = '';
-if ( isset( $links['discard'] ) ) {
-	$discard_args = array();
-	parse_str( (string) wp_parse_url( $links['discard'], PHP_URL_QUERY ), $discard_args );
-	$discard_token = isset( $discard_args['token'] ) ? $discard_args['token'] : '';
-}
-fg_ok( '' !== $discard_token, 'discard token extracted' );
-
+echo "[8b] The same deletion link a second time\n";
+// The link of a deleted entry is spent, and a spent link stays spent: a member
+// who finds the mail again in a search of two years must not be able to take a
+// new entry down with it.
 list( $location ) = fg_call(
 	array( $fg_actions, 'process_ride_token' ),
 	array(
 		'action'      => 'fg_process_ride_token',
-		'ride_ref'    => $discard_ref,
-		'intent'      => 'discard',
-		'token'       => $discard_token,
-		'token_nonce' => hash_hmac( 'sha256', 'discard|' . $discard_token, wp_salt( 'nonce' ) ),
+		'ride_ref'    => $ride_ref,
+		'intent'      => 'delete',
+		'token'       => $parts['token'],
+		'token_nonce' => hash_hmac( 'sha256', 'delete|' . $parts['token'], wp_salt( 'nonce' ) ),
 		'source_url'  => home_url( '/fahrgemeinschaften/' ),
 	)
 );
-fg_ok( 'deleted' === fg_notice_of( $location ), 'discard succeeds', (string) $location );
-fg_ok( null === $fg_repo->get_ride( $discard_id ), 'pending entry removed' );
+fg_ok( 'invalid_token' === fg_notice_of( $location ), 'replay rejected', (string) $location );
+fg_ok( null === $fg_repo->get_ride( $ride_id ), 'and it brings nothing back' );
+
+/* ------------------------------------------------------------------ 9 */
+echo "[9] A second entry, and the one link of its mail\n";
+// The state before publication is gone, so the mail has one link and the entry
+// is public without anybody answering anything. What replaces the check that
+// the discard link worked is the check that there is no discard link at all: a
+// club reading the mail must find one way out and no way in.
+fg_mail_reset();
+fg_call( array( $fg_actions, 'submit_ride' ), fg_submission_post( array( 'fg_origin' => 'Wegwerf-Bereich' ) ) );
+$discard_ride = fg_newest_ride();
+$discard_id   = $discard_ride ? $discard_ride->id : 0;
+fg_ok( $discard_id > 0, 'the second entry was created' );
+fg_ok( FG_RIDE_STATUS_PUBLISHED === $discard_ride->status, 'and it is published at once', (string) $discard_ride->status );
+$body  = fg_mail_bodies();
+$links = fg_extract_links( $body );
+fg_ok( 1 === count( $links ) && isset( $links['delete'] ), 'its mail carries the deletion link and nothing else', wp_json_encode( array_keys( $links ) ) );
+fg_not_contains( 'Verwerfungslink', $body, 'no discard link is named' );
+fg_not_contains( 'Bestaetigungslink', $body, 'no confirmation link is named' );
+fg_contains( 'Wegwerf-Bereich', $fg_public->render_shortcode(), 'the second entry is in the list without anybody answering' );
+$fg_repo->delete_ride( $discard_id );
+fg_ok( null === $fg_repo->get_ride( $discard_id ), 'the second entry is removed again' );
 
 /* ------------------------------------------------------------------ 10 */
 echo "[10] Rejected submissions\n";
@@ -1608,9 +1649,9 @@ $cases = array(
 
 foreach ( $cases as $label => $overrides ) {
 	fg_mail_reset();
-	$before = fg_count_rides( FG_RIDE_STATUS_PENDING );
+	$before = fg_count_rides( FG_RIDE_STATUS_PUBLISHED );
 	list( $location ) = fg_call( array( $fg_actions, 'submit_ride' ), fg_submission_post( $overrides ) );
-	$after = fg_count_rides( FG_RIDE_STATUS_PENDING );
+	$after = fg_count_rides( FG_RIDE_STATUS_PUBLISHED );
 	fg_ok(
 		'not_created' === fg_notice_of( $location ) && $before === $after,
 		"rejected: {$label}",
@@ -1628,7 +1669,7 @@ $stats = ( new FG_Stats() )->get_recent( 1 );
 fg_ok( $stats['publish_personal_data'] >= 3, 'personal data rejections counted', (string) $stats['publish_personal_data'] );
 
 echo "[10b] Only form submissions are accepted\n";
-$pending_before = fg_count_rides( FG_RIDE_STATUS_PENDING );
+$published_before = fg_count_rides( FG_RIDE_STATUS_PUBLISHED );
 $die_args       = fg_expect_die( array( $fg_actions, 'submit_ride' ), 'GET' );
 fg_ok( is_array( $die_args ) && 405 === (int) $die_args['response'], 'GET on the submit endpoint is refused', wp_json_encode( $die_args ) );
 
@@ -1645,13 +1686,13 @@ $die_args = fg_expect_die(
 	)
 );
 fg_ok( is_array( $die_args ) && 405 === (int) $die_args['response'], 'HEAD on the token endpoint is refused', wp_json_encode( $die_args ) );
-fg_ok( $pending_before === fg_count_rides( FG_RIDE_STATUS_PENDING ), 'refused requests change nothing' );
+fg_ok( $published_before === fg_count_rides( FG_RIDE_STATUS_PUBLISHED ), 'refused requests change nothing' );
 
 /* ------------------------------------------------------------------ 11 */
 echo "[11] Rides are read-only for administrators\n";
 $admin_event = fg_make_event( 'Admin-Dienst', $soon );
 $admin_member = fg_make_member( '400', 'admin@example.org', 'Admina', 'Probe' );
-$admin_ride   = $fg_repo->create_pending_ride(
+$admin_ride   = $fg_repo->create_ride(
 	array(
 		'event_id'  => $admin_event,
 		'mode'      => FG_RIDE_MODE_SEARCH,
@@ -1661,20 +1702,16 @@ $admin_ride   = $fg_repo->create_pending_ride(
 );
 $admin_row = $fg_repo->get_ride( $admin_ride['id'] );
 fg_ok( '' !== $admin_row->public_ref, 'every ride gets a reference' );
-fg_ok( FG_RIDE_STATUS_PENDING === $admin_row->status, 'a new ride is never public before confirmation' );
-fg_ok( ! $fg_repo->is_valid_public_ride( $admin_row ), 'unconfirmed ride is not valid' );
+// One write, three values: status, time and deletion token. A ride that is not
+// written as published in the same statement would either be invisible for a
+// moment or have no way out.
+fg_ok( FG_RIDE_STATUS_PUBLISHED === $admin_row->status, 'a new ride is published at once', (string) $admin_row->status );
+fg_ok( '' !== $admin_row->confirmed_at, 'and it carries the time it was entered', (string) $admin_row->confirmed_at );
+fg_ok( '' !== $admin_row->delete_hash, 'and it has a deletion token', wp_json_encode( $admin_row->delete_hash ) );
+fg_ok( $fg_repo->is_valid_public_ride( $admin_row ), 'a complete new ride is valid in public' );
 fg_ok( false === has_action( 'admin_post_fg_save_ride' ), 'no endpoint can change a ride' );
 fg_ok( null !== $fg_repo->get_ride_by_reference( $admin_row->public_ref ), 'a ride can be addressed by its reference' );
 fg_ok( null === $fg_repo->get_ride_by_reference( 'gibtesnicht' ), 'an unknown reference resolves to nothing' );
-
-$fg_repo->update_ride(
-	$admin_ride['id'],
-	array(
-		'status'       => FG_RIDE_STATUS_PUBLISHED,
-		'confirmed_at' => current_time( 'mysql' ),
-	)
-);
-fg_ok( $fg_repo->is_valid_public_ride( $fg_repo->get_ride( $admin_ride['id'] ) ), 'a complete published ride is public' );
 
 // A published ride that loses the member behind it must disappear from the
 // public list instead of going out with half a record. A ride with no member is
@@ -1688,19 +1725,12 @@ fg_not_contains( 'Warteschlange', $public_html, 'a ride without a member stays o
 // A member that is not there any more is a different case from a ride without a
 // member: the ride row is complete and points at a row that is gone. The list
 // leaves it out, and the notifier has nothing to send to.
-$leer_ride = $fg_repo->create_pending_ride(
+$leer_ride = $fg_repo->create_ride(
 	array(
 		'event_id'  => $admin_event,
 		'mode'      => FG_RIDE_MODE_OFFER,
 		'origin'    => 'Geisternummer',
 		'member_id' => $admin_member->id,
-	)
-);
-$fg_repo->update_ride(
-	$leer_ride['id'],
-	array(
-		'status'       => FG_RIDE_STATUS_PUBLISHED,
-		'confirmed_at' => current_time( 'mysql' ),
 	)
 );
 fg_ok( $fg_repo->is_valid_public_ride( $fg_repo->get_ride( $leer_ride['id'] ) ), 'a complete published ride is public even before the member is looked at' );
@@ -1749,7 +1779,7 @@ fg_ok( ! $fg_repo->is_event_active( $bad_event ), 'withdrawn event is no longer 
 
 $cascade_event = fg_make_event( 'Kaskade', $soon );
 fg_register( $cascade_event, fg_member_id( 'sucher' ) );
-$fg_repo->create_pending_ride(
+$fg_repo->create_ride(
 	array(
 		'event_id'  => $cascade_event,
 		'mode'      => FG_RIDE_MODE_OFFER,
@@ -1783,7 +1813,13 @@ fg_ok( null !== $fg_repo->get_member_by_number( '300' ), 'the member itself surv
 /* ------------------------------------------------------------------ 13 */
 echo "[13] Daily cleanup and statistics retention\n";
 $abgelaufen = fg_make_member( '401', 'abgelaufen@example.org', 'Abgelaufen', 'Probe' );
-$expired    = $fg_repo->create_pending_ride(
+// Two entries, both published and both public: one whose deletion link has run
+// out, one whose link is still good. Since the state before publication is gone
+// there is no third kind of row the cleanup could delete, which is the point of
+// the counter below — it reads how many rows there are and holds the number, so
+// a cleanup that took a row with it would be caught here and not by the two
+// single-row checks that follow.
+$abgelaufen_ride = $fg_repo->create_ride(
 	array(
 		'event_id'  => $event_id,
 		'mode'      => FG_RIDE_MODE_OFFER,
@@ -1791,15 +1827,15 @@ $expired    = $fg_repo->create_pending_ride(
 		'member_id' => $abgelaufen->id,
 	)
 );
-$expired_ride = $expired['id'];
+$expired_ride = $abgelaufen_ride['id'];
 $fg_repo->update_ride(
 	$expired_ride,
 	array(
-		'pending_confirm_expires' => time() - 10,
-		'pending_discard_expires' => time() - 10,
+		'delete_hash'    => hash( 'sha256', 'x' ),
+		'delete_expires' => time() - 10,
 	)
 );
-$expired_published = $fg_repo->create_pending_ride(
+$expired_published = $fg_repo->create_ride(
 	array(
 		'event_id'  => $event_id,
 		'mode'      => FG_RIDE_MODE_OFFER,
@@ -1807,16 +1843,7 @@ $expired_published = $fg_repo->create_pending_ride(
 		'member_id' => $abgelaufen->id,
 	)
 );
-$fg_repo->update_ride(
-	$expired_published['id'],
-	array(
-		'status'         => FG_RIDE_STATUS_PUBLISHED,
-		'confirmed_at'   => current_time( 'mysql' ),
-		'delete_hash'    => hash( 'sha256', 'z' ),
-		'delete_expires' => time() - 10,
-	)
-);
-$fg_repo->update_ride( $expired['id'], array( 'pending_confirm_hash' => hash( 'sha256', 'x' ), 'pending_discard_hash' => hash( 'sha256', 'y' ) ) );
+$frische_ride = $expired_published['id'];
 
 $stats_option = (array) get_option( FG_STATS_OPTION, array() );
 $old_date     = gmdate( 'Y-m-d', time() - ( FG_STATISTICS_RETENTION_DAYS + 5 ) * DAY_IN_SECONDS );
@@ -1824,11 +1851,15 @@ $stats_option[ $old_date ] = array( 'publish_form_total' => 7 );
 $stats_option[ gmdate( 'Y-m-d' ) ] = array( 'publish_form_total' => 1 );
 update_option( FG_STATS_OPTION, $stats_option, false );
 
+$fahrten_vorher = fg_count_rides();
 $fg_actions->daily_cleanup();
-fg_ok( null === $fg_repo->get_ride( $expired_ride ), 'expired pending ride removed' );
-$kept_ride = $fg_repo->get_ride( $expired_published['id'] );
-fg_ok( null !== $kept_ride, 'published ride itself is kept' );
+$fahrten_nachher = fg_count_rides();
+fg_ok( $fahrten_vorher === $fahrten_nachher, 'the cleanup removes no entry at all', $fahrten_vorher . ' -> ' . $fahrten_nachher );
+fg_ok( null !== $fg_repo->get_ride( $expired_ride ), 'the entry whose deletion link ran out is kept' );
+$kept_ride = $fg_repo->get_ride( $expired_ride );
 fg_ok( '' === $kept_ride->delete_hash && 0 === $kept_ride->delete_expires, 'expired deletion token cleared', wp_json_encode( array( $kept_ride->delete_hash, $kept_ride->delete_expires ) ) );
+$frische_row = $fg_repo->get_ride( $frische_ride );
+fg_ok( null !== $frische_row && '' !== $frische_row->delete_hash && $frische_row->delete_expires > time(), 'the deletion link that is still good survives', wp_json_encode( $frische_row ? array( $frische_row->delete_hash, $frische_row->delete_expires ) : null ) );
 $stats_option = (array) get_option( FG_STATS_OPTION, array() );
 fg_ok( ! isset( $stats_option[ $old_date ] ), 'statistics older than the retention period pruned' );
 fg_ok( ! empty( get_option( FG_CLEANUP_OPTION ) ), 'cleanup marker written' );
@@ -1852,19 +1883,12 @@ fg_register( $bulk_event, $opfer->id );
 fg_register( $bulk_event, $ander->id );
 
 for ( $i = 0; $i < 25; $i++ ) {
-	$bulk = $fg_repo->create_pending_ride(
+	$bulk = $fg_repo->create_ride(
 		array(
 			'event_id'  => $bulk_event,
 			'mode'      => FG_RIDE_MODE_OFFER,
 			'origin'    => 'Innenstadt',
 			'member_id' => $opfer->id,
-		)
-	);
-	$fg_repo->update_ride(
-		$bulk['id'],
-		array(
-			'status'       => FG_RIDE_STATUS_PUBLISHED,
-			'confirmed_at' => current_time( 'mysql' ),
 		)
 	);
 }
@@ -1954,8 +1978,8 @@ list( $location )   = fg_call(
 		)
 	)
 );
-fg_ok( 'pending' === fg_notice_of( $location ), 'submission is processed instead of redirected', (string) $location );
-fg_ok( count( fg_mail_recipients() ) > 0, 'confirmation mail is sent on a plain HTTP site' );
+fg_ok( 'published' === fg_notice_of( $location ), 'submission is processed instead of redirected', (string) $location );
+fg_ok( count( fg_mail_recipients() ) > 0, 'the mail about the entry is sent on a plain HTTP site' );
 $fg_repo->delete_event( $http_event );
 
 $shortcode_html = $fg_public->render_shortcode();
@@ -2175,7 +2199,7 @@ fg_ok(
 	wp_json_encode( $mitglied_zaehler )
 );
 
-$viel_ride = $fg_repo->create_pending_ride(
+$viel_ride = $fg_repo->create_ride(
 	array(
 		'event_id'  => $viel_event_a,
 		'mode'      => FG_RIDE_MODE_OFFER,

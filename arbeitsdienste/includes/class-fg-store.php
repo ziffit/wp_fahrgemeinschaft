@@ -54,6 +54,10 @@ final class FG_Store {
 	/**
 	 * Writable ride columns.
 	 *
+	 * The four pending_* columns are missing here on purpose. They are still in
+	 * the table, but nothing writes or reads them since 1.15.0, so reading them
+	 * into a record would be a claim that this code uses them.
+	 *
 	 * @var string[]
 	 */
 	private static $ride_columns = array(
@@ -67,10 +71,6 @@ final class FG_Store {
 		'consent_version',
 		'consented_at',
 		'created_at',
-		'pending_confirm_hash',
-		'pending_confirm_expires',
-		'pending_discard_hash',
-		'pending_discard_expires',
 		'delete_hash',
 		'delete_expires',
 		'source_url',
@@ -507,21 +507,25 @@ final class FG_Store {
 	}
 
 	/**
-	 * Consume a token with a compare-and-swap on its stored hash.
+	 * Consume the deletion token with a compare-and-swap on its stored hash.
 	 *
 	 * The statement only matches while the hash is still the expected one, so a
 	 * link that is opened twice is processed once even under parallel requests.
 	 * The caller re-reads the row afterwards to detect a competing request.
 	 *
-	 * @param int    $ride_id       Ride ID.
-	 * @param string $hash_column   Hash column.
+	 * The column names are parameters for their own sake: with the pending state
+	 * gone, the deletion token is the only token a ride has, and a name that a
+	 * caller could pass in would be a name nobody needs any more. The check is
+	 * therefore a refusal of everything that is not this one pair.
+	 *
+	 * @param int    $ride_id        Ride ID.
+	 * @param string $hash_column    Hash column.
 	 * @param string $expires_column Expiry column.
-	 * @param string $expected_hash Stored hash that must still match.
+	 * @param string $expected_hash  Stored hash that must still match.
 	 * @return bool
 	 */
 	public function claim_token( $ride_id, $hash_column, $expires_column, $expected_hash ) {
-		if ( ! in_array( $hash_column, array( 'pending_confirm_hash', 'pending_discard_hash', 'delete_hash' ), true )
-			|| ! in_array( $expires_column, array( 'pending_confirm_expires', 'pending_discard_expires', 'delete_expires' ), true ) ) {
+		if ( 'delete_hash' !== $hash_column || 'delete_expires' !== $expires_column ) {
 			return false;
 		}
 
@@ -535,25 +539,6 @@ final class FG_Store {
 		);
 
 		return 1 === (int) $result;
-	}
-
-	/**
-	 * Find pending rides whose confirmation window has ended.
-	 *
-	 * @param int $now Unix timestamp.
-	 * @return int[]
-	 */
-	public function expired_pending_ids( $now ) {
-		$table = FG_Schema::rides_table();
-		$ids   = $this->db->get_col(
-			$this->db->prepare(
-				"SELECT id FROM $table WHERE status = %s AND pending_confirm_expires > 0 AND pending_confirm_expires < %d",
-				FG_RIDE_STATUS_PENDING,
-				(int) $now
-			)
-		);
-
-		return array_map( 'absint', (array) $ids );
 	}
 
 	/**
@@ -1242,7 +1227,10 @@ final class FG_Store {
 			$parts[] = $this->db->prepare( 'event_id = %d', (int) $args['event_id'] );
 		}
 
-		if ( ! empty( $args['status'] ) && in_array( $args['status'], array( FG_RIDE_STATUS_PENDING, FG_RIDE_STATUS_PUBLISHED ), true ) ) {
+		// The status is still a usable condition even though the admin list no
+		// longer offers it: the public list asks for published rides explicitly,
+		// and a row written by an older version can still carry another value.
+		if ( ! empty( $args['status'] ) && in_array( $args['status'], array( FG_RIDE_STATUS_PUBLISHED, 'pending' ), true ) ) {
 			$parts[] = $this->db->prepare( 'status = %s', (string) $args['status'] );
 		}
 
@@ -1289,8 +1277,6 @@ final class FG_Store {
 				case 'is_active':
 				case 'demand':
 				case 'duration_hours':
-				case 'pending_confirm_expires':
-				case 'pending_discard_expires':
 				case 'delete_expires':
 				case 'unregister_expires':
 					$formats[] = '%d';
@@ -1335,25 +1321,21 @@ final class FG_Store {
 	 * @return FG_Ride
 	 */
 	private function to_ride( array $row ) {
-		$ride                    = new FG_Ride();
-		$ride->id                = (int) $row['id'];
-		$ride->event_id          = (int) $row['event_id'];
-		$ride->status            = (string) $row['status'];
-		$ride->mode              = (string) $row['mode'];
-		$ride->origin            = (string) $row['origin'];
-		$ride->member_id         = (int) $row['member_id'];
-		$ride->public_ref        = (string) $row['public_ref'];
-		$ride->confirmed_at      = null === $row['confirmed_at'] ? '' : (string) $row['confirmed_at'];
-		$ride->consent_version   = (string) $row['consent_version'];
-		$ride->consented_at      = (string) $row['consented_at'];
-		$ride->created_at        = (string) $row['created_at'];
-		$ride->pending_confirm_hash    = (string) $row['pending_confirm_hash'];
-		$ride->pending_confirm_expires = (int) $row['pending_confirm_expires'];
-		$ride->pending_discard_hash    = (string) $row['pending_discard_hash'];
-		$ride->pending_discard_expires = (int) $row['pending_discard_expires'];
-		$ride->delete_hash             = (string) $row['delete_hash'];
-		$ride->delete_expires          = (int) $row['delete_expires'];
-		$ride->source_url              = (string) $row['source_url'];
+		$ride                  = new FG_Ride();
+		$ride->id              = (int) $row['id'];
+		$ride->event_id        = (int) $row['event_id'];
+		$ride->status          = (string) $row['status'];
+		$ride->mode            = (string) $row['mode'];
+		$ride->origin          = (string) $row['origin'];
+		$ride->member_id       = (int) $row['member_id'];
+		$ride->public_ref      = (string) $row['public_ref'];
+		$ride->confirmed_at    = null === $row['confirmed_at'] ? '' : (string) $row['confirmed_at'];
+		$ride->consent_version = (string) $row['consent_version'];
+		$ride->consented_at    = (string) $row['consented_at'];
+		$ride->created_at      = (string) $row['created_at'];
+		$ride->delete_hash     = (string) $row['delete_hash'];
+		$ride->delete_expires  = (int) $row['delete_expires'];
+		$ride->source_url      = (string) $row['source_url'];
 
 		return $ride;
 	}

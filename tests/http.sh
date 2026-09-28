@@ -8,12 +8,13 @@ F="$DIR/fixture.json"
 jq() { python3 -c "import json,sys;d=json.load(open('$F'));print(d['$1'])"; }
 
 PAGE_ID=$(jq page_id)
-PENDING_REF=$(jq pending_ref)
-CONFIRM_TOKEN=$(jq confirm_token)
-CONFIRM_NONCE=$(jq confirm_nonce)
+FIRST_ID=$(jq first_id)
+FIRST_REF=$(jq first_ref)
+FIRST_TOKEN=$(jq first_token)
+FIRST_NONCE=$(jq first_nonce)
 PUBLISHED_REF=$(jq published_ref)
-DELETE_TOKEN=$(jq delete_token)
-DELETE_NONCE=$(jq delete_nonce)
+SECOND_TOKEN=$(jq second_token)
+SECOND_NONCE=$(jq second_nonce)
 EVENT_UUID=$(jq event_uuid)
 
 STATE="docker exec wpdev-wordpress-1 php /tmp/fgtests/state.php"
@@ -67,7 +68,7 @@ if [ "$loc" = "https://localhost:8443/?page_id=$PAGE_ID" ]; then
 else
 	bad "http request is redirected to https with the same query" "$loc"
 fi
-loc=$(curl -s -o /dev/null -w '%{redirect_url}' "http://localhost:8080/?fg_ride_action=view&ride_ref=$PENDING_REF&intent=confirm&token=$CONFIRM_TOKEN")
+loc=$(curl -s -o /dev/null -w '%{redirect_url}' "http://localhost:8080/?fg_ride_action=view&ride_ref=$FIRST_REF&intent=delete&token=$FIRST_TOKEN")
 if printf '%s' "$loc" | grep -q "^https://localhost:8443/"; then
 	ok "token page over http is redirected to https"
 else
@@ -78,12 +79,14 @@ if [ "$code" = "404" ] || [ "$code" = "200" ]; then ok "unrelated pages are unto
 
 # --- 3. token landing page
 echo "[3] token landing page"
-head=$(curl -sk -D - -o "$DIR/confirm.html" "$BASE/?fg_ride_action=view&ride_ref=$PENDING_REF&intent=confirm&token=$CONFIRM_TOKEN")
+head=$(curl -sk -D - -o "$DIR/confirm.html" "$BASE/?fg_ride_action=view&ride_ref=$FIRST_REF&intent=delete&token=$FIRST_TOKEN")
 html=$(cat "$DIR/confirm.html")
-has "confirm page renders" "$html" "Veröffentlichung bestätigen"
-has "confirm page shows the first name of the member" "$html" "Anton"
-has "confirm page shows the member number to the member itself" "$html" "0042"
-hasnt "confirm page hides the address" "$html" "anton@angeln.example.org"
+has "delete page renders" "$html" "Fahrgemeinschaft löschen"
+has "delete page shows the first name of the member" "$html" "Anton"
+has "delete page shows the member number to the member itself" "$html" "0042"
+has "delete page names the entry that is meant" "$html" "Innenstadt"
+hasnt "delete page hides the address" "$html" "anton@angeln.example.org"
+has "delete page says what is about to happen" "$html" "sofort und ohne weitere Rückfrage"
 has "form posts to admin-post.php" "$html" "wp-admin/admin-post.php"
 has "form carries the token verifier" "$html" "name=\"token_nonce\""
 hasnt "no theme stylesheet" "$html" "wp-content/themes"
@@ -95,64 +98,64 @@ has "nosniff header" "$head" "X-Content-Type-Options: nosniff"
 has "referrer policy" "$head" "Referrer-Policy: no-referrer"
 
 echo "[3b] invalid token page"
-html=$(curl -sk "$BASE/?fg_ride_action=view&ride_ref=$PENDING_REF&intent=confirm&token=falsch")
+html=$(curl -sk "$BASE/?fg_ride_action=view&ride_ref=$FIRST_REF&intent=delete&token=falsch")
 has "invalid token is refused" "$html" "Link nicht gültig"
+# The two intents of the state that is gone. A real token of this ride is sent
+# with them, so the refusal cannot come from the token: only the intent is
+# refused, and that is the check.
+html=$(curl -sk "$BASE/?fg_ride_action=view&ride_ref=$FIRST_REF&intent=confirm&token=$FIRST_TOKEN")
+has "the confirmation intent no longer exists" "$html" "Link nicht gültig"
+html=$(curl -sk "$BASE/?fg_ride_action=view&ride_ref=$FIRST_REF&intent=discard&token=$FIRST_TOKEN")
+has "the discard intent no longer exists" "$html" "Link nicht gültig"
 
 echo "[3c] token page over GET does not change anything"
-code=$(curl -sk -o /dev/null -w '%{http_code}' "$BASE/?fg_ride_action=view&ride_ref=$PENDING_REF&intent=delete&token=$DELETE_TOKEN")
-pending_state=$(s statuses)
-if [ "$pending_state" = "pending,published," ]; then ok "GET never changes a status ($pending_state)"; else bad "GET never changes a status" "$pending_state"; fi
+code=$(curl -sk -o /dev/null -w '%{http_code}' "$BASE/?fg_ride_action=view&ride_ref=$FIRST_REF&intent=delete&token=$FIRST_TOKEN")
+vorher_stand=$(s statuses)
+if [ "$vorher_stand" = "published,published," ]; then ok "GET never changes a status ($vorher_stand)"; else bad "GET never changes a status" "$vorher_stand"; fi
 
-# --- 4. confirm over real HTTPS POST
-echo "[4] confirmation over POST"
-# The form on the token page carries a nonce of its own. Without it the
-# confirmation is refused with the sentence about a stale form, not with the one
-# about a dead link: a page that was opened a while ago is fixed by reloading
-# it, and that is what the visitor is told. The check happens while the entry is
-# still pending, so the refusal cannot come from the entry being gone already.
+# --- 4. deletion over real HTTPS POST
+echo "[4] deletion over POST"
+# The form on the token page carries a nonce of its own. Without it the request
+# is refused with the sentence about a stale form, not with the one about a dead
+# link: a page that was opened a while ago is fixed by reloading it, and that is
+# what the visitor is told. Both refusals happen while the entry is still there,
+# so neither of them can come from the entry being gone already. The deletions
+# themselves are in section 7, after the submission — a second entry is needed
+# there, and a second entry is also what section 5c counts on.
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_process_ride_token" \
-	--data-urlencode "ride_ref=$PENDING_REF" \
-	--data-urlencode "intent=confirm" \
-	--data-urlencode "token=$CONFIRM_TOKEN" \
+	--data-urlencode "ride_ref=$FIRST_REF" \
+	--data-urlencode "intent=delete" \
+	--data-urlencode "token=$FIRST_TOKEN" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID")
-if printf '%s' "$loc" | grep -q "fg_notice=form_expired"; then ok "confirmation without the form nonce is refused"; else bad "confirmation without the form nonce is refused" "$loc"; fi
-if [ "$(s statuses)" = "pending,published," ]; then ok "and publishes nothing"; else bad "and publishes nothing" "$(s statuses)"; fi
+if printf '%s' "$loc" | grep -q "fg_notice=form_expired"; then ok "deletion without the form nonce is refused"; else bad "deletion without the form nonce is refused" "$loc"; fi
+if [ "$(s statuses)" = "published,published," ]; then ok "and deletes nothing"; else bad "and deletes nothing" "$(s statuses)"; fi
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_process_ride_token" \
-	--data-urlencode "ride_ref=$PENDING_REF" \
-	--data-urlencode "intent=confirm" \
-	--data-urlencode "token=$CONFIRM_TOKEN" \
+	--data-urlencode "ride_ref=$FIRST_REF" \
+	--data-urlencode "intent=delete" \
+	--data-urlencode "token=$FIRST_TOKEN" \
 	--data-urlencode "token_nonce=falsch" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID")
 if printf '%s' "$loc" | grep -q "fg_notice=form_expired"; then ok "a wrong form nonce is refused too"; else bad "a wrong form nonce is refused too" "$loc"; fi
-if [ "$(s statuses)" = "pending,published," ]; then ok "and publishes nothing there either"; else bad "and publishes nothing there either" "$(s statuses)"; fi
-loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
-	--data-urlencode "action=fg_process_ride_token" \
-	--data-urlencode "ride_ref=$PENDING_REF" \
-	--data-urlencode "intent=confirm" \
-	--data-urlencode "token=$CONFIRM_TOKEN" \
-	--data-urlencode "token_nonce=$CONFIRM_NONCE" \
-	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID")
-if printf '%s' "$loc" | grep -q "fg_notice=published"; then ok "confirmation succeeds ($loc)"; else bad "confirmation succeeds" "$loc"; fi
-state=$(s count-pending-token)
-if [ "$state" = "0" ]; then ok "pending token is consumed"; else bad "pending token is consumed" "$state"; fi
-body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-has "confirmed ride appears in the list" "$body" "Innenstadt"
-has "and under the first name of the member" "$body" "Anton"
+if [ "$(s statuses)" = "published,published," ]; then ok "and deletes nothing there either"; else bad "and deletes nothing there either" "$(s statuses)"; fi
 
-echo "[4b] replay of the same token"
+echo "[4b] the token of another entry"
+# The link of one entry with the reference of another. The token is a real one
+# and the verifier fits it, so the refusal can only come from the two not
+# belonging together: a link is not a key that opens every entry.
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_process_ride_token" \
-	--data-urlencode "ride_ref=$PENDING_REF" \
-	--data-urlencode "intent=confirm" \
-	--data-urlencode "token=$CONFIRM_TOKEN" \
-	--data-urlencode "token_nonce=$CONFIRM_NONCE" \
+	--data-urlencode "ride_ref=$FIRST_REF" \
+	--data-urlencode "intent=delete" \
+	--data-urlencode "token=$SECOND_TOKEN" \
+	--data-urlencode "token_nonce=$SECOND_NONCE" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID")
-if printf '%s' "$loc" | grep -q "fg_notice=invalid_token"; then ok "replay is refused ($loc)"; else bad "replay is refused" "$loc"; fi
+if printf '%s' "$loc" | grep -q "fg_notice=invalid_token"; then ok "the token of another entry is refused ($loc)"; else bad "the token of another entry is refused" "$loc"; fi
+if [ "$(s statuses)" = "published,published," ]; then ok "and no entry is gone for it"; else bad "and no entry is gone for it" "$(s statuses)"; fi
 
 echo "[4c] mutations are POST only"
-get_head=$(curl -sk -D - -o /dev/null "$BASE/wp-admin/admin-post.php?action=fg_process_ride_token&ride_ref=$PUBLISHED_REF&intent=delete&token=$DELETE_TOKEN")
+get_head=$(curl -sk -D - -o /dev/null "$BASE/wp-admin/admin-post.php?action=fg_process_ride_token&ride_ref=$PUBLISHED_REF&intent=delete&token=$SECOND_TOKEN")
 code=$(printf '%s' "$get_head" | head -1 | grep -o '[0-9]\{3\}')
 if [ "$code" = "405" ]; then ok "GET on admin-post.php answers 405"; else bad "GET on admin-post.php answers 405" "$code"; fi
 if printf '%s' "$get_head" | grep -qi "^allow: POST"; then ok "405 carries an Allow: POST header"; else bad "405 carries an Allow: POST header" "$(printf '%s' "$get_head" | tr -d '\r' | tr '\n' '|')"; fi
@@ -605,22 +608,13 @@ else
 	bad "the form offers a work duty to submit against" "no event reference on the page"
 fi
 
-# --- 6. deletion over POST
-echo "[6] self service deletion"
-loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
-	--data-urlencode "action=fg_process_ride_token" \
-	--data-urlencode "ride_ref=$PUBLISHED_REF" \
-	--data-urlencode "intent=delete" \
-	--data-urlencode "token=$DELETE_TOKEN" \
-	--data-urlencode "token_nonce=$DELETE_NONCE" \
-	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID")
-if printf '%s' "$loc" | grep -q "fg_notice=deleted"; then ok "deletion succeeds"; else bad "deletion succeeds" "$loc"; fi
-body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-hasnt "deleted ride is gone" "$body" "Suedstadt"
-has "the ride that is left is untouched" "$body" "Innenstadt"
-
-# --- 7. plain submission over real POST
-echo "[7] submission with a form nonce from the page"
+# --- 6. plain submission over real POST
+#
+# This section stands before the deletion on purpose. A submission is published
+# at once, so what the deletion removes next is an entry that came out of the
+# real form, and the check that the other entry survived is then a check about
+# two different origins rather than about two rows of the same fixture.
+echo "[6] submission with a form nonce from the page"
 submit_nonce=$(curl -sk "$BASE/?page_id=$PAGE_ID" | grep -o 'name="fg_submit_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
 event_ref=$(python3 -c "import json;print(json.load(open('$F'))['event_ref'])")
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
@@ -634,19 +628,21 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 	--data-urlencode "fg_submit_nonce=$submit_nonce")
-if printf '%s' "$loc" | grep -q "fg_notice=pending"; then ok "submission is vorkereed ($loc)"; else bad "submission is vorkereed" "$loc"; fi
+if printf '%s' "$loc" | grep -q "fg_notice=published"; then ok "a submission is published at once ($loc)"; else bad "a submission is published at once" "$loc"; fi
 
 # A ride is offered for one duty, and it may only be offered by somebody who is
 # in that duty. The pair of member number and address decides, and the member
 # does not even have to know their own number: whoever signs up for a duty can
 # then find a ride, and whoever is not in the duty cannot put their pair into
-# the list of a duty they are not part of.
+# the list of a duty they are not part of. Each refused case gets an area of its
+# own, because the pickup area is the only free text a submission has and the
+# only thing a check can look for afterwards.
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_submit_ride" \
 	--data-urlencode "fg_event_ref=$event_ref" \
 	--data-urlencode "fg_mode=search" \
 	--data-urlencode "fg_member_no=$(jq member_free_no)" \
-	--data-urlencode "fg_origin=Weststadt" \
+	--data-urlencode "fg_origin=Nichtangemeldet" \
 	--data-urlencode "fg_member_email=$(jq member_free_mail)" \
 	--data-urlencode "fg_consent=1" \
 	--data-urlencode "fg_website=" \
@@ -666,7 +662,7 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "fg_event_ref=$event_ref" \
 	--data-urlencode "fg_mode=search" \
 	--data-urlencode "fg_member_no=$(jq member_taken_no)" \
-	--data-urlencode "fg_origin=Weststadt" \
+	--data-urlencode "fg_origin=FalschesPaar" \
 	--data-urlencode "fg_member_email=$(jq member_free_mail)" \
 	--data-urlencode "fg_consent=1" \
 	--data-urlencode "fg_website=" \
@@ -677,20 +673,77 @@ if printf '%s' "$loc" | grep -q "fg_notice=not_created"; then
 else
 	bad "a number and an address of two different members are refused" "$loc"
 fi
-hasnt "and the refused ride is nowhere on the page" "$(curl -sk "$BASE/?page_id=$PAGE_ID")" "Weststadt"
-hasnt "pending ride stays private" "$(curl -sk "$BASE/?page_id=$PAGE_ID")" "Anton Weststadt"
+nach_den_refusals=$(curl -sk "$BASE/?page_id=$PAGE_ID")
+hasnt "the ride of the member who is not in the duty is nowhere on the page" "$nach_den_refusals" "Nichtangemeldet"
+hasnt "and neither is the one of the mismatched pair" "$nach_den_refusals" "FalschesPaar"
+has "the accepted ride is in the list at once" "$nach_den_refusals" "Weststadt"
+hasnt "and the list shows a first name next to the area, not both names" "$nach_den_refusals" "Anton Weststadt"
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_submit_ride" \
 	--data-urlencode "fg_event_ref=$event_ref" \
 	--data-urlencode "fg_mode=search" \
 	--data-urlencode "fg_member_no=0044" \
-	--data-urlencode "fg_origin=Weststadt" \
+	--data-urlencode "fg_origin=Manipuliert" \
 	--data-urlencode "fg_member_email=cem@angeln.example.org" \
 	--data-urlencode "fg_consent=1" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 	--data-urlencode "fg_submit_nonce=manipuliert")
 if printf '%s' "$loc" | grep -q "fg_notice=form_expired"; then ok "manipulated nonce gets a reload hint ($loc)"; else bad "manipulated nonce gets a reload hint" "$loc"; fi
+
+# --- 7. deletion over POST
+#
+# Two entries of the fixture and one that section 6 submitted through the real
+# form. Each is deleted with its own link, and after every step the two others
+# are looked at: a deletion link belongs to one entry, so the checks on the
+# survivors are what tell a deletion from a wipe.
+echo "[7] self service deletion"
+# The counter is read before and after, because both fixture entries carry a
+# token and a count of one would say nothing about which one was spent.
+tokens_vorher=$(s count-delete-token)
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_process_ride_token" \
+	--data-urlencode "ride_ref=$FIRST_REF" \
+	--data-urlencode "intent=delete" \
+	--data-urlencode "token=$FIRST_TOKEN" \
+	--data-urlencode "token_nonce=$FIRST_NONCE" \
+	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID")
+if printf '%s' "$loc" | grep -q "fg_notice=deleted"; then ok "deletion succeeds"; else bad "deletion succeeds" "$loc"; fi
+tokens_nachher=$(s count-delete-token)
+if [ "$tokens_nachher" = "$((tokens_vorher - 1))" ]; then
+	ok "the deletion token is consumed ($tokens_vorher -> $tokens_nachher)"
+else
+	bad "the deletion token is consumed" "$tokens_vorher -> $tokens_nachher"
+fi
+body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
+hasnt "deleted ride is gone" "$body" "Innenstadt"
+has "the ride of the other fixture is untouched" "$body" "Suedstadt"
+has "and the submitted one as well" "$body" "Weststadt"
+
+echo "[7b] replay of the same link"
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_process_ride_token" \
+	--data-urlencode "ride_ref=$FIRST_REF" \
+	--data-urlencode "intent=delete" \
+	--data-urlencode "token=$FIRST_TOKEN" \
+	--data-urlencode "token_nonce=$FIRST_NONCE" \
+	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID")
+if printf '%s' "$loc" | grep -q "fg_notice=invalid_token"; then ok "replay is refused ($loc)"; else bad "replay is refused" "$loc"; fi
+body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
+has "and the replay leaves the other entry of the fixture alone" "$body" "Suedstadt"
+
+echo "[7c] the second deletion"
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_process_ride_token" \
+	--data-urlencode "ride_ref=$PUBLISHED_REF" \
+	--data-urlencode "intent=delete" \
+	--data-urlencode "token=$SECOND_TOKEN" \
+	--data-urlencode "token_nonce=$SECOND_NONCE" \
+	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID")
+if printf '%s' "$loc" | grep -q "fg_notice=deleted"; then ok "the second deletion succeeds too"; else bad "the second deletion succeeds too" "$loc"; fi
+body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
+hasnt "deleted ride is gone" "$body" "Suedstadt"
+has "the ride that is left is untouched" "$body" "Weststadt"
 
 # --- 8. the list of work duties on a page of its own
 # The list is a shortcode of its own and gets a page of its own, so it is

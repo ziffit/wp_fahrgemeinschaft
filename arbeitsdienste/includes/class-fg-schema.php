@@ -20,7 +20,7 @@ final class FG_Schema {
 	 *
 	 * @var string
 	 */
-	const VERSION = '1.4.0';
+	const VERSION = '1.5.0';
 
 	/**
 	 * Option name holding the installed schema version.
@@ -30,12 +30,15 @@ final class FG_Schema {
 	const OPTION = 'fg_schema_version';
 
 	/**
-	 * Option name holding the number of rides the migration of 1.4.0 removed.
+	 * Option name holding the number of rides the migrations removed.
 	 *
 	 * The option is not read by the plugin afterwards. It exists so the club is
 	 * told once how many public entries disappeared, and it is deleted the moment
 	 * that notice has been shown. Its existence is therefore the marker for "not
 	 * yet seen", and a stale number is better than a number nobody ever saw.
+	 *
+	 * Two migrations can add to it, and an install() runs both, so the steps add
+	 * their numbers up instead of the first one winning the option.
 	 *
 	 * @var string
 	 */
@@ -238,6 +241,16 @@ final class FG_Schema {
 		// stays in the events table — a WordPress rolled back to an older
 		// version of this plugin must not fail on a field it does not know. The
 		// migration empties them; see clear_legacy_ride_contacts().
+		//
+		// The four columns pending_confirm_hash, pending_confirm_expires,
+		// pending_discard_hash and pending_discard_expires lost their reader and
+		// their writer in 1.15.0, when the pending state went away: a ride is
+		// published when the form is sent, so there is nothing to confirm and
+		// nothing to discard before publication. They keep their place for the
+		// same reason as above. Unlike alias and contact_email they need no
+		// migration — the migration of 1.4.0 already wrote every row, and a
+		// ride published by an older version has never carried a pending token
+		// in these columns while being published.
 		$statements = array(
 			"CREATE TABLE $events (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -260,7 +273,7 @@ final class FG_Schema {
 			"CREATE TABLE $rides (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 	event_id bigint(20) unsigned NOT NULL DEFAULT 0,
-	status varchar(10) NOT NULL DEFAULT 'pending',
+	status varchar(10) NOT NULL DEFAULT 'published',
 	mode varchar(10) NOT NULL DEFAULT '',
 	alias varchar(80) NOT NULL DEFAULT '',
 	origin varchar(100) NOT NULL DEFAULT '',
@@ -328,6 +341,7 @@ final class FG_Schema {
 		self::clear_legacy_participants();
 		self::adopt_ride_members();
 		self::clear_legacy_ride_contacts();
+		self::clear_pending_rides();
 
 		update_option( self::OPTION, self::VERSION, false );
 	}
@@ -432,13 +446,64 @@ final class FG_Schema {
 		// data in the database for ever.
 		$wpdb->query( "UPDATE $table SET alias = '', contact_email = '' WHERE alias <> '' OR contact_email <> ''" ); // phpcs:ignore WordPress.DB
 
-		if ( $dropped > 0 ) {
-			add_option( self::DROPPED_RIDES_OPTION, $dropped, '', false );
+		self::count_dropped_rides( $dropped );
+	}
+
+	/**
+	 * Remove the rides that are still waiting for a confirmation.
+	 *
+	 * Until 1.15.0 a public entry was stored as pending and became visible only
+	 * after the person had clicked a link in a mail. Since 1.15.0 a ride is
+	 * published when the form is sent, so a row in the pending state is one that
+	 * nobody ever confirmed — and there is no longer a code path that could turn
+	 * it into a published one. Left alone it would stay in the table for ever:
+	 * the daily cleanup that used to expire it is gone with the state itself, and
+	 * without a status column in the list it would look like an ordinary entry.
+	 *
+	 * They are removed and not published. A pending row is a submission whose
+	 * author was asked to confirm and never did, and a club has no way of reading
+	 * that as consent to a public entry; the person who wanted one offered it
+	 * again with one form. The number goes into the same option as the rides the
+	 * migration of 1.4.0 removed, so the club is told once about both.
+	 *
+	 * The status is compared as a literal and not through FG_RIDE_STATUS_PENDING,
+	 * because that constant is gone with the state it named. The value is what is
+	 * in the rows written by every version up to and including 1.14.0.
+	 *
+	 * @return void
+	 */
+	public static function clear_pending_rides() {
+		global $wpdb;
+
+		// No prepare() here: the statement carries no value from outside, only
+		// the table name this class built and a literal this class wrote.
+		$table   = self::rides_table();
+		$dropped = (int) $wpdb->query( "DELETE FROM $table WHERE status = 'pending'" ); // phpcs:ignore WordPress.DB
+
+		self::count_dropped_rides( $dropped );
+	}
+
+	/**
+	 * Add removed rides to the number the club is shown once.
+	 *
+	 * add_option() would be wrong here: it does nothing when the option already
+	 * exists, and an install() runs both removing steps, so the second number
+	 * would be lost without a word. update_option() adds the option when it is
+	 * missing and writes it when it is there.
+	 *
+	 * @param int $count Number of rides removed by the calling step.
+	 * @return void
+	 */
+	private static function count_dropped_rides( $count ) {
+		$count = (int) $count;
+
+		if ( $count > 0 ) {
+			update_option( self::DROPPED_RIDES_OPTION, (int) get_option( self::DROPPED_RIDES_OPTION, 0 ) + $count, false );
 		}
 	}
 
 	/**
-	 * How many rides the migration of 1.4.0 removed, and clear the number.
+	 * How many rides the migrations removed, and clear the number.
 	 *
 	 * The option is deleted as it is read, which is what makes the notice appear
 	 * once. The number is returned rather than printed so that the caller decides
