@@ -280,6 +280,20 @@ switch ( $command ) {
 		fg_state_out( $result['deleted'] ? 'deleted:' . $result['registrations'] : 'missing' );
 		break;
 
+	// unlinked: every member who is not registered for a work service, one
+	// "member_no|email" per line. The group deletion on the member screen claims
+	// to remove exactly these people, so the suite compares the names on that
+	// screen with the names here instead of counting rows on both sides and
+	// hoping the two counts agree.
+	case 'unlinked':
+		$zeilen = array();
+		foreach ( $repo->get_members_without_registration() as $member ) {
+			$zeilen[] = $member->member_no . '|' . $member->email;
+		}
+
+		fg_state_out( implode( ' ', $zeilen ) );
+		break;
+
 	/* --------------------------------------------------------- registrations */
 
 	// register <event_id> <member_no> <email> [source_url]

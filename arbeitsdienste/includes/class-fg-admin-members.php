@@ -19,6 +19,13 @@ defined( 'ABSPATH' ) || exit;
  * administration. An import never deletes: a member whose number is missing from
  * the file is only listed in the report, because a file that is a week old must
  * not empty the member list.
+ *
+ * The same screen carries the one deletion that acts on a group: it removes every
+ * member who is not registered for a work service, which is what clears the list
+ * after a test or before a fresh import. It is a link that names how many members
+ * it would take and shows them, and only the second click deletes. Who is
+ * registered stays, and so does every ride: a ride is its own entry with its own
+ * contact address and was never owned by the member record.
  */
 final class FG_Admin_Members {
 	/**
@@ -38,6 +45,7 @@ final class FG_Admin_Members {
 
 		add_action( 'admin_post_fg_save_member', array( $this, 'save' ) );
 		add_action( 'admin_post_fg_import_members', array( $this, 'import' ) );
+		add_action( 'admin_post_fg_prune_members', array( $this, 'prune' ) );
 	}
 
 	/**
@@ -48,6 +56,15 @@ final class FG_Admin_Members {
 	public function render() {
 		if ( ! current_user_can( 'edit_posts' ) ) {
 			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'arbeitsdienste' ) );
+		}
+
+		// The first step of the group deletion only reads and only names what it
+		// would take. It is a link and not a form because nothing is changed by
+		// following it, and a link that a browser or a proxy fetches by itself
+		// must never delete anything.
+		if ( isset( $_GET['fg_prune'] ) && 'ask' === FG_Admin::query_key( 'fg_prune' ) ) {
+			$this->render_prune();
+			return;
 		}
 
 		// `member` in the query means a form is wanted: an ID opens that record,
@@ -135,6 +152,8 @@ final class FG_Admin_Members {
 			<?php $this->render_pagination( $total, $page, $search ); ?>
 
 			<?php $this->render_import(); ?>
+
+			<?php $this->render_cleanup(); ?>
 		</div>
 		<?php
 	}
@@ -327,6 +346,181 @@ final class FG_Admin_Members {
 			</table>
 		<?php endif; ?>
 		<?php
+	}
+
+	/**
+	 * Render the section that removes every member without a work service.
+	 *
+	 * The first step is a link and not a button that deletes: it opens the
+	 * overview, and only the form on the overview sends the request that removes
+	 * anything. Both numbers are printed here, so the person in front of the
+	 * screen learns what the operation is about before starting it rather than
+	 * after it.
+	 *
+	 * @return void
+	 */
+	private function render_cleanup() {
+		$ohne = (int) $this->repository->count_members_without_registration();
+		$mit  = (int) $this->repository->count_members() - $ohne;
+		?>
+		<h2><?php esc_html_e( 'Aufräumen', 'arbeitsdienste' ); ?></h2>
+		<p><?php esc_html_e( 'Für einen Testlauf und vor einem neuen Import lässt sich die Liste in einem Zug leeren: gelöscht werden alle Mitglieder, die für keinen Arbeitsdienst angemeldet sind. Fahrgemeinschaften bleiben erhalten, denn eine Fahrt ist ein eigener Eintrag mit eigener Kontaktadresse.', 'arbeitsdienste' ); ?></p>
+		<?php $this->render_prune_counts( $ohne, $mit ); ?>
+		<?php if ( 0 === $ohne ) : ?>
+			<p><?php esc_html_e( 'Zurzeit ist niemand ohne Anmeldung im Bestand; es gibt nichts zu löschen.', 'arbeitsdienste' ); ?></p>
+		<?php else : ?>
+			<p>
+				<a class="button" href="<?php echo esc_url( $this->prune_url() ); ?>"><?php esc_html_e( 'Zeigen, was gelöscht würde', 'arbeitsdienste' ); ?></a>
+			</p>
+		<?php endif; ?>
+		<?php
+	}
+
+	/**
+	 * Render the overview of the group deletion, with the form that carries it out.
+	 *
+	 * The overview names every member it would take. That is the point of the
+	 * second step: the first step only says how many, and a count of a few
+	 * hundred is no answer to "is my member in there?".
+	 *
+	 * @return void
+	 */
+	private function render_prune() {
+		$ohne     = (int) $this->repository->count_members_without_registration();
+		$mit      = (int) $this->repository->count_members() - $ohne;
+		$betroffen = $ohne ? $this->repository->get_members_without_registration() : array();
+		?>
+		<div class="wrap">
+			<h1 class="wp-heading-inline"><?php esc_html_e( 'Mitglieder ohne Arbeitsdienst löschen', 'arbeitsdienste' ); ?></h1>
+			<a href="<?php echo esc_url( $this->list_url() ); ?>" class="page-title-action"><?php esc_html_e( 'Zurück zur Liste', 'arbeitsdienste' ); ?></a>
+			<hr class="wp-header-end">
+
+			<p><?php esc_html_e( 'Diese Übersicht zählt beim Aufruf dieser Seite. Zwischen ihr und dem Klick kann sich die Zahl geändert haben: gelöscht wird, wer in diesem Moment für keinen Arbeitsdienst angemeldet ist.', 'arbeitsdienste' ); ?></p>
+			<?php $this->render_prune_counts( $ohne, $mit ); ?>
+
+			<?php if ( $ohne ) : ?>
+				<?php // Wie der Importbericht steht die Liste in einem eigenen Rahmen: darüber steht die Liste aller Mitglieder, und eine Nummer, die von hier gelesen wird, muss sich von einer Nummer aus jener Liste unterscheiden lassen. ?>
+				<div class="fg-prune-report">
+					<p>
+						<?php
+						printf(
+							/* translators: %d: number of members. */
+							esc_html( _n( 'Dieses Mitglied wird gelöscht:', 'Diese Mitglieder werden gelöscht:', count( $betroffen ), 'arbeitsdienste' ) ),
+							count( $betroffen )
+						);
+						?>
+					</p>
+					<table class="widefat striped">
+						<thead>
+							<tr>
+								<th><?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?></th>
+								<th><?php esc_html_e( 'Name', 'arbeitsdienste' ); ?></th>
+								<th><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ( $betroffen as $member ) : ?>
+								<tr>
+									<td><?php echo esc_html( $member->member_no ); ?></td>
+									<td><?php echo esc_html( trim( $member->first_name . ' ' . $member->last_name ) ); ?></td>
+									<td><?php echo esc_html( $member->email ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="fg_prune_members">
+					<?php wp_nonce_field( 'fg_prune_members', 'fg_prune_nonce' ); ?>
+					<?php
+					submit_button(
+						sprintf(
+							/* translators: %d: number of members. */
+							esc_html( _n( '%d Mitglied endgültig löschen', '%d Mitglieder endgültig löschen', count( $betroffen ), 'arbeitsdienste' ) ),
+							count( $betroffen )
+						),
+						'primary delete',
+						'submit',
+						false
+					);
+					?>
+				</form>
+			<?php else : ?>
+				<p><?php esc_html_e( 'Es ist niemand mehr ohne Anmeldung im Bestand. Zurück zur Liste.', 'arbeitsdienste' ); ?></p>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Print the two numbers the group deletion is decided on.
+	 *
+	 * They stand in a frame of their own for the same reason the import report
+	 * does: above this section the screen prints the list of every member with
+	 * their number and the count of duties each of them is in, and a number read
+	 * over the whole screen could have come from any of them.
+	 *
+	 * @param int $ohne Members not registered for any work service.
+	 * @param int $mit  Members registered for at least one work service.
+	 * @return void
+	 */
+	private function render_prune_counts( $ohne, $mit ) {
+		?>
+		<div class="fg-prune-zahlen">
+			<p>
+				<?php
+				printf(
+					/* translators: 1: number of members without a work service, 2: that number in words. */
+					'<span class="fg-prune-ohne">%1$s</span> %2$s',
+					esc_html( (string) (int) $ohne ),
+					esc_html( _n( 'Mitglied ist für keinen Arbeitsdienst angemeldet.', 'Mitglieder sind für keinen Arbeitsdienst angemeldet.', (int) $ohne ) )
+				);
+				?>
+			</p>
+			<p>
+				<?php
+				printf(
+					/* translators: 1: number of registered members, 2: that number in words. */
+					'<span class="fg-prune-mit">%1$s</span> %2$s',
+					esc_html( (string) (int) $mit ),
+					esc_html( _n( 'Mitglied ist für mindestens einen Arbeitsdienst angemeldet und bleibt erhalten.', 'Mitglieder sind für mindestens einen Arbeitsdienst angemeldet und bleiben erhalten.', (int) $mit ) )
+				);
+				?>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Delete every member that is not registered for a work service.
+	 *
+	 * The number in the notice is what the delete statement actually removed,
+	 * not what the overview named. The two can differ, and a notice that named
+	 * the number from the overview would be a claim about the past.
+	 *
+	 * @return void
+	 */
+	public function prune() {
+		if ( ! current_user_can( 'delete_posts' ) ) {
+			wp_die( esc_html__( 'Du hast keine Berechtigung, Eintragungen zu löschen.', 'arbeitsdienste' ) );
+		}
+
+		check_admin_referer( 'fg_prune_members', 'fg_prune_nonce' );
+
+		$deleted = (int) $this->repository->delete_members_without_registration();
+		$kept    = (int) $this->repository->count_members();
+
+		FG_Admin::store_notice(
+			sprintf(
+				/* translators: 1: number of deleted members, 2: number of members that stayed. */
+				esc_html( _n( '%1$d Mitglied gelöscht, %2$d Mitglieder bleiben angemeldt.', '%1$d Mitglieder gelöscht, %2$d Mitglieder bleiben angemeldt.', $deleted ) ),
+				$deleted,
+				$kept
+			)
+		);
+
+		$this->redirect_back();
 	}
 
 	/**
@@ -611,7 +805,7 @@ final class FG_Admin_Members {
 	}
 
 	/**
-	 * Build the edit URL of one member.
+	 * Build the URL of the edit form of one member.
 	 *
 	 * @param int $member_id Member ID.
 	 * @return string
@@ -621,6 +815,21 @@ final class FG_Admin_Members {
 			array(
 				'page'   => FG_MEMBERS_PAGE_SLUG,
 				'member' => (int) $member_id,
+			),
+			admin_url( 'admin.php' )
+		);
+	}
+
+	/**
+	 * Build the URL of the overview of the group deletion.
+	 *
+	 * @return string
+	 */
+	private function prune_url() {
+		return add_query_arg(
+			array(
+				'page'     => FG_MEMBERS_PAGE_SLUG,
+				'fg_prune' => 'ask',
 			),
 			admin_url( 'admin.php' )
 		);

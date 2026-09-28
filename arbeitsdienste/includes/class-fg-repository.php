@@ -1014,6 +1014,39 @@ final class FG_Repository {
 	}
 
 	/**
+	 * Count the members that are not registered for any work service.
+	 *
+	 * @return int
+	 */
+	public function count_members_without_registration() {
+		return $this->store->count_members_without_registration();
+	}
+
+	/**
+	 * Read the members that are not registered for any work service.
+	 *
+	 * @return FG_Member[]
+	 */
+	public function get_members_without_registration() {
+		return $this->store->query_members_without_registration();
+	}
+
+	/**
+	 * Delete every member that is not registered for any work service.
+	 *
+	 * Rides are kept, like in delete_member(), and so is every member that is
+	 * registered for at least one work service. The condition is asked of the
+	 * database at the moment of the delete, not taken from a list that was read
+	 * for the overview: a registration made after the overview was read keeps
+	 * its member.
+	 *
+	 * @return int Number of deleted members.
+	 */
+	public function delete_members_without_registration() {
+		return $this->store->delete_members_without_registration();
+	}
+
+	/**
 	 * Read and check the four fields of a member.
 	 *
 	 * Nothing is trimmed away beyond the surrounding whitespace of a form, and

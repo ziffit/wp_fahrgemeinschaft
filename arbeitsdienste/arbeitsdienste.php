@@ -24,7 +24,7 @@ defined( 'ABSPATH' ) || exit;
  * Mails oder Datenschutzerklärung: sie kennzeichnet die ausgelieferte Fassung,
  * und wer ein Archiv entpackt, soll an der Zahl erkennen, was darin ist.
  */
-define( 'FG_VERSION', '1.10.0' );
+define( 'FG_VERSION', '1.11.0' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
 /**
  * Name of the element that carries a message after a form was sent.

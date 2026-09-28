@@ -4,8 +4,8 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 27.09.2026 — **Admin-Ebene 392, öffentliches HTTP 179, Mail-Ebene 96,
-0 Fehler**. Die CLI-Suite ist an diesem Tag nicht gelaufen, weil `smoke.php` am Anfang
+Letzter Lauf: 28.09.2026 — **Admin-Ebene 428, öffentliches HTTP 179, Mail-Ebene 96,
+0 Fehler**. Die CLI-Suite ist nicht gelaufen, weil `smoke.php` am Anfang
 alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht und dafür eine
 ausdrückliche Zustimmung braucht; ihre 482 Prüfungen stammen aus dem freigegebenen Lauf
 vom 27.09.2026 und sind seither unverändert. Der Lauf ist damit keine Viersuiten-Zahl,
@@ -136,7 +136,7 @@ Fahrgemeinschaften und Mitglieder sowie die Statistik-Option, es gibt also keine
 | CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–20: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene und die Mitgliederverwaltung; dazu die Abschnitte `[2a]` (die vier freiwilligen Angaben eines Arbeitsdienstes) und `[3c]` (die Liste der Arbeitsdienste) |
 | Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data`, Verhalten der Schaltflächen im Stylesheet; dazu die Abschnitte `[8]` für die Arbeitsdienstliste auf einer eigenen Seite und `[9]` für den vollständigen Weg von der Anmeldung über die E-Mail bis zum Abmelden |
 | Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo` |
-| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der fünf Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die Abschnitte `[9]` (Mitgliederverwaltung), `[10]` (CSV-Import) und `[11]` (Anmeldung zu einem Dienst) |
+| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der fünf Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die Abschnitte `[9]` (Mitgliederverwaltung), `[10]` (CSV-Import), `[11]` (Anmeldung zu einem Dienst) und `[12]` (Aufräumen um alle Mitglieder ohne Arbeitsdienst) |
 
 Zwei Eigenheiten der Suiten, die man kennen muss, bevor man einem Fehlschlag traut:
 
@@ -160,7 +160,7 @@ Zwei Eigenheiten der Suiten, die man kennen muss, bevor man einem Fehlschlag tra
   Helfer `feld()` (ein Feldtype und `required` im selben `<input>`-Tag) und `notice()`
   (nur der Meldungsrahmen, nie die ganze Seite).
 
-### Die Abschnitte `[2a]`, `[3c]`, `[8]`, `[9]`, `[10]` und `[11]`
+### Die Abschnitte `[2a]`, `[3c]`, `[8]`, `[9]`, `[10]`, `[11]` und `[12]`
 
 `[2a]` prüft die vier neuen Felder dort, wo sie hingehören: an der Tabelle. Der
 Nachweis steht am Anfang und heißt, dass die vier Spalten am **Ende** einer bereits
@@ -234,6 +234,27 @@ eine Schaltfläche ohne Rückfrage löscht, ohne zu fragen. Weil die Dienstseite
 für jede Anmeldung eine eigene Löschschaltfläche trägt, unterscheidet der Helfer
 `link <typ>` nach dem übergebenen Typ, statt die erste Löschschaltfläche der Seite
 zu nehmen.
+
+`[12]` in `admin.sh` ist der einzige Abschnitt der Suite, der etwas löscht, das er
+nicht selbst angelegt hat, und der einzige, der zwei Zahlen auf einmal nennen muss. Die
+beiden Zahlen unterhalb der Liste werden deshalb beide einzeln gelesen und beide gegen
+die Tabellen gerechnet, nicht gegeneinander: Die Rechnung ist `anzahl = mit + ohne`, und
+eine Prüfung, die nur prüft, dass `mit` und `ohne` zusammenpassen, ist bei zwei
+vertauschten Zahlen grün. Die Menge der Betroffenen wird aus der Übersicht und aus
+der Tabelle gelesen und als **Satz** (sortiert) verglichen, nicht als Zeichenkette. Der
+Grund ist derselbe wie oben bei den Mitgliedsnummern: Die Nummern der Betroffenen
+stehen auch in der Mitgliederliste derselben Seite, und eine Suche nach einer Nummer
+über die ganze Seite wird von der Zeile des ersten Treffers beantwortet. Die Adressen
+werden zusätzlich einzeln geprüft, denn zwei Nummern können sich wie die eine der
+anderen anfangen und zwei Adressen nicht. Für den Hinweis nach dem Löschen gilt
+dasselbe: Geprüft wird der **ganze** Text, nicht ein Wort daraus — die Seite erklärt im
+Abschnitt darüber in Worten, dass gelöscht wird, eine Prüfung, die die Seite liest, ist
+also immer grün.
+
+Der Abschnitt prüft außerdem das, was beim Löschen einzelner Anmeldungen sonst niemand
+prüft: dass ein **abgewiesener** Aufruf nichts bewirkt. Ein falscher Nonce muss mit 403
+enden und die Zahl der Mitglieder unverändert lassen; die Prüfung schickt ihn und
+misst danach, nicht vorher.
 
 Eine Feinheit der Prüftechnik, die sich hier bewährt hat: Die Wochentagsprüfung
 vergleicht nicht mit einem festen Wort, sondern mit dem, was `format_event_date_long()`
@@ -617,6 +638,69 @@ das Escaping eines Besucherwerts, das rohe kaufmännische Und, das Laden von ein
 Adresse und die unaufgelöste Schablone. Sie sind wieder hergestellt; der Abschnitt [8] läuft
 wieder mit allen Prüfungen, und die Suite mit 392.
 
+### Die sechste Reihe (7 Fehlerbilder am Aufräumen der Mitgliederseite)
+
+Sie ging den Abschnitt `[12]` an, das Löschen aller Mitglieder, die für keinen Arbeitsdienst
+angemeldet sind. Die Prüfungen standen in einem Aufbau, der sich für eine Handlung eigens
+bewährt hat, und die Reihe prüft, ob dieser Aufbau die Handlung überhaupt trägt.
+
+Der Aufbau ist: drei Mitglieder ohne jeden Dienst anlegen, den Bildschirm nach seinen beiden
+Zahlen fragen, den ersten Klick verfolgen, die Übersicht gegen die Tabelle halten, einen
+falschen Nonce schicken und dann den zweiten Klick tun. Sieben Fehlerbilder, an je einer
+Stelle:
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| `DELETE FROM fg_members` ohne die Bedingung | die beiden angemeldeten Mitglieder bleiben | beide „survived“, dazu die Memberzahl und der Hinweis: 4 Prüfungen |
+| `render()` ruft vor der Übersicht die Löschung auf | das Aufrufen der Übersicht löscht nichts | 8 Prüfungen, zuerst „the overview deletes nothing“ — und die Übersicht stand danach leer, ohne Schaltfläche und ohne Formular |
+| `check_admin_referer()` entfernt | ein falscher Nonce wird abgewiesen | „a wrong nonce is refused“ meldete 303 statt 403, danach waren alle drei weg; die Hinweisprüfung sah zusätzlich **zwei** Hinweise |
+| die Übersicht zeigt nur den ersten Betroffenen | sie nennt genau die Mitglieder, die sie nimmt | 3 Prüfungen: die Schaltfläche meldete „1 Mitglied endgültig löschen“, die Mengenprüfung fand 0960 gegen 0960 0961 0962 |
+| der Hinweis nennt für beide Zahlen dieselbe | der Hinweis nennt beide Zahlen | genau 1 Prüfung |
+| die beiden Zahlen auf der Liste sind vertauscht | die Liste nennt beide Zahlen richtig | 3 Prüfungen, zuerst „it names how many would be deleted“ |
+| `current_user_can( 'delete_posts' )` entfernt | — | **keine**, und das ist keine Wirkung des Fehlers, sondern eine Lücke der Umgebung; siehe unten |
+
+Drei Dinge sind dabei mitgefallen, und alle drei waren Fehler im Prüfrahmen, nicht im Plugin:
+
+- **Die Reihenfolge der Fehlerbilder war zunächst falsch.** Die Bilder wurden im Repo
+  vorgenommen und nach jedem Bild nur in den Teststand zurückgespiegelt, nicht ins Repo
+  selbst. Dadurch trug Bild 2 sein Fehlverhalten in Bild 3 hinein, und die Prüfung meldete
+  12 rote Zeilen für einen Fehler, der genau eine betraf. Der Rahmen stellt jetzt nach
+  jedem Bild den Stand in **beiden** Orten wieder her und bricht ab, wenn die beiden
+  nicht mehr bytegleich sind. Aus demselben Grund wird am Ende `diff -r` über Repo und
+  Teststand geschrieben: Ein Feature, das mit einem Fehlerbild zurückbleibt, ist sonst
+  von einem grünen Lauf nicht zu unterscheiden.
+- **Ein Fehlerbild hat den Bildschirm statt des Hinweises geprüft.** Der Hinweis wurde über
+  die ganze Seite gesucht, und die Seite erklärt im Abschnitt darüber in Worten, dass
+  gelöscht wird. Die Prüfung ist jetzt ein Vergleich des **ganzen** Hinweistextes, nicht
+  zweier Teilzeichenketten: Sie trägt beide Zahlen und nennt beim Scheitern, was sie
+  gelesen hat. Dass das mehr trägt als die beiden Teilprüfungen, hat Bild 3 gezeigt — dort
+  standen zwei Hinweise untereinander, weil die abgewiesene Anfrage durchgegangen war.
+- **Eine Prüfung suchte eine Zahl an der falschen Stelle.** Die Nummern der Betroffenen
+  standen in der Seite der Übersicht und wurden einzeln gesucht. Eine Mitgliedsnummer ist
+  Text, und die eines einen Anfänger haben kann: Die Suche nach `004` wird von der Zeile
+  der 0042 beantwortet. Gehalten werden jetzt beide Mengen als **satz**, sortiert, und
+  verglichen; die Adressen zusätzlich einzeln, denn zwei Adressen können sich nicht wie
+  zwei Nummern ähneln.
+
+Die siebte Zeile der Tabelle ist offen und bleibt offen: Die Suite meldet sich als
+Verwalter an und hat damit `edit_posts` und `delete_posts` beide. Eine Prüfung, die die
+Berechtigung des Löschvorgangs verlangt, brauchte einen zweiten Benutzer mit weniger
+Rechten und einen zweiten Login — das ist dieselbe Lücke, die bei allen endgültigen
+Löschungen des Plugins besteht, und sie ist unter „Was die Umgebung nicht prüft“ vermerkt.
+Der Preis dafür, dass hier eine offene Lücke steht, ist ehrlicher als eine Prüfung, die
+grün ist, weil sie den Fall nie erreicht.
+
+Der Abschnitt hat außerdem eine Nebenwirkung auf den Zustand, die die anderen Suiten
+spüren: Er löscht alle Mitglieder, die für keinen Dienst angemeldet sind — und das sind nach
+einem Lauf der HTTP-Suite auch die, die `http_setup.php` angelegt hat. `http.sh` und
+`mail.sh` bauen ihre Fixture ohnehin vor ihrem Lauf neu, was hier keine neue Vorschrift ist;
+`admin.sh` braucht für seinen Bericht über fehlende Dateizeilen ein Mitglied, das nicht in
+der Datei steht, und nimmt dafür 0042 aus der Fixture. Nach einem Lauf der neuen Reihe ist
+deshalb `http_setup.php` zu fahren, bevor `admin.sh` wieder etwas über den Importbericht
+behauptet. Beim ersten Lauf nach den Fehlerbildern ist genau das passiert: Zwei rote
+Zeilen in `[10]` über den Bericht, weil Bild 1 in seiner Variante ohne Bedingung auch die
+Fixture-Mitglieder mitgenommen hatte.
+
 ## Umstieg von den eigenen Beitragstypen
 
 Die Testinstanz lief ursprünglich mit einer Fassung, die eigene WordPress-Beitragstypen
@@ -763,6 +847,16 @@ wieder entfernt.
   das Plugin es tut — und es tut es absichtlich nicht. Dieser Fall ist damit nicht
   abgedeckt, und das ist eine Entscheidung und keine Lücke im Aufbau; siehe
   `arbeitsdienste/README.md`, Abschnitt „Bewusste Abweichungen“.
+- **Keine Berechtigungen unterhalb des Verwalters.** Die Suite meldet sich als Verwalter an
+  und hat damit `edit_posts` und `delete_posts` gleichzeitig. Jede `current_user_can()`-Prüfung
+  im Plugin bleibt damit unberührt: Sie kann immer nur annehmen, dass sie nichts verweigert.
+  Geprüft wird deshalb an jeder Stelle, was mit der Berechtigung **passiert** — der
+  Löschvorgang, der eine Anmeldung entfernt, verlangt `delete_posts` und läuft darum über
+  `check_admin_referer()` und die gespeicherte Meldung, nicht über einen Link — aber nicht,
+  dass sie ohne die Berechtigung einmal greift. Das trifft den Abschnitt `[12]` genauso wie
+  das endgültige Löschen eines Arbeitsdienstes; die fehlende Prüfung ist beim Massenlöschen
+  zusätzlich unter den Fehlerbildern der sechsten Reihe aufgeführt worden, mit dem
+  Ergebnis „keine“ und ohne den Versuch, das zu überspielen.
 - **Keine Barrierefreiheits- und Browserprüfung.** Die HTML-Ausgabe wird auf Struktur und
   Escaping geprüft, nicht auf Darstellung in verschiedenen Browsern. Für die beiden
   `details`-Schaltflächen heißt das auch: Es wird geprüft, dass die offene und die

@@ -319,3 +319,31 @@ Abweichungen und Entscheidungen“, die Prüfungen in `PRUEFUMGEBUNG.md`.
   Fahrgemeinschaften nicht. Der Stammdatensatz selbst wird nur über die Mitgliederliste
   geändert, nicht über die Datenschutz-Werkzeuge: Ein Löschantrag sagt, dass die
   Anmeldungen hier weg sollen, nicht dass der Mensch aus dem Verein verschwindet.
+
+### Aufräumen um die Mitglieder ohne Arbeitsdienst (1.11.0)
+
+Ergänzt um den Auftrag vom 28.09.2026: Die Mitgliederseite bekommt einen Vorgang, der
+alle Mitglieder löscht, die für keinen Arbeitsdienst angemeldet sind. Gedacht für das
+Aufräumen nach einem Testlauf und vor einem frischen Import, nicht als Werkzeug des
+laufenden Betriebs. Schema unverändert `1.2.0`.
+
+- **Der Vorgang steht auf der Mitgliederseite, nicht unter den Einstellungen.** Das
+  Aufräumen ist eine Handlung an den Mitgliedern; die Seite Einstellungen gehört laut
+  eigener Beschreibung dem Logo und der Fußzeile und sonst nichts.
+- **Zwei Schritte, und der erste ist ein Link.** Der erste Klick öffnet eine Übersicht,
+  die jeden Betroffenen einzeln nennt; der zweite ist ein gepostetes Formular mit Nonce
+  und der Berechtigung `delete_posts`. Ein Link wird von Browsern und Proxys von selbst
+  abgerufen, deshalb darf er nichts löschen, und deshalb nennt auch die Übersicht die
+  Zahl noch einmal auf der Schaltfläche.
+- **„Nicht verknüpft“ heißt wörtlich: keine Zeile in `fg_event_members`.** Auch ein
+  Dienst, der längst vorbei ist, hält sein Mitglied am Leben. Das Aufräumen ist eine
+  Frage nach Anmeldungen und keine über Vereinsmitgliedschaften; wer die Frage
+  umgedreht gestellt haben will, findet dieselbe Liste im Importbericht, der
+  Mitglieder ohne Anmeldung ausdrücklich als solche nennt.
+- **Die Bedingung steht in der `DELETE`-Anweisung selbst**, nicht in einer vorher
+  gelesenen Liste. Wer sich zwischen der Übersicht und dem Klick für einen Dienst
+  einträgt, behält damit sein Mitglied; mit einer Liste davor ginge es verloren, ohne
+  dass es jemand ausgelöst hätte.
+- **Fahrgemeinschaften bleiben.** Eine Fahrt ist ein eigener Eintrag mit eigener
+  Kontaktadresse und gehörte nie zum Mitgliedsdatensatz — dieselbe Semantik wie beim
+  Löschen eines einzelnen Mitglieds.

@@ -40,23 +40,25 @@ import re,sys,html
 h=sys.stdin.read()
 m=re.search(r'<div id=\"fg-hinweis\"[^>]*>(.*?)</div>', h, re.S)
 print(html.unescape(re.sub(r'<[^>]+>','',m.group(1))).strip() if m else '')"; }
-# The report of an import, without the rest of the screen. The screen carries the
-# list of every member as well, so a number that a check looks for over the whole
-# page is found in the list even when the report says nothing about it: the three
-# fixture members are in the database, the import file holds two others, and both
-# are on the page twice. Reading the report alone is the difference between a
-# check on the report and a check on the page.
-report() { python3 -c "
+# The text of a frame of the screen, without the rest of the document. The
+# argument is the class of the frame. A screen that prints two things at once
+# needs this: the member screen carries the list of every member as well as the
+# report of an import, and a number that a check looks for over the whole page is
+# found in the list even when the report says nothing about it — the three fixture
+# members are in the database, the import file holds two others, and both are on
+# the page twice. Reading one frame is the difference between a check on the
+# report and a check on the page.
+rahmen() { python3 -c "
 import re,sys,html
 h=sys.stdin.read()
-m=re.search(r'<div class=\"fg-import-report\">', h)
+m=re.search(r'<div class=\"$1\">', h)
 if not m:
     print('')
 else:
     # The closing tag is found by counting, not by the next '</div>': the report
     # holds a notice of its own, and a search for the first closing tag would
     # hand back the first paragraph of the report and drop the table below it.
-    # The count starts at 1 because the opening tag of the report itself is
+    # The count starts at 1 because the opening tag of the frame itself is
     # already behind the search position.
     tiefe, i = 1, m.end()
     while i < len(h):
@@ -72,6 +74,52 @@ else:
             tiefe += 1
         i = naechste.end()
     print(html.unescape(re.sub(r'<[^>]+>',' ', h[m.end():i])).replace('  ',' '))"; }
+report() { rahmen 'fg-import-report'; }
+# The number in a named span, without the sentence around it. A screen that
+# prints a count and names it in words makes two claims, and only the span is the
+# one about the number: "Mitglieder sind für keinen Arbeitsdienst angemeldet" is
+# true whether the span says 3 or 3000.
+zahl() { python3 -c "
+import re,sys,html
+h=sys.stdin.read()
+m=re.search(r'<span class=\"$1\">([^<]*)</span>', h)
+print(html.unescape(m.group(1)).strip() if m else '')"; }
+# The first cell of every data row of the screen, space separated. The rows are
+# taken from the tbody and not from the whole table, so the heading row is not read
+# as a member. A caller compares the result with the tables instead of searching
+# for one number at a time: a member number is text, one of them can be the
+# beginning of another, and a search for 004 is answered by the row of 0042.
+nummern() { python3 -c "
+import re,sys,html
+h=sys.stdin.read()
+koerper=re.search(r'<tbody[^>]*>(.*?)</tbody>', h, re.S)
+a=koerper.group(1) if koerper else ''
+n=[]
+for row in re.findall(r'<tr[^>]*>(.*?)</tr>', a, re.S):
+    c=re.findall(r'<td[^>]*>(.*?)</td>', row, re.S)
+    if c:
+        n.append(re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>','',c[0]))).strip())
+print(' '.join(n))"; }
+# The text of the notices at the top of an admin screen, notices joined by " | ".
+# A notice is read on its own because the member screen says in words what the
+# cleanup section does — "gelöscht werden alle Mitglieder, die für keinen
+# Arbeitsdienst angemeldet sind" — and a number searched for over the whole page
+# can be answered by that sentence instead of by the notice. The public screen has
+# the same helper for the same reason.
+hinweis() { python3 -c "
+import re,sys,html
+h=sys.stdin.read()
+m=re.findall(r'<div class=\"notice [^\"]*\"><p>(.*?)</p></div>', h, re.S)
+print(' | '.join(html.unescape(re.sub(r'<[^>]+>','',x)).strip() for x in m))"; }
+# The URL of the link whose query carries a given fragment. `link` is bound to the
+# delete links because a duty screen carries one of those per row and taking the
+# first one found would click the wrong button; a link that is named by its own
+# query key is read with this.
+ziel() { python3 -c "
+import re,sys,html
+h=sys.stdin.read()
+m=re.search(r'href=\"([^\"]*$1[^\"]*)\"', h)
+print(html.unescape(m.group(1)) if m else '')"; }
 link() { python3 -c "
 import re,sys
 h=sys.stdin.read()
@@ -1607,6 +1655,146 @@ has "the card of this duty offers the place again" "$(printf '%s' "$list" | kart
 has "and the free places it reads are its own" "$(printf '%s' "$list" | karte "$FREIREF")" "Verfügbare freie Plätze 2"
 hasnt "and it does not name the member who took the other place" "$(printf '%s' "$list" | karte "$FREIREF")" "0850"
 clean "$list" "duty list after a place was freed"
+
+# --- removing every member that is not registered for a work service
+echo "[12] deleting the members without a work service"
+# Three members who are in no duty at all, so the operation has something to take
+# and the plural of the notice is certain whatever the fixture holds.
+for nummer in 0960 0961 0962; do
+	neu "$nummer" "muell$nummer@example.org" "Muell" "Probe$nummer" > /dev/null
+done
+PRUNE_VORHER=$(s unlinked)
+PRUNE_ERWARTET=$(printf '%s' "$PRUNE_VORHER" | tr ' ' '\n' | grep -c .)
+ALLE_VORHER=$(s count-members)
+if [ "$PRUNE_ERWARTET" -ge 3 ]; then ok "three members are not in any duty ($PRUNE_ERWARTET in total)"; else bad "three members are not in any duty" "$PRUNE_ERWARTET"; fi
+
+screen=$(curl -sk -b "$JAR" "$MEMBERS")
+has "the cleanup section is on the member screen" "$screen" ">Aufräumen<"
+has "it says what would be deleted" "$screen" "sind für keinen Arbeitsdienst angemeldet"
+has "it says what stays" "$screen" "bleiben erhalten"
+has "it says that rides are kept" "$screen" "Fahrgemeinschaften bleiben erhalten"
+# The screen is asked for two numbers, and both are compared with the tables. A
+# count that only ever appears in a sentence is a claim about the wording, not
+# about the state of the club.
+if [ "$(printf '%s' "$screen" | zahl fg-prune-ohne)" = "$PRUNE_ERWARTET" ]; then
+	ok "it names how many would be deleted ($PRUNE_ERWARTET)"
+else
+	bad "it names how many would be deleted" "$(printf '%s' "$screen" | zahl fg-prune-ohne) instead of $PRUNE_ERWARTET"
+fi
+if [ "$(printf '%s' "$screen" | zahl fg-prune-mit)" = "$(( ALLE_VORHER - PRUNE_ERWARTET ))" ]; then
+	ok "and how many would stay ($(( ALLE_VORHER - PRUNE_ERWARTET )))"
+else
+	bad "and how many would stay" "$(printf '%s' "$screen" | zahl fg-prune-mit) instead of $(( ALLE_VORHER - PRUNE_ERWARTET ))"
+fi
+PRUNE_URL=$(printf '%s' "$screen" | ziel 'fg_prune=ask')
+if [ -n "$PRUNE_URL" ]; then ok "the link to the overview is there"; else bad "the link to the overview is there" "no link with fg_prune on the screen"; fi
+
+uebersicht=$(curl -sk -b "$JAR" "$PRUNE_URL")
+has "the overview has a heading of its own" "$uebersicht" "Mitglieder ohne Arbeitsdienst löschen"
+has "it says the count was taken when the page was opened" "$uebersicht" "Diese Übersicht zählt beim Aufruf dieser Seite"
+has "its button says how many it removes" "$uebersicht" "$PRUNE_ERWARTET Mitglieder endgültig löschen"
+has "the form carries a nonce" "$uebersicht" 'name="fg_prune_nonce"'
+if [ "$(printf '%s' "$uebersicht" | zahl fg-prune-ohne)" = "$PRUNE_ERWARTET" ]; then
+	ok "the overview names the same number as the screen"
+else
+	bad "the overview names the same number as the screen" "$(printf '%s' "$uebersicht" | zahl fg-prune-ohne) instead of $PRUNE_ERWARTET"
+fi
+# Opening the overview is a link, and a link is fetched by browsers and proxies on
+# their own. If it deleted anything, the safest click in the plugin would be the
+# one nobody made.
+if [ "$(s unlinked)" = "$PRUNE_VORHER" ]; then ok "opening the overview deletes nothing"; else bad "opening the overview deletes nothing" "$(s unlinked)"; fi
+
+# The overview has to name exactly the people the statement would take. It names
+# too many and it takes them with it; it names too few and a member is removed
+# from a screen that said they would stay. Both lists are sorted before they are
+# compared, because the claim is about the two sets and not about their order, and
+# a member number is text: one of them can be the beginning of another, so a
+# search for 004 would be answered by the row of 0042.
+betroffen=$(printf '%s' "$uebersicht" | rahmen 'fg-prune-report')
+AUF_SCREEN=$(printf '%s' "$uebersicht" | nummern | tr ' ' '\n' | sed '/^$/d' | sort | tr '\n' ' ')
+IN_TABELLE=$(printf '%s' "$PRUNE_VORHER" | tr ' ' '\n' | sed 's/|.*$//; /^$/d' | sort | tr '\n' ' ')
+if [ "$AUF_SCREEN" = "$IN_TABELLE" ]; then
+	ok "the overview names exactly the members it would take ($PRUNE_ERWARTET)"
+else
+	bad "the overview names exactly the members it would take" "screen: [$AUF_SCREEN] tables: [$IN_TABELLE]"
+fi
+# The addresses are checked on top, one by one: two member numbers can look alike
+# and two addresses cannot, so this is what catches a row that carries the right
+# number with the wrong person behind it.
+ADRESSEN=0
+for eintrag in $PRUNE_VORHER; do
+	if printf '%s' "$betroffen" | grep -qF "${eintrag##*|}"; then ADRESSEN=$((ADRESSEN+1)); fi
+done
+if [ "$ADRESSEN" = "$PRUNE_ERWARTET" ]; then
+	ok "and it names the address of each of them"
+else
+	bad "and it names the address of each of them" "$ADRESSEN of $PRUNE_ERWARTET"
+fi
+# The two members of this suite that are registered for a duty of this run are the
+# ones the operation must not touch. They are named by their number and not by
+# theirs: "Verwalter Test" and "Voll Belegt" are the kind of name an overview
+# would print, and a check that read a name would pass on the wrong member.
+for angemeldet in 0842 0850; do
+	hasnt "the registered member $angemeldet is not in the overview" "$betroffen" "$angemeldet"
+done
+has "the overview offers the way back" "$uebersicht" "Zurück zur Liste"
+clean "$uebersicht" "the cleanup overview"
+
+# The request that removes members is refused without a valid nonce, and the
+# refusal changes nothing: a form that can be posted from anywhere would let a
+# page in a browser window of a third party empty the member list with one request.
+PNONCE=$(val /dev/stdin fg_prune_nonce <<< "$uebersicht")
+out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_prune_members" \
+	--data-urlencode "fg_prune_nonce=manipuliert")
+if [ "$out" = "403" ]; then ok "a wrong nonce is refused ($out)"; else bad "a wrong nonce is refused" "$out"; fi
+if [ "$(s unlinked)" = "$PRUNE_VORHER" ]; then ok "and after the refusal nothing is gone"; else bad "and after the refusal nothing is gone" "$(s unlinked)"; fi
+
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-prune.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_prune_members" \
+	--data-urlencode "fg_prune_nonce=$PNONCE")
+geraeumt=$(cat "$DIR/member-prune.html")
+# The notice is compared as a whole and not searched for in two pieces. It carries
+# two numbers, and the claim is that it carries *these* two: a notice that named
+# how many went and left the rest out would be answered by the first half of a
+# two-part check.
+notiz=$(printf '%s' "$geraeumt" | hinweis)
+ERWARTETE_NOTIZ="$PRUNE_ERWARTET Mitglieder gelöscht, $(( ALLE_VORHER - PRUNE_ERWARTET )) Mitglieder bleiben angemeldt."
+if [ "$notiz" = "$ERWARTETE_NOTIZ" ]; then
+	ok "the notice names both numbers"
+else
+	bad "the notice names both numbers" "reads [$notiz], expected [$ERWARTETE_NOTIZ]"
+fi
+if [ "$(s unlinked)" = "" ]; then ok "no member without a work service is left"; else bad "no member without a work service is left" "$(s unlinked)"; fi
+if [ "$(s count-members)" = "$(( ALLE_VORHER - PRUNE_ERWARTET ))" ]; then
+	ok "and the member list holds the registered ones only"
+else
+	bad "and the member list holds the registered ones only" "$(s count-members) instead of $(( ALLE_VORHER - PRUNE_ERWARTET ))"
+fi
+# Two members of this suite are signed up for a duty of this run, and both must
+# have survived with their registration. A group deletion that took the registered
+# ones with it would empty the club on the second click of a test run.
+for behalten in 0842 0850; do
+	if [ "$(s member-by-no "$behalten" id)" != "missing" ]; then
+		ok "the registered member $behalten survived"
+	else
+		bad "the registered member $behalten survived" "gone"
+	fi
+done
+if [ "$(s count-registrations "$EVENT_ID")" = "1" ]; then ok "and their registration is still there"; else bad "and their registration is still there" "$(s count-registrations "$EVENT_ID")"; fi
+if [ "$(s count-registrations "$VOLLEDUTY")" = "1" ]; then ok "the one on the full duty too"; else bad "the one on the full duty too" "$(s count-registrations "$VOLLEDUTY")"; fi
+# The list is asked a second time: with nobody left to remove it has to say so
+# and offer no form at all, because a button that removes nothing is a button
+# that looks like it did something.
+screen=$(curl -sk -b "$JAR" "$MEMBERS")
+if [ "$(printf '%s' "$screen" | zahl fg-prune-ohne)" = "0" ]; then ok "the screen now counts nobody to remove"; else bad "the screen now counts nobody to remove" "$(printf '%s' "$screen" | zahl fg-prune-ohne)"; fi
+has "and it says there is nothing to do" "$screen" "gibt nichts zu löschen"
+hasnt "and it offers no link to the overview" "$screen" "fg_prune=ask"
+uebersicht=$(curl -sk -b "$JAR" "$PRUNE_URL")
+has "the overview says so too" "$uebersicht" "Es ist niemand mehr ohne Anmeldung im Bestand"
+hasnt "and it carries no delete form" "$uebersicht" 'name="fg_prune_nonce"'
+clean "$geraeumt" "removal of the members without a work service"
+clean "$screen" "the member screen after the cleanup"
 
 s delete-member "$VOLLMITGLIED" >/dev/null
 s delete-member "$FREIMITGLIED" >/dev/null

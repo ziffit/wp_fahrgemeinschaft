@@ -749,6 +749,75 @@ final class FG_Store {
 	}
 
 	/**
+	 * Count the members that are not registered for any work service.
+	 *
+	 * "Not registered" is the absence of a row and nothing else. A duty that has
+	 * already taken place still counts as a link, because a member who once did
+	 * a work service is not a leftover of the member administration; the club
+	 * removes those by hand.
+	 *
+	 * @return int
+	 */
+	public function count_members_without_registration() {
+		$members = FG_Schema::members_table();
+		$links   = FG_Schema::event_members_table();
+
+		// The subquery reads the registrations table and not the member table, so
+		// the statement is not the "delete from a table that is also read in the
+		// subquery" that MySQL refuses.
+		return (int) $this->db->get_var(
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- no input: both names come from FG_Schema.
+			"SELECT COUNT(*) FROM $members
+			WHERE NOT EXISTS (SELECT 1 FROM $links r WHERE r.member_id = $members.id)"
+		);
+	}
+
+	/**
+	 * Read the members that are not registered for any work service.
+	 *
+	 * The order is the one of the member list, so the overview of a cleanup and
+	 * the list it removes rows from are read in the same order.
+	 *
+	 * @return FG_Member[]
+	 */
+	public function query_members_without_registration() {
+		$members = FG_Schema::members_table();
+		$links   = FG_Schema::event_members_table();
+
+		$rows = $this->db->get_results(
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- no input: both names come from FG_Schema.
+			"SELECT * FROM $members
+			WHERE NOT EXISTS (SELECT 1 FROM $links r WHERE r.member_id = $members.id)
+			ORDER BY member_no ASC, id ASC",
+			ARRAY_A
+		);
+
+		return array_map( array( $this, 'to_member' ), (array) $rows );
+	}
+
+	/**
+	 * Delete every member that is not registered for any work service.
+	 *
+	 * The condition stands in the statement instead of a list of IDs that was
+	 * read before it, so a registration made in the second between the overview
+	 * and the click keeps its member. There is no second statement for the
+	 * registrations: a member that the WHERE clause accepts has none by
+	 * definition, and the same clause decides what the overview named.
+	 *
+	 * @return int Number of removed members.
+	 */
+	public function delete_members_without_registration() {
+		$members = FG_Schema::members_table();
+		$links   = FG_Schema::event_members_table();
+
+		return (int) $this->db->query(
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- no input: both names come from FG_Schema.
+			"DELETE FROM $members
+			WHERE NOT EXISTS (SELECT 1 FROM $links r WHERE r.member_id = $members.id)"
+		);
+	}
+
+	/**
 	 * Insert a registration and return its ID.
 	 *
 	 * @param array $fields Column values.
