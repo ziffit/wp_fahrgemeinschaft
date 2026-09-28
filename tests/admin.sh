@@ -333,6 +333,18 @@ fi
 has "shows the retention note" "$stats" "nach 90 Tagen entfernt"
 has "shows the three periods" "$stats" "Letzte 30 Tage"
 has "shows counter labels" "$stats" "Veröffentlichte Einträge"
+# All four counters of the two forms that ask for a member name the pair. A label
+# that named only the address would be read by the club as a statement about an
+# address, and since version 1.16.0 neither of the two forms decides on the
+# address alone. All four are read, not two of them: two labels out of four are
+# checked exactly as well as none, and the two that are missing here are the two
+# a club would not think of as the delicate one.
+has "the counter of an entry names the number too" "$stats" "Einträge mit passender Mitgliedsnummer und E-Mail-Adresse"
+has "the refused entry counter names the number too" "$stats" "Abgewiesene Einträge: Nummer und E-Mail-Adresse passen nicht zu einem Mitglied"
+has "the contact counter names the number too" "$stats" "Kontaktanfragen mit passender Mitgliedsnummer und E-Mail-Adresse"
+has "the refused counter names the number too" "$stats" "Abgewiesene Kontaktanfragen: Nummer und E-Mail-Adresse passen nicht zu einem Mitglied"
+hasnt "and no label claims that an address alone decides" "$stats" "Gültige Kontaktadressen"
+hasnt "nor that an address alone is missing" "$stats" "Ungültige, abweichende oder nicht hinterlegte E-Mail-Adresse"
 hasnt "statistics show no address" "$stats" "@example"
 has "work duty screen is linked" "$stats" "page=fahrgemeinschaften-events"
 has "member screen is linked" "$stats" "page=fahrgemeinschaften-members"
@@ -2239,7 +2251,7 @@ clean "$vorschau" "mail preview"
 has "the preview carries the finished subject" "$vorschau" "Angemeldet: Flussaktion am Samstag, den 12.06.2027"
 has "the preview shows the HTML part" "$vorschau" "</html>"
 has "the preview shows the text part" "$vorschau" "<pre"
-has "the preview greets the invented member" "$vorschau" "Hallo Anton"
+has "the preview greets the invented member with both names" "$vorschau" "Hallo Anton Berger"
 
 # A link of the message has to be a link in the preview too, and it has to say
 # what it does. The address alone is what the club would otherwise learn to
@@ -2437,8 +2449,8 @@ hasnt "an unknown key opens no reset" "$fremd_seite" "Auf Standard zurücksetzen
 
 echo "[13b] the greeting of the messages"
 # Both sides of a contact request are members since schema 1.4.0, so both
-# greetings carry a first name and the case of an address that belongs to nobody
-# is gone from this path. What took its place is the member who left the club
+# greetings carry the two names of a member and the case of an address that
+# belongs to nobody is gone from this path. What took its place is the member who left the club
 # after offering the ride: the ride still points at the row, the row is not there
 # any more, and there is no name and no address to write to. All of it is read
 # out of the messages that really went out.
@@ -2450,15 +2462,15 @@ echo "[13b] the greeting of the messages"
 neu 7201 ersteller@angeln.example.org Greta Gruen
 neu 7202 fragende@angeln.example.org Frieda Fraglich
 IFS=$'\t' read -r an_ersteller an_fragend gesendet_e gesendet_f <<< "$(s mail-anrede "$ANREDE" 7201 7202)"
-if [ "$an_ersteller" = "Hallo Greta," ]; then
-	ok "the member who offered the ride is greeted by the first name ($an_ersteller)"
+if [ "$an_ersteller" = "Hallo Greta Gruen," ]; then
+	ok "the member who offered the ride is greeted with both names ($an_ersteller)"
 else
-	bad "the member who offered the ride is greeted by the first name" "$an_ersteller"
+	bad "the member who offered the ride is greeted with both names" "$an_ersteller"
 fi
-if [ "$an_fragend" = "Hallo Frieda," ]; then
-	ok "a member who asks for contact is greeted by the first name ($an_fragend)"
+if [ "$an_fragend" = "Hallo Frieda Fraglich," ]; then
+	ok "a member who asks for contact is greeted with both names ($an_fragend)"
 else
-	bad "a member who asks for contact is greeted by the first name" "$an_fragend"
+	bad "a member who asks for contact is greeted with both names" "$an_fragend"
 fi
 if [ "$gesendet_e" = "1" ] && [ "$gesendet_f" = "1" ]; then
 	ok "and both messages went out"
@@ -2485,10 +2497,10 @@ s delete-member "$(s member-by-no 7201 id)" > /dev/null
 s delete-member "$(s member-by-no 7202 id)" > /dev/null
 
 anrede_dienst=$(s mail-greeting "$ANREDE" 7101 dienst@angeln.example.org Anton Beispiel)
-if [ "$anrede_dienst" = "Hallo Anton," ]; then
-	ok "the signup mail greets the member by the first name ($anrede_dienst)"
+if [ "$anrede_dienst" = "Hallo Anton Beispiel," ]; then
+	ok "the signup mail greets the member with both names ($anrede_dienst)"
 else
-	bad "the signup mail greets the member by the first name" "$anrede_dienst"
+	bad "the signup mail greets the member with both names" "$anrede_dienst"
 fi
 
 # The greeting has to be there in the finished message and not only in a helper,

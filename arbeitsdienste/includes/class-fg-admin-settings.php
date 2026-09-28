@@ -173,7 +173,7 @@ final class FG_Admin_Settings {
 		$text = implode(
 			"\n",
 			array(
-				'Hallo Anton,',
+				'Hallo Anton Berger',
 				'',
 				__( 'so sieht eine E-Mail des Plugins im HTML-Teil aus. Der Text steht unverändert als reiner Text in der ersten Alternative der Nachricht.', 'arbeitsdienste' ),
 				'',
@@ -184,7 +184,12 @@ final class FG_Admin_Settings {
 			)
 		);
 
-		$subject = __( 'Fahrgemeinschaft bestätigen – Arbeitseinsatz', 'arbeitsdienste' );
+		// The subject of the mail to a ride, with the invented duty filled in. Up to
+		// version 1.14.0 it read "Fahrgemeinschaft bestätigen" and named a state
+		// that does not exist any more; a club that reads this line to see what a
+		// mail of the plugin looks like would have read a word for a step that is
+		// not taken.
+		$subject = __( 'Deine Fahrgemeinschaft ist eingetragen – Arbeitseinsatz', 'arbeitsdienste' );
 
 		if ( ! headers_sent() ) {
 			header( 'Content-Type: text/html; charset=' . get_bloginfo( 'charset' ) );

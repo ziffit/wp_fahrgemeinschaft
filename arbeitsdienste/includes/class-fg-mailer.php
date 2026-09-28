@@ -166,12 +166,8 @@ final class FG_Mailer {
 	 * would be a second place where a club's logo or its contact data has to be
 	 * kept correct.
 	 *
-	 * Up to version 1.13.0 the name of the member was not in the message, because
-	 * a name in a forwarded message is a piece of personal data that has left the
-	 * club. Since the club can read the wording of this mail, it can put the name
-	 * in there or leave it out, and the member is greeted by name either way. The
-	 * decision is therefore one the club makes per message, not one this code
-	 * makes for it.
+	 * The member is already in hand, so the greeting comes from that record and
+	 * not from a second query for the address that record carries.
 	 *
 	 * @param int    $registration_id Registration ID.
 	 * @param string $unregister_url  Unregistration link.
@@ -203,7 +199,7 @@ final class FG_Mailer {
 		$mail = FG_Mail_Texts::compose(
 			FG_Mail_Texts::DUTY_SIGNUP,
 			array_merge(
-				$this->person( $to, '' ),
+				$this->person_from_member( $member ),
 				array(
 					'Arbeitsdienst'        => (string) $event->title,
 					'Arbeitsdienstdetails' => trim( $event->title . ', ' . $date . ( '' === $time ? '' : ', ' . $time ), ', ' ),
@@ -222,52 +218,39 @@ final class FG_Mailer {
 	}
 
 	/**
-	 * The name fields of a recipient, looked up by their address.
+	 * The name fields of the member a message goes to.
+	 *
+	 * Three values out of one record, and the record is required: every message
+	 * of this plugin goes to a member, and the type says so. Until version
+	 * 1.14.0 the greeting could fall back to a bare "Hallo" for a recipient that
+	 * belonged to nobody, because the ride messages were addressed by an address
+	 * that did not have to be in the member list. It does not any more, and a
+	 * ride that has no member behind it is deleted by the migration rather than
+	 * mailed.
 	 *
 	 * The three values belong together: {{Anrede}} is not "Hallo" plus a name
-	 * written in the template, it is the greeting as a whole. Otherwise an
-	 * address that belongs to no member leaves "Hallo ," standing in the mail,
-	 * and that is the one case where a missing name is not a missing name but a
-	 * broken sentence.
+	 * written in the template, it is the greeting as a whole. Otherwise the mail
+	 * would carry a comma with no word in front of it, which is the one case
+	 * where a missing name is not a missing name but a broken sentence.
 	 *
-	 * The ride messages do not come through here any more, because they know
-	 * their member; see person_from_member() below.
-	 *
-	 * @param string $email       Recipient address.
-	 * @param string $ersatz_name Name to use when the address belongs to nobody.
+	 * @param FG_Member $member Member record. Never empty.
 	 * @return array<string, string>
 	 */
-	private function person( $email, $ersatz_name ) {
-		return $this->person_from_member( $this->repository->get_member_by_email( $email ), $ersatz_name );
-	}
+	private function person_from_member( FG_Member $member ) {
+		$vorname = trim( (string) $member->first_name );
+		$name    = trim( (string) $member->last_name );
 
-	/**
-	 * The name fields of a member that is already at hand.
-	 *
-	 * The same three values as person(), from a record the caller already has.
-	 * Every ride message knows its member, because a ride points at one, and
-	 * looking the address up again would be a second query for an answer that
-	 * was in the row.
-	 *
-	 * @param FG_Member|null $member      Member record.
-	 * @param string          $ersatz_name Name to use when there is no member.
-	 * @return array<string, string>
-	 */
-	private function person_from_member( $member, $ersatz_name = '' ) {
-		$vorname = $member ? trim( (string) $member->first_name ) : '';
-		$name    = $member ? trim( (string) $member->last_name ) : '';
-
-		// The first name alone, and not "first name, else last name": a member
-		// row without a first name cannot be written, FG_Repository refuses it,
-		// so the second name is never the only one there is. The fallback for a
-		// recipient that belongs to nobody is a designation the caller passes in,
-		// and where there is none the greeting stays a bare "Hallo".
-		$ansprache = '' !== $vorname ? $vorname : trim( (string) $ersatz_name );
+		// Both names, and not a fallback chain. FG_Repository refuses a member row
+		// without a first name and without a last name, so a record that comes
+		// from there always carries both and there is nothing to decide here. The
+		// public list shows the first name alone, and that is a separate question:
+		// {{Vorname}} stands for it, while the greeting names the person.
+		$ansprache = trim( $vorname . ' ' . $name );
 
 		return array(
 			'Vorname' => $vorname,
 			'Name'    => $name,
-			'Anrede'  => '' === $ansprache ? 'Hallo' : 'Hallo ' . $ansprache,
+			'Anrede'  => 'Hallo ' . $ansprache,
 		);
 	}
 

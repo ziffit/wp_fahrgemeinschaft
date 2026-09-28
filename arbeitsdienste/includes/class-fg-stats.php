@@ -19,14 +19,19 @@ final class FG_Stats {
 	public static function labels() {
 		return array(
 			'publish_form_total'     => 'Veröffentlichungsformulare gesamt',
-			'publish_valid_email'    => 'Gültige E-Mail-Adresse',
-			'publish_invalid_email'  => 'Ungültige, abweichende oder nicht hinterlegte E-Mail-Adresse',
+			'publish_valid_email'    => 'Einträge mit passender Mitgliedsnummer und E-Mail-Adresse',
+			// One counter, three refusals: the pair does not belong to a member, or
+			// the member is not in the list of the duty. The label names all three,
+			// because a label that named one of them would be wrong for the other
+			// two. The key stays what it is; renaming a stored key would throw the
+			// days that have already been counted away.
+			'publish_invalid_email'  => 'Abgewiesene Einträge: Nummer und E-Mail-Adresse passen nicht zu einem Mitglied, oder das Mitglied ist für diesen Arbeitsdienst nicht angemeldet',
 			'publish_published'      => 'Veröffentlichte Einträge',
 			'publish_deleted'        => 'Gelöschte Einträge',
 			'publish_personal_data'  => 'Einträge mit zurückgewiesenen persönlichen Angaben',
 			'contact_total'          => 'Kontaktversuche gesamt',
-			'contact_valid_email'    => 'Gültige Kontaktadressen',
-			'contact_invalid_email'  => 'Ungültige Kontaktadressen',
+			'contact_valid_email'    => 'Kontaktanfragen mit passender Mitgliedsnummer und E-Mail-Adresse',
+			'contact_invalid_email'  => 'Abgewiesene Kontaktanfragen: Nummer und E-Mail-Adresse passen nicht zu einem Mitglied, das Mitglied ist für diesen Arbeitsdienst nicht angemeldet oder die Eintragung ist nicht sichtbar',
 			'contact_mail_sent'      => 'Kontakt-E-Mails an Mitglieder übergeben',
 			'contact_requester_mail' => 'Bestätigungen an Anfragende übergeben',
 			'bot_honeypot'           => 'Honeypot-Treffer',

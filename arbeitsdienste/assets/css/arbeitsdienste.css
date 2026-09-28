@@ -250,32 +250,9 @@ details.fg-contact[open] > .fg-contact-latch {
 	color: var(--fg-button);
 }
 
-/* Label, field and button side by side; on a narrow column the row wraps. */
-.fg-contact-row {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.5rem;
-}
-
-.fg-contact-row .fg-field {
-	flex: 1 1 12rem;
-	min-width: 0;
-	flex-direction: row;
-	align-items: center;
-	gap: 0.5rem;
-}
-
-/* The label stands in the same row as the field and is not allowed to break.
-   "E-Mail" has a hyphen in it, and that is a place where a browser may wrap
-   without being asked to, which would put "E-" over "Mail". */
-.fg-contact-row .fg-field label {
-	white-space: nowrap;
-}
-
-.fg-contact-row .fg-button {
-	flex: 0 0 auto;
-	padding: 0.4rem 0.65rem;
+/* The hint under the contact form, between the fields and the next card. */
+.fg-contact-form .fg-list-hint {
+	margin: 0.5rem 0 0;
 }
 
 .fg-list-hint {
@@ -396,18 +373,34 @@ details.fg-signup[open] > .fg-signup-latch {
 	border-top: 1px solid var(--fg-border);
 }
 
-/* The two fields side by side; on a narrow column the row wraps. They are the
-   whole form, and both are needed to find the member, so on a wide screen
-   neither of them takes a full line. */
-.fg-signup-row {
+/* The two fields that name a member, side by side; on a narrow column the row
+   wraps. The same row in the two forms that carry it: the signup form of a work
+   service and the contact form of a ride. The offer form has the same two
+   fields, but as two cells of its own grid, which puts them side by side just
+   the same. They are the whole question in all three, so on a wide screen
+   neither of them takes a full line, and the button stands at their foot. */
+.fg-member-row {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: flex-end;
 	gap: 0.75rem;
 }
 
-.fg-signup-row .fg-field {
+.fg-member-row .fg-field {
 	flex: 1 1 14rem;
 	min-width: 0;
+}
+
+/* The labels are not allowed to break. "E-Mail-Adresse" has hyphens in it, and
+   that is a place where a browser may wrap without being asked to, which would
+   put "E-" over "Mail-Adresse". */
+.fg-member-row .fg-field label {
+	white-space: nowrap;
+}
+
+.fg-member-row .fg-button {
+	flex: 0 0 auto;
+	padding: 0.4rem 0.65rem;
 }
 
 .fg-signup-form .fg-hint {

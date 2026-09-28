@@ -277,7 +277,7 @@ $links = array(
 $linktext = implode(
 	"\n",
 	array(
-		'Hallo Anton,',
+		'Hallo Anton Berger,',
 		'',
 		'Die Eintragung löschen:',
 		'{{Ersterlink:Fahrgemeinschaft löschen}}',

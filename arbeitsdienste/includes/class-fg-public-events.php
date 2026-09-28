@@ -250,7 +250,12 @@ final class FG_Public_Events {
 						<label for="fg-signup-website-<?php echo esc_attr( $ref ); ?>"><?php esc_html_e( 'Bitte dieses Feld leer lassen', 'arbeitsdienste' ); ?></label>
 						<input type="text" id="fg-signup-website-<?php echo esc_attr( $ref ); ?>" name="fg_website" value="" tabindex="-1" autocomplete="off">
 					</div>
-					<div class="fg-signup-row">
+					<?php // The same row class as the contact form of a ride, and the same
+					// two fields. One question asked in three forms of the plugin is one
+					// question with one answer on the server, and a visitor who has
+					// already typed the pair into one form is not asked to learn that
+					// another form wants it in a different order. ?>
+					<div class="fg-member-row">
 						<div class="fg-field">
 							<label for="fg-member-no-<?php echo esc_attr( $ref ); ?>"><?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?></label>
 							<input type="text" id="fg-member-no-<?php echo esc_attr( $ref ); ?>" name="fg_member_no" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_NO_MAX ); ?>" required>

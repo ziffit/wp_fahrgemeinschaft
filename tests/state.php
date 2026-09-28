@@ -578,7 +578,9 @@ switch ( $command ) {
 			$mail_table,
 			FG_Mail_Texts::RIDE_PUBLISHED,
 			'Ein Platzhalter aus der Zukunft',
-			'Hallo {{Anrede}}, dein Eintrag ist da: {{Erfunden}}.'
+			// {{Anrede}} is the greeting as a whole since version 1.15.0, so the
+			// stored text starts with it and does not put a word in front of it.
+			'{{Anrede}}, dein Eintrag ist da: {{Erfunden}}.'
 		);
 
 		// A member the caller names, so that the ride has a real address to go
@@ -629,8 +631,8 @@ switch ( $command ) {
 	//
 	// The two greetings of a contact request, from the messages that really
 	// went out. Both sides are members since schema 1.4.0, so both greetings
-	// carry a first name and the fallback for an address of nobody is not
-	// reachable on this path any more. What replaced it as the case worth a
+	// carry both names of a member, and the fallback for an address of nobody is
+	// not reachable on this path any more. What replaced it as the case worth a
 	// test is the member who left the club after offering the ride: the ride
 	// still points at the row ID, the row is gone, and there is no name and no
 	// address to write to. The flag "geloescht" builds exactly that — it makes

@@ -188,7 +188,6 @@ final class FG_Actions {
 		}
 
 		$ref   = sanitize_key( $this->post_value( 'ride_ref' ) );
-		$email = $this->repository->normalize_email( $this->post_value( 'fg_contact_email' ) );
 		$ride  = $this->repository->get_ride_by_reference( $ref );
 		$owner = $ride ? $this->repository->get_member( $ride->member_id ) : null;
 
@@ -198,13 +197,20 @@ final class FG_Actions {
 			&& '' !== $ride->confirmed_at
 			&& $this->repository->is_event_active( $ride->event_id );
 
-		// The one asking becomes a member, not an address that is passed on.
-		// The check below asks whether a member is in the list of this duty, and
-		// that question has been asked of a row ID since schema 1.4.0. Naming the
-		// asker also means the greeting in the reply mail is written from the
-		// member list, and that a member writing to their own entry is caught by
-		// comparing two row IDs rather than two strings.
-		$asker = false !== $email ? $this->repository->get_member_by_email( $email ) : null;
+		// The one asking becomes a member, not an address that is passed on. The
+		// form asks for the member number and the address, and the same pair has
+		// to belong to the same member here as it does in the two other forms of
+		// the plugin — the same call, the same refusal without a hint about which
+		// half was wrong, and the same consequence: a pair that belongs to nobody
+		// is not a pair of strings that get written somewhere.
+		//
+		// Naming the asker also means the greeting in the reply mail is written
+		// from the member list, and that a member writing to their own entry is
+		// caught by comparing two row IDs rather than two strings.
+		$asker = $this->repository->find_member_for_registration(
+			$this->post_value( 'fg_contact_member_no' ),
+			$this->post_value( 'fg_contact_email' )
+		);
 
 		if ( ! $ride_visible || ! $asker || ! $this->repository->is_event_participant( $ride->event_id, $asker->id ) ) {
 			$this->stats->increment( 'contact_invalid_email' );

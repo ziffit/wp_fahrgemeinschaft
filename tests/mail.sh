@@ -164,7 +164,8 @@ before=$(count_mails)
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_contact_ride" \
 	--data-urlencode "ride_ref=$(python3 -c "import json;print(json.load(open('$F'))['published_ref'])")" \
-	--data-urlencode "fg_contact_email=cem@angeln.example.org" \
+	--data-urlencode "fg_contact_member_no=$ANFRAGER_NR" \
+	--data-urlencode "fg_contact_email=$ANFRAGER_MAIL" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 	--data-urlencode "fg_contact_nonce=$contact_nonce")
@@ -181,6 +182,10 @@ foreach ( \$wpdb->get_results( 'SELECT mail_to, mail_subject, mail_body FROM ' .
 requester=$(printf '%s' "$newest" | head -1)
 creator=$(printf '%s' "$newest" | tail -1)
 has "requester receives the dictated answer" "$requester" "Wir haben das Mitglied benachrichtigt, das die Fahrgemeinschaft angeboten hat."
+# The greeting names the asking member with both names. Every message of this
+# plugin goes to a member of the club, and both mails of this section are the
+# reason a club reads a name in a mail at all.
+has "requester mail greets the asking member with both names" "$requester" "Hallo Cem Cemu,"
 hasnt "requester mail has no link" "$requester" "http"
 hasnt "requester mail has no html" "$requester" "<a href"
 has "creator mail carries the requester address" "$creator" "cem@angeln.example.org"
@@ -188,7 +193,7 @@ has "creator mail carries the requester address" "$creator" "cem@angeln.example.
 # name of its own any more: it belongs to a member. The sentence alone would go
 # to every member who ever offered a ride, so the greeting beside it is what
 # tells two creators apart, and both halves are checked.
-has "creator mail greets the member who offered the ride" "$creator" "Hallo Berta,"
+has "creator mail greets the member who offered the ride" "$creator" "Hallo Berta Beispiel,"
 has "creator mail says who wrote in" "$creator" "du hast einen Interessenten für deine Eintragung."
 
 echo "[4c] contact request to own entry"
@@ -196,6 +201,7 @@ before=$(count_mails)
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_contact_ride" \
 	--data-urlencode "ride_ref=$(python3 -c "import json;print(json.load(open('$F'))['published_ref'])")" \
+	--data-urlencode "fg_contact_member_no=$ERSTELLER_NR" \
 	--data-urlencode "fg_contact_email=berta@angeln.example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
@@ -209,6 +215,7 @@ before=$(count_mails)
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_contact_ride" \
 	--data-urlencode "ride_ref=$(python3 -c "import json;print(json.load(open('$F'))['published_ref'])")" \
+	--data-urlencode "fg_contact_member_no=" \
 	--data-urlencode "fg_contact_email=fremd@example.com" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
@@ -216,6 +223,23 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 has "foreign address answered identically" "$loc" "fg_notice=contact_received"
 after=$(count_mails)
 if [ "$after" = "$before" ]; then ok "foreign address causes no mail"; else bad "foreign address causes no mail" "$((after - before))"; fi
+
+# The form asks two values, and one of them being right is not enough. A right
+# number with an address of no member is refused like the address of nobody, and
+# the mail that this section is about must not go out in either case.
+echo "[4d] contact request with a right number and a foreign address"
+before=$(count_mails)
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_contact_ride" \
+	--data-urlencode "ride_ref=$(python3 -c "import json;print(json.load(open('$F'))['published_ref'])")" \
+	--data-urlencode "fg_contact_member_no=$ANFRAGER_NR" \
+	--data-urlencode "fg_contact_email=fremd@example.com" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
+	--data-urlencode "fg_contact_nonce=$contact_nonce")
+has "a right number does not carry a foreign address" "$loc" "fg_notice=contact_received"
+after=$(count_mails)
+if [ "$after" = "$before" ]; then ok "and that one causes no mail either"; else bad "and that one causes no mail either" "$((after - before))"; fi
 
 # --- 5. behaviour when the transport refuses the message
 echo "[5] delivery failure"

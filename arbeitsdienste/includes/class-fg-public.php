@@ -127,7 +127,8 @@ final class FG_Public {
 								</select>
 							</div>
 
-							<div class="fg-field">
+							<?php // The pickup area gets a line of its own. It is the only free text in the form and the text a visitor has to think about, and a half-width box cuts the three examples in the hint in half. The two fields below it share one row, because they are one question. ?>
+							<div class="fg-field fg-field-full">
 								<label for="fg-origin"><?php esc_html_e( 'Abfahrtsbereich', 'arbeitsdienste' ); ?></label>
 								<input type="text" id="fg-origin" name="fg_origin" maxlength="100" required>
 								<?php // The three examples are the ones the server also accepts. Each of them was checked against the personal data filter; see the note in PRUEFUMGEBUNG.md about values that end in a street word. ?>
@@ -161,7 +162,8 @@ final class FG_Public {
 						</div>
 
 						<div class="fg-actions">
-							<button class="fg-button" type="submit"><?php esc_html_e( 'Eintragung vormerken', 'arbeitsdienste' ); ?></button>
+						<?php // The button says what the press does. Until version 1.16.0 it said "Eintragung vormerken" and promised a step in front of the entry that the code no longer takes; a visitor who read that was told their entry was not yet in the list, and since 1.15.0 it is in the list the moment the page comes back. ?>
+						<button class="fg-button" type="submit"><?php esc_html_e( 'Fahrgemeinschaft eintragen', 'arbeitsdienste' ); ?></button>
 						</div>
 					</form>
 				<?php endif; ?>
@@ -283,14 +285,20 @@ final class FG_Public {
 						<label for="fg-contact-website-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'Bitte dieses Feld leer lassen', 'arbeitsdienste' ); ?></label>
 						<input type="text" id="fg-contact-website-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_website" value="" tabindex="-1" autocomplete="off">
 					</div>
-					<?php // Label, field and button in one row. The label keeps its for, only its wording is short. ?>
-					<div class="fg-contact-row">
+					<?php // The same pair of fields as in the two other forms of the plugin, the same row class and the same rule: a member number and an address, and both have to belong to the same member. The field names keep the fg_contact_ prefix because this form stands inside the list while the offer form stands above it on the same page — the question is the same, the name tells the two apart. ?>
+					<div class="fg-member-row">
 						<div class="fg-field">
-							<label for="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'E-Mail', 'arbeitsdienste' ); ?></label>
+							<label for="fg-contact-no-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?></label>
+							<input type="text" id="fg-contact-no-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_contact_member_no" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_NO_MAX ); ?>" required>
+						</div>
+						<div class="fg-field">
+							<label for="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></label>
 							<input type="email" id="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_contact_email" maxlength="<?php echo esc_attr( FG_Schema::CONTACT_EMAIL_MAX ); ?>" autocomplete="email" required>
 						</div>
 						<button class="fg-button" type="submit"><?php esc_html_e( 'Absenden', 'arbeitsdienste' ); ?></button>
 					</div>
+					<?php // The two values are not published anywhere. They are the way to find the person, and the reply mail is the only thing that comes out of them. ?>
+					<p class="fg-hint fg-list-hint"><?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat. Deine Mitgliedsnummer und deine E-Mail-Adresse stehen nirgends öffentlich.', 'arbeitsdienste' ); ?></p>
 				</form>
 			</details>
 		</article>
@@ -310,8 +318,13 @@ final class FG_Public {
 		$notices    = array(
 			'published'        => array( __( 'Deine Fahrgemeinschaft steht in der Liste. Die E-Mail dazu enthält den Link, mit dem du sie wieder löschen kannst.', 'arbeitsdienste' ), false ),
 			'deleted'          => array( __( 'Die Eintragung wurde gelöscht.', 'arbeitsdienste' ), false ),
-			'contact_received' => array( __( 'Vielen Dank für deine Anfrage. Wir informieren das Mitglied, das die Fahrgemeinschaft angeboten hat, sofern die angegebene Adresse zu einem Mitglied gehört, das sich für den gewählten Arbeitsdienst eingetragen hat.', 'arbeitsdienste' ), false ),
-			'not_created'      => array( __( 'Die Eintragung konnte nicht angelegt werden. Bitte prüfe die Eingaben und verwende die im Verein hinterlegte E-Mail-Adresse.', 'arbeitsdienste' ), true ),
+			// Both of these name the pair and not the address alone, in the same words the
+			// signup form uses for its own refusal. The page asks two values in
+			// both cases, and a message that talked about one of them would send
+			// the reader looking for a mistake in the wrong field. Which of the two
+			// was wrong stays unsaid in all three, and that is the same decision.
+			'contact_received' => array( __( 'Vielen Dank für deine Anfrage. Wir informieren das Mitglied, das die Fahrgemeinschaft angeboten hat, sofern Mitgliedsnummer und E-Mail-Adresse zu einem Mitglied des Vereins passen, das sich für den gewählten Arbeitsdienst eingetragen hat.', 'arbeitsdienste' ), false ),
+			'not_created'      => array( __( 'Die Eintragung konnte nicht angelegt werden. Mitgliedsnummer und E-Mail-Adresse müssen zu einem Mitglied des Vereins passen.', 'arbeitsdienste' ), true ),
 			'email_failed'     => array( __( 'Die Eintragung konnte nicht angelegt werden, weil die E-Mail mit dem Lösch-Link nicht zugestellt werden konnte. Bitte versuche es später erneut.', 'arbeitsdienste' ), true ),
 			'invalid_token'    => array( __( 'Der Link ist ungültig oder abgelaufen. Bitte kontaktiere uns, falls du Unterstützung benötigst.', 'arbeitsdienste' ), true ),
 			'form_expired'     => array( __( 'Das Formular ist nicht mehr gültig. Bitte lade die Seite neu und sende das Formular erneut ab.', 'arbeitsdienste' ), true ),

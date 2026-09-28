@@ -38,6 +38,14 @@
 > **gelöscht**, nicht veröffentlicht — siehe unten „Umsetzungsstand: Kein vorgemerkter
 > Zustand (1.15.0, Schema 1.5.0)“.
 
+> **Hinweis (28.09.2026, dritter Umschlag desselben Tages):** Der Auftrag ist ein fünftes Mal
+> umgestellt worden (Plugin 1.16.0, Schema **unverändert** 1.5.0 — diese Fassung ändert keine
+> Tabelle). Zwei sichtbare Dinge: Die Anrede aller vier Nachrichten lautet „Hallo Vorname
+> Nachname“, und das Kontaktformular eines Eintrags fragt zusätzlich nach der
+> Mitgliedsnummer. Damit steht das Paar in allen drei Formularen, es wird überall
+> gleich geprüft und überall gleich abgelehnt — siehe unten „Umsetzungsstand: Anrede und
+> Kontaktformular (1.16.0)“.
+
 ## Ziel
 
 Ein schlankes WordPress-Plugin für Vereinsmitglieder, das öffentlich sichtbare Angebote und Suchwünsche für kommende Arbeitsdienste sowie eine sichere Kontaktvermittlung per E-Mail ermöglicht.
@@ -99,6 +107,9 @@ Anzeige:
 - Arbeitsdienst und Datum
 - Abfahrtsbereich als Ort oder Stadtteil, im Formular mit drei Beispielen
 - Schaltfläche „Kontaktieren“; das darunterliegende Kontaktformular erscheint erst auf Wunsch und wird über „Absenden“ gesendet
+- ~~nur die E-Mail-Adresse~~ **Seit 1.16.0** Mitgliedsnummer **und** E-Mail-Adresse nebeneinander
+  in einer Zeile, mit einem Hinweis darunter, dass beide zu einem Mitglied passen müssen
+  und dass keine der beiden Angaben öffentlich steht
 
 Nicht öffentlich:
 
@@ -186,7 +197,7 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 - Jeder Link einer Nachricht ist ein `<a href>` im HTML-Teil, und sein Text nennt die Handlung. Bis 1.13.0 stand die Adresse als Klartext im Wortlaut, den `paragraphs()` Zeile für Zeile escaped; im HTML-Teil war sie damit weder klickbar noch kürzbar. Der Text, der an `wp_mail()` geht, ist trotzdem der fertige Textteil, nicht der Wortlaut mit den Marken: `FG_Mailer::send()` übergibt `FG_Mail_Templates::text_part()` an `wp_mail()` und den unaufgelösten Wortlaut an `phpmailer_init`. Filter auf `wp_mail()` — der Protokollierer dieses Plugins, ein Mail-Log, ein Plugin, das seine eigene Fußzeile anhängt — sehen also eine fertige Nachricht.
 - Ein Link-Platzhalter darf einen eigenen Wortlaut hinter einem Doppelpunkt mitbringen, `{{Loeschlink:Fahrgemeinschaft löschen}}`. Ohne den Doppelpunkt gilt der Vorgabewortlaut der Nachricht, damit ein vor 1.13.0 gespeicherter Text nicht bricht. Diese Form wird nur für die Links der jeweiligen Nachricht zugelassen.
 - Der Wortlaut einer Nachricht ist Platzhaltertext, kein HTML. `FG_Mail_Templates::render()` übersetzt ihn beim Versand, der Rahmen steht im Plugin; was ein Verein an Betreff und Text ändert, kann deshalb kein Markup in die Nachricht bringen. Ein Platzhalter, den die Nachricht nicht kennt, wird beim Speichern abgelehnt (mit Nennung der erlaubten Menge) und beim Senden zurückgehalten — die Nachricht geht nicht halb gefüllt hinaus, der Grund steht im Fehlerprotokoll und als Hinweis auf der Seite E-Mails.
-- Namen in E-Mails nur aus der Mitgliederverwaltung und nur der Vorname: gehört die Adresse zu keinem Mitglied, steht dort die vom Absender gewählte Bezeichnung, sonst nichts. Die vollständigen Namen der angemeldeten Mitglieder stehen in keinem Tabellenfeld, das ein Formular auslesen kann, und eine Kontakt-E-Mail trägt als Absenderadresse nur die vom Absender gewählte fremde Adresse.
+- ~~Namen in E-Mails nur aus der Mitgliederverwaltung und nur der Vorname: gehört die Adresse zu keinem Mitglied, steht dort die vom Absender gewählte Bezeichnung, sonst nichts.~~ **Überholt seit 1.14.0, erneut seit 1.16.0:** Es gibt keine vom Absender gewählte Bezeichnung mehr, seit `1.14.0` kommt der Name aus dem Mitglied, und seit `1.16.0` steht in der Anrede der vollständige Name — „Hallo Vorname Nachname“. Jede Nachricht geht an ein Mitglied, ein Mitglied hat immer Vor- und Nachnamen, und es gibt deshalb keinen Zweig, in dem ein Name fehlen könnte. Der Nachname kommt dabei nur in der Anrede vor; `{{Vorname}}` setzt weiterhin nur den Vornamen, weil die öffentliche Liste den Vornamen zeigt. Die vollständigen Namen der angemeldeten Mitglieder stehen in keinem Tabellenfeld, das ein Formular auslesen kann, und eine Kontakt-E-Mail trägt als `Reply-To` die Adresse des anfragenden Mitglieds.
 - `Reply-To` für die Kontakt-E-Mail verwenden.
 - SMTP-Zustellung einrichten und SPF/DKIM/DMARC prüfen.
 - Mailversandfehler nur aggregiert zählen; keine vollständigen Mailinhalte dauerhaft protokollieren.
@@ -276,7 +287,7 @@ Die Umsetzung folgt dem Plan, ergänzt ihn aber an den folgenden Stellen. Die au
 
 ### Öffentliche Seite und Formulare
 
-- Das Formular enthält kein Freitextfeld für eine Beschreibung und keine Platzanzahl, sondern nur Art, Arbeitsdienst, Vorname oder Spitzname, Abfahrtsbereich, E-Mail-Adresse und Einwilligung.
+- Das Formular enthält kein Freitextfeld für eine Beschreibung und keine Platzanzahl, sondern nur Art, Arbeitsdienst, Abfahrtsbereich, Mitgliedsnummer, E-Mail-Adresse und Einwilligung. ~~Vorname oder Spitzname~~ **Seit 1.14.0** nicht mehr abgefragt, der Vorname kommt aus dem Mitglied. Die Schaltfläche heißt seit `1.16.0` **Fahrgemeinschaft eintragen**; vorher stand dort „Eintragung vormerken“, was einen Schritt vor dem Eintrag versprach, den es seit `1.15.0` nicht gibt. Der Abfahrtsbereich liegt über die volle Breite, die beiden Felder des Paares teilen sich eine Zeile.
 - Die Serverseite weist zusätzlich personenbezogene Angaben in den öffentlich sichtbaren Feldern ab: E-Mail-Adressen, Telefonnummern und „Straße + Hausnummer“. Solche Versuche landen in der neutralen Antwort `not_created` und im Zähler `publish_personal_data`.
 - Öffentliche Formulare nutzen WordPress-Nonces. Die langlebigen Token-Seiten nutzen stattdessen eine eigene Formularprüfung, die per HMAC mit `wp_salt()` aus Token und Aktion abgeleitet wird. Damit hängt die Prüfung am geheimen Token und nicht an einer Sitzung.
 
@@ -579,3 +590,93 @@ Löschlink, `publish_published` jeden Eintrag beim Absenden des Formulars.
 
 Die echte CSV-Kopfzeile des Vereinsprogramms ist weiterhin offen und wird mit dem Import
 nachgezogen. Sie ist keine Frage dieser Fassung, sondern eine offene Angabe aus dem Auftrag.
+
+## Umsetzungsstand: Anrede und Kontaktformular (1.16.0)
+
+Ergänzt um den Auftrag vom 28.09.2026, am selben Tag wie die beiden Fassungen davor. Der
+Auftrag hieß: In **allen** Nachrichten soll die Anrede „Hallo Vorname Nachname“ lauten, und
+das Kontaktformular eines Eintrags soll zusätzlich nach der Mitgliedsnummer fragen. Beides
+ist sichtbar und beides betrifft das, was ein Verein im Postfach liest.
+
+### Die Anrede
+
+```php
+private function person_from_member( FG_Member $member )   // war: person() mit $ersatz_name
+```
+
+| Vorher (bis 1.15.0) | Jetzt (ab 1.16.0) |
+| --- | --- |
+| `person( $email, $ersatz )` und `person_from_member( $member, $ersatz )` | `person_from_member( FG_Member $member )` |
+| „Hallo Anton“ | „Hallo Anton Berger“ |
+| `{{Vorname}}`, `{{Name}}` je Nachricht anders beschrieben | `{{Vorname}}`, `{{Name}}` je Nachricht passend beschrieben, `{{Anrede}}` überall derselbe Satz |
+
+Drei Entscheidungen stecken darin, und keine folgt aus dem Auftrag:
+
+- **Der Nachname kommt in keinen eigenen Platzhalter.** `{{Name}}` gibt es, aber der ergibt
+  sich aus `{{Vorname}}` plus Leerzeichen plus `{{Name}}`; ein dritter Platzhalter für denselben
+  Nachnamen wäre eine zweite Schreibweise für eine Sache, und ein gespeicherter Wortlaut, der
+  `{{Nachname}}` nicht kennt, würde beim Speichern abgelehnt. Der Nachname steht nur in der
+  Anrede, und das ist die einzige Stelle einer Nachricht, an der ein Name als Ganzes gelesen
+  wird.
+- **Der Parameter ist ein Mitglied, keine Liste von Namen.** Die alte Fassung brauchte einen
+  `$ersatz_name` für den Fall, dass die Adresse zu keinem Mitglied gehört; dieser Fall ist seit
+  `1.14.0` auf diesem Weg unerreichbar, und ein Parameter, den niemand setzen kann, ist eine
+  Einladung, ihn zu erfinden. Der Typ `FG_Member` ohne Vorgabewert macht das jetzt am Aufruf
+  sichtbar: Ein Aufrufer ohne Mitglied bekommt nicht einen leeren Gruß, sondern einen Fehler
+  beim Aufruf.
+- **Die Anmeldebestätigung holt das Mitglied nicht ein zweites Mal.** `send_duty_signup()` hat
+  das Mitglied bereits geladen und holte sich die Anrede trotzdem über `person( $to, '' )` —
+  das war eine zweite Abfrage (`get_member_by_email()`) auf eine Adresse, die in derselben
+  Zeile stand. Jetzt ruft sie `person_from_member( $member )` mit dem Mitglied auf, das sie
+  ohnehin hat, und `person()` ist gelöscht.
+
+### Das Kontaktformular
+
+| Vorher (bis 1.15.0) | Jetzt (ab 1.16.0) |
+| --- | --- |
+| Feld `fg_contact_email` | Felder `fg_contact_member_no` und `fg_contact_email` |
+| `normalize_email( post_value( 'fg_contact_email' ) )`, dann `get_member_by_email( $email )` | ein Aufruf: `find_member_for_registration( post_value( 'fg_contact_member_no' ), post_value( 'fg_contact_email' ) )` |
+| `Reply-To` an die eingegebene Adresse | `Reply-To` an das gefundene Mitglied, dieselbe Adresse |
+| `E-Mail` als Beschriftung | `E-Mail-Adresse`, wie in den beiden anderen Formularen |
+
+Der Präfix `fg_contact_` unterscheidet die Feldnamen im DOM, die **Frage** ist dieselbe wie im
+Anmeldeformular; deshalb steht in allen drei Formularen `Mitgliedsnummer` und `E-Mail-Adresse`
+nebeneinander, und alle drei lehnen mit demselben Satz ab. Der Prüfaufruf ist derselbe
+Aufruf: `FG_Repository::find_member_for_registration()`. Das ist der Punkt des ganzen Schritts —
+drei Formulare, eine Regel, eine Stelle im Code, an der sie steht.
+
+Der Preis, um den es geht, ist derselbe wie beim Angebotformular und er ist hier der
+wichtigere, weil die Kontaktvermittlung an ihm hängt: Seit `1.14.0` kann eine Adresse zu
+**zwei** Mitgliedern gehören, wenn jemand ausgeschieden ist und seine Adresse im Bestand
+steht. Ohne die Nummer wäre die Kontaktvermittlung eine Lotterie, und die Anfrage ginge
+gelegentlich an das falsche (frühere) Mitglied. Umgekehrt gilt: Ein Besucher ohne Mitgliedsnummer
+kontaktiert niemanden, und das ist der Preis.
+
+### Der Briefkasten
+
+- `FG_Mail_Texts::mails()` trägt für `{{Anrede}}` in allen vier Nachrichten dasselbe Beispiel
+  („Hallo Anton Berger“) und dieselbe Bedingung („Nummer und Adresse müssen zu einem Mitglied
+  passen“). `{{Vorname}}` und `{{Name}}` bleiben in der Anmeldebestätigung, weil die Liste dort
+  den Vornamen zeigt.
+- Die Testmail auf der Seite **E-Mails** begrüßt mit demselben Namen wie die Vorschau, und
+  der Betreff ist der der Eintragungsmail.
+
+### Die Zähler
+
+Die vier Zähler `contact_valid_email` und `contact_invalid_email` sowie
+`publish_valid_email` und `publish_invalid_email` behalten ihre Schlüssel und bekommen nur
+neue Beschriftungen. Ein Umbenennen würde die Tabelle verwerfen, in der seit dem
+Einführen der Zähler steht, was der Verein in einer Woche hatte, und die sichtbare Beschriftung
+lässt sich ohne Datenverlust an ein geändertes Paar anpassen.
+
+| Schlüssel | Beschriftung ab 1.16.0 |
+| --- | --- |
+| `publish_valid_email` | Einträge mit passender Mitgliedsnummer und E-Mail-Adresse |
+| `publish_invalid_email` | Abgewiesene Einträge: Nummer und E-Mail-Adresse passen nicht zu einem Mitglied, oder das Mitglied ist für diesen Arbeitsdienst nicht angemeldet |
+| `contact_valid_email` | Kontaktanfragen mit passender Mitgliedsnummer und E-Mail-Adresse |
+| `contact_invalid_email` | Abgewiesene Kontaktanfragen: Nummer und E-Mail-Adresse passen nicht zu einem Mitglied, das Mitglied ist für diesen Arbeitsdienst nicht angemeldet oder die Eintragung ist nicht sichtbar |
+
+### Was offen bleibt
+
+Unverändert offen bleibt die echte CSV-Kopfzeile des Vereinsprogramms; sie wird mit dem Import
+nachgezogen und ist keine Frage dieser Fassung.

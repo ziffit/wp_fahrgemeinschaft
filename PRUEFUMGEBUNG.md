@@ -4,16 +4,35 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **CLI 527, Admin-Ebene 555, öffentliches HTTP 201,
-Mail-Ebene 113, 0 Fehler**, gegen den Stand **Plugin 1.15.0, Schema 1.5.0**, also
-gegen den Endstand ohne den Zustand vor der Veröffentlichung. Die Mail-Ebene
-113 ist die Summe aus 54 Prüfungen im Shell-Satz `mail.sh` und 59 im MIME-Satz
-`mail-mime.php`; `mail.sh` addiert beide selbst und gibt 113 aus. Die Zahl 166
-aus dem Kopf desselben Tages war falsch gezählt — der MIME-Satz stand ein
-zweites Mal darin. Nachgezählt am damaligen Stand: 47 Aufrufe im Shell-Satz plus
-59 im MIME-Satz, also 106. Das ist an den Zeilen der Suite nachgewiesen und nicht
-aus dem Log abgelesen, weil der damalige Lauf nicht wiederholbar ist, ohne das
-Plugin auf 1.14.0 zurückzusetzen.
+Letzter Lauf: 28.09.2026 — **CLI 533, Admin-Ebene 561, öffentliches HTTP 217,
+Mail-Ebene 116, 0 Fehler**, gegen den Stand **Plugin 1.16.0, Schema 1.5.0**. Die
+Mail-Ebene 116 ist die Summe aus 57 Prüfungen im Shell-Satz `mail.sh` und 59 im
+MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und gibt 116 aus.
+
+Die Zahlen vom Vortag desselben Tages waren **CLI 527, Admin-Ebene 555, HTTP 201,
+Mail-Ebene 113** gegen **Plugin 1.15.0**. Dazwischen liegt die Fassung 1.16.0 (Anrede
+mit beiden Namen, Kontaktformular mit der Mitgliedsnummer) und der Satz Prüfungen,
+der zu ihr gehört. Jede der vier Zahlen ist der Wert, den die Suite selbst ausgegeben
+hat, und keine davon ist gerechnet oder aus dem Diff hochgerechnet: Ein Teil der
+neuen Prüfungen steht in einer Schleife über die Fälle des Paares und läuft deshalb
+mehrfach, die Differenz zu den Zeilen in der Datei ist also größer als die Zahl der
+neuen Zeilen — wer nachrechnen will, muss die Schleife mitzählen. Die Zahl 166 aus dem
+Kopf desselben Tages war falsch gezählt — der MIME-Satz stand ein zweites Mal darin.
+Nachgezählt am damaligen Stand: 47 Aufrufe im Shell-Satz plus 59 im MIME-Satz, also
+106. Das ist an den Zeilen der Suite nachgewiesen und nicht aus dem Log abgelesen,
+weil der damalige Lauf nicht wiederholbar ist, ohne das Plugin auf 1.14.0
+zurückzusetzen.
+
+Die vier Zahlen stammen aus **einem** Lauf gegen den Endstand, in der
+Reihenfolge CLI zuerst: Die CLI-Suite leert die Tabellen, und `http.sh` und
+`mail.sh` bauen ihre Fixture ohnehin vorher neu auf — das ist der Grund für diese
+Reihenfolge und nicht der Weg des geringsten Widerstandes. Während der Arbeit sind
+die Suiten mehrfach gegen Zwischenstände gelaufen, nach jeder Gegenprobe und nach
+jeder Korrektur an einer Prüfung; gezählt wird nur dieser eine Lauf. Das ist die
+einzige Zahlensorte, die sich nicht von selbst versteht: Eine Suite, die nach jeder
+Änderung neu gezählt wird, meldet am Ende immer eine Zahl, und ohne die Regel
+„ein Lauf, ein Stand" wäre in diesem Dokument eine Zahl stehen, die zu irgendwann
+stand, aber nicht zu dem, was ausgeliefert wird.
 
 Alle vier Suiten sind an diesem Tag gegen denselben Stand gelaufen, zuerst die CLI
 über `WPDEV/setup.sh` und dann die drei HTTP-Suiten von Hand. Die CLI-Suite ist
@@ -158,8 +177,8 @@ Fahrgemeinschaften und Mitglieder sowie die Statistik-Option, es gibt also keine
 | Suite | Datei | Vorgehen |
 | --- | --- | --- |
 | CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–20: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene und die Mitgliederverwaltung; dazu die Abschnitte `[2a]` (die vier freiwilligen Angaben eines Arbeitsdienstes), `[3c]` (die Liste der Arbeitsdienste) und `[1b]` (die Migration: eine Fahrt mit einer Adresse, die zu einem Mitglied gehört, wird über einen JOIN an dieses Mitglied gehängt; eine mit einer fremden Adresse wird gelöscht und gezählt; beide Alt-Spalten werden geleert; eine Fahrt ohne Adresse und ohne Mitglied bleibt stehen; eine Zeile im Zustand vor der Veröffentlichung wird gelöscht und im selben Zähler gemeldet) |
-| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Abfahrtsbereich gegen Kontaktdaten über den Zähler `publish_personal_data`, Verhalten der Schaltflächen im Stylesheet; dazu die Abschnitte `[5e]` (die Mitgliedsnummer als Schlüssel: das Formular fragt Nummer und Adresse, nennt keinen Namen mehr, und beide Längenbegrenzungen stehen im HTML), `[8]` für die Arbeitsdienstliste auf einer eigenen Seite und `[9]` für den vollständigen Weg von der Anmeldung über die E-Mail bis zum Abmelden |
-| Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo`, und die Links beider Teile: im HTML ein `<a href>` mit einem Wortlaut, der die Handlung nennt, im Text die Adresse in Klarschrift |
+| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Abfahrtsbereich gegen Kontaktdaten über den Zähler `publish_personal_data`, Verhalten der Schaltflächen im Stylesheet; dazu die Abschnitte `[5]` (drei Paare, von denen je nur eine Hälfte stimmt, und ein Paar aus zwei fremden Werten: alle vier werden gleich beantwortet und gleich gezählt), `[5c]`/`[5e]` (der Abfahrtsbereich über die volle Breite, die drei Formulare des Plugins — zwei auf der Angebotsseite, eines auf der Dienstseite — fragen dasselbe Paar in denselben zwei Worten), `[5e]` (die Mitgliedsnummer als Schlüssel: das Formular fragt Nummer und Adresse, nennt keinen Namen mehr, und beide Längenbegrenzungen stehen im HTML), `[6]` und `[9]` (die Absage nennt beide Angaben, im Angebot- wie im Anmeldeformular mit demselben Satz), `[8]` für die Arbeitsdienstliste auf einer eigenen Seite und `[9]` für den vollständigen Weg von der Anmeldung über die E-Mail bis zum Abmelden |
+| Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler, dazu `[4d]` (eine richtige Nummer mit fremder Adresse: kein Empfänger, keine Mail, Zähler wie bei einer ganz fremden Adresse). Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo`, und die Links beider Teile: im HTML ein `<a href>` mit einem Wortlaut, der die Handlung nennt, im Text die Adresse in Klarschrift |
 | Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der sechs Unterseiten auf jeder Seite, die neue Seite E-Mails eingeschlossen), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die Abschnitte `[9]` (Mitgliederverwaltung), `[10]` (CSV-Import), `[11]` (Anmeldung zu einem Dienst) und `[12]` (Aufräumen um alle Mitglieder ohne Arbeitsdienst) und `[13]` mit `[13b]` (Anrede der Nachrichten) und `[13c]` (Zurückhaltung bei einem unbekannten Platzhalter) — Wortlaut der vier E-Mails, Platzhalter je Nachricht, Vorschau, Zurücksetzen |
 
 Zwei Eigenheiten der Suiten, die man kennen muss, bevor man einem Fehlschlag traut:
@@ -370,7 +389,7 @@ läuft aus `/tmp/opencode/fg/`:
 | Datei | Zweck |
 | --- | --- |
 | `gegenproben.txt` | Eine Zeile je Gegenprobe: `Suite ~~~ Datei ~~~ alte Stelle ~~~ neue Stelle ~~~ Muster`. Der Trenner der Felder ist die Dreier-Tilde, weil in einer Bruchstelle auch Pipes vorkommen; `\n` steht für einen Zeilenumbruch |
-| `gegenprobe.sh` | Sichert die Datei, baut die Bruchstelle ein, kopiert das Plugin in den Container, lässt die Suite laufen, stellt die Datei wieder her |
+| `gegenprobe.sh` | Sichert die Datei, baut die Bruchstelle ein, kopiert das Plugin in den Container, lässt die Suite laufen, stellt die Datei wieder her. Er nimmt `admin`, `http` und `mail`; `smoke.php` steht nicht darin, weil die Suite am Anfang Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht und das nicht in ein Werkzeug gehört, das eine Datei vorsätzlich kaputt macht |
 | `alle-gegenproben.sh` | Fährt die Liste der Reihe nach ab und schreibt ein Protokoll |
 
 Zwei Vorkehrungen, ohne die das Werkzeug sich selbst widerlegt: Es verlangt, dass die
@@ -969,6 +988,54 @@ Eine Prüfung, die an einem Muster gewachsen ist, ist an genau einem Muster
 blind — und dieses hier wäre es für die Form geworden, die diese Fassung
 gerade eingeführt hat.
 
+### Die zehnte Reihe (12 Gegenproben zu Fassung 1.16.0)
+
+Sie ging die beiden sichtbaren Änderungen an: die Anrede und das Paar im
+Kontaktformular. Zwölf Gegenproben, davon zwei, die beim ersten Mal **nichts**
+gebrochen haben und erst beim zweiten Mal die gestellte Frage trafen — beide stehen
+unten bei ihrem Befund, weil eine Reihe, die sich selbst bestehen lässt, wertlos ist.
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| die Nummer im Kontaktformular heißt nur noch „Nummer“ | alle drei Formulare fragen dasselbe Paar in denselben Worten | `both forms of the page ask for the pair in the same words` |
+| die Adresse im Anmeldeformular heißt nur noch „E-Mail“ | dasselbe, über die Dienstseite | `the signup form asks for the pair in the words the offer form uses` — und **nur** diese: die beiden Formulare auf der Angebotsseite bleiben grün, weil sie sich nicht verändert haben |
+| die Absage des Angebotsformulars nennt nur noch die Adresse | die Absage nennt das Paar in einem Satz | `the refusal of the offer form names the pair in one sentence` |
+| die Absage des Anmeldeformulars nennt nur noch die Adresse | dasselbe, und dieselben Worte wie im Angebotformular | 2 Prüfungen: `the signup form refuses in the words the offer form uses` und die Satzregel `no sentence of the refusal names one of the two without the other` |
+| `find_member_for_registration()` vergleicht die Adresse nicht mehr | ein Paar, von dem nur eine Hälfte stimmt, wird abgewiesen | 2 Prüfungen: die Zählerprüfung im Paar-Fall von `[5]` und eine bestehende Prüfung in `[6]`; siehe unten |
+| die Schaltfläche sagt wieder „Eintragung vormerken“ | die Schaltfläche nennt den Druck | 2 Prüfungen: `the button names what the press does` und `and no button promises a step in front of the entry` |
+| der Abfahrtsbereich verliert seine volle Breite | er hat eine Zeile für sich, das Paar teilt sich eine | `the area has a line of its own and the pair shares one` |
+| die Anrede nennt nur den Vornamen, öffentliche Ebene | der Gruß nennt beide Namen, und der Nachname steht sonst nirgends | 2 Prüfungen: `the body greets the member with both names` und `and the surname stands only in the greeting` |
+| dieselbe Bruchstelle auf der Mail-Ebene | dasselbe in einer wirklich verschickten Nachricht | 2 Prüfungen: `requester mail greets the asking member with both names` und `creator mail greets the member who offered the ride` |
+| die Beschriftung `publish_valid_email` ohne die Nummer | die Zähler der beiden Formen nennen das Paar | `the counter of an entry names the number too` |
+| die Beschriftung `contact_valid_email` ohne die Nummer | dasselbe, und zwar für alle vier Zähler | `the contact counter names the number too` |
+
+Der Fall mit der gelockerten Paar-Prüfung ist der einzige, bei dem eine Prüfung **zu
+Recht** grün blieb. Die Antwort auf eine Kontaktanfrage ist seit `1.14.0` neutral, das
+heißt: Sie ist dieselbe, wenn das Paar passt, und dieselbe, wenn es nicht passt. Eine
+gelockerte Prüfung nimmt dem Server nur das Nehmen, sie erfindet aber keine Mail — der
+Briefkasten bleibt leer, und die Seite sagt dasselbe wie vorher. Genau darin liegt der
+Zweck der neutralen Antwort, und genau darum kann sie als Messgerät dafür nicht dienen.
+Was sie **kann**, ist der Zähler: `contact_invalid_email` steht still, wenn die
+Verwaltung eine Anfrage annimmt, die sie ablehnen soll. Die Schleife in `[5]` prüft
+deshalb beides, die Antwort **und** den Zähler, und nur die Zählerprüfung wurde rot.
+
+Eine Prüfung dieser Reihe war zunächst **gar nicht vorhanden**: Die Beschriftung von
+`contact_valid_email` wurde von keiner Prüfung gelesen, und die erste Gegenprobe auf
+eine Zählerbeschriftung traf deshalb eine Stelle, die niemand prüft — die Suite blieb
+grün und meldete das als Erfolg. Der Befund ist mehr als eine fehlende Zeile: Von den
+vier Beschriftungen der beiden Formen waren zwei geprüft. Zwei Prüfungen sind kommen
+nicht dazu, weil sie billiger wirken, sondern weil eine Liste von vier zur Hälfte
+geprüft keine Liste ist, sondern ein Zufall. Es sind jetzt alle vier, und die
+Gegenprobe auf jede der beiden neuen ist die elfte und zwölfte Zeile der Tabelle.
+
+Die zweite Gegenprobe, die nichts brach, war eine Fehlzählung und keine Blindheit:
+`fg-field-full` steht viermal in `class-fg-public.php`, und die Bruchstelle wurde als
+„die dritte“ bezeichnet — die erste davon ist aber ein `<fieldset>`, und die Suche lief
+nach `<div`, also war der dritte `<div>`-Treffer die Einwilligungszeile und nicht der
+Abfahrtsbereich. Das Werkzeug hat die Bruchstelle nicht beanstandet, weil es prüft,
+**dass** die Stelle mehrfach vorkommt, und nicht **welche** davon gemeint war. Mit „die
+zweite“ wurde der Abfahrtsbereich getroffen und die Prüfung rot.
+
 ## Umstieg von den eigenen Beitragstypen
 
 Die Testinstanz lief ursprünglich mit einer Fassung, die eigene WordPress-Beitragstypen
@@ -1077,6 +1144,97 @@ die Option vorher gelöscht, `FG_Schema::install()` gelaufen, und danach geprüf
 Zeile weg ist, die Option 1 trägt und `count_rides( array( 'status' => 'pending' ) )` null
 antwortet. Der Status wird dabei als **Literal** verglichen und nicht über eine Konstante,
 denn die Konstante ist mit dem Zustand weg.
+
+## Fassung 1.16.0: Anrede und Kontaktformular
+
+Bis `1.15.0` stand in der Anrede aller vier Nachrichten nur der Vorname, und das
+Kontaktformular eines Eintrags fragte nach der Adresse allein. Seit `1.16.0` lautet die
+Anrede „Hallo Vorname Nachname“, und das Kontaktformular fragt nach Mitgliedsnummer **und**
+Adresse. Beides ist an der ausgelieferten Seite und an der wirklich verschickten Nachricht
+geprüft, nicht am Quelltext.
+
+### Die Anrede
+
+Die Anrede wird an vier Stellen und aus drei Ebenen geprüft, weil ein Wort in einer Ebene
+zu wenig geprüft worden ist:
+
+| Ebene | Stelle | Was geprüft wird |
+| --- | --- | --- |
+| CLI | `smoke.php` | Anmeldebestätigung, Angebotsmail, Kontaktmail: die erste Zeile des Textteils ist der Gruß mit beiden Namen |
+| Mail | `mail.sh`, `mail-mime.php` | derselbe Gruß im HTML- **und** im Textteil, in beiden Anreden der Kontaktmail |
+| Admin | `admin.sh` `[13b]` | die Anrede der Nachrichten, die wirklich verschickt wurden, plus die Vorschau auf der Seite **E-Mails** |
+
+Dazu kommt in `smoke.php` die Umkehrung einer alten Prüfung: Bis `1.15.0` stand dort
+`the name of the member is not in the mail`, und sie war nur grün, weil der Gruß den
+Nachnamen nicht enthielt. Seit `1.16.0` prüft die Stelle beides — der Gruß **ist**
+„Hallo Teilnehmer Probe,“ und der Nachname steht **sonst nirgends** im Text
+(`substr_count( …, 'Probe' ) === 1`). Ein Gruß, der den Nachnamen ein zweites Mal in einen
+Satz setzt, wäre eine zweite Stelle mit personenbezogener Angabe im Wortlaut.
+
+### Das Paar in allen drei Formularen
+
+Das Kontaktformular ist der dritte Ort, an dem dasselbe Paar geprüft wird. Die Regel steht
+an einer Stelle im Code, `FG_Repository::find_member_for_registration()`, und alle drei
+Formulare rufen sie. Geprüft wird das an der Oberfläche, weil eine Regel, die an drei
+Stellen gleich aussehen soll, an drei Stellen gleich aussehen **muss**:
+
+- **Die Felder stehen nebeneinander und heißen gleich.** `http.sh` liest die Beschriftungen
+  aus dem ausgelieferten HTML und stellt die drei Formulare **nebeneinander**, bevor es sie
+  vergleicht: Die beiden der Angebotsseite stehen in derselben Seite, das der Anmeldung
+  steht auf der Dienstseite, also werden beide Seiten mit einer Trennmarke in eine Eingabe
+  gelegt. Geprüft wird, dass alle drei dieselben zwei Worte in derselben Reihenfolge
+  nennen. Der Vergleich Formular für Formular hätte nichts bewiesen: Zwei Formulare, die
+  gleich lauten, und ein drittes mit eigener Fassung, sind zwei Regeln mit einer
+  Ausnahme.
+- **Die Absage nennt beide Angaben.** Im Angebotformular und im Anmeldeformular wird die
+  Meldung als **Text** gelesen (`hinweis_text()`, ohne Markup) und mit
+  „Die Eintragung konnte nicht angelegt werden. …“ bzw. „Die Anmeldung ist nicht möglich.
+  …“ verglichen. Der zweite Satz muss in beiden derselbe sein; die erste Hälfte darf es
+  nicht, weil das eine Formular eine Zeile anlegt und das andere eine Anmeldung.
+- **Keine der beiden Hälften wird herausgestellt.** Der Satz „… müssen zu einem Mitglied
+  des Vereins passen“ nennt Nummer und Adresse in einem Satz. Eine Prüfung, die jede
+  Nennung einzeln prüft, wäre die falsche: Sie fände in einem Satz, der nur die Adresse
+  nennt, keinen Fehler, obwohl genau das der Fehler wäre. Geprüft wird deshalb die
+  Bedingung, **dass kein Satz des Textes ein Feld ohne das andere nennt** — ein Satz wie
+  „Die Mitgliedsnummer ist nicht bekannt.“ macht die Prüfung rot.
+- **Der Fall, in dem nur eine Hälfte stimmt.** `http.sh` schickt drei Paare (richtige
+  Nummer mit fremder Adresse, fremde Nummer mit richtiger Adresse, zwei richtige Angaben,
+  die zu keinem Mitglied gehören) und prüft je Paar dieselben zwei Dinge: dieselbe
+  neutrale Antwort **und** denselben Zähler. Den Zähler holt die Schleife aus dem
+  Zustandsbefehl `stat`, nicht aus dem Text der Antwort: Eine Antwort kann richtig
+  aussehen und der Zähler trotzdem der falsche sein, und der umgekehrte Fall — die Antwort
+  nennt einen Grund, die Tabelle zählt es nicht — wäre genauso still.
+
+### Zwei Fehler in den Prüfungen selbst, gefunden beim Einbau
+
+Beide sind gefunden worden, weil die Prüfung rot wurde, als sie ehrlich wurde — nicht weil
+sie vorher falsch grün gewesen wär, der zweite schon:
+
+**Die Absage-Prüfung las einen leeren Rumpf.** Der `curl`-Aufruf, der die Meldung der
+Anmeldung holt, war ohne `-L`; eine abgewiesene Anmeldung endet aber in einem 303 mit
+leerem Rumpf, und der Satz steht auf der Seite, auf die die Umleitung zeigt. Die Datei war
+0 Byte groß, die Prüfungen darüber waren für das falsche Grün grün, und der Satz wurde
+überhaupt nie gelesen. Zwei Prüfungen sind nicht verschwunden, sondern ersetzt: Die
+`hasnt`-Zeilen für „nennt die Nummer nicht als falsch“ und „nennt die Adresse nicht als
+falsch“ prüften beide nichts; der Weg ist jetzt `hinweis_text()` gefolgt der Umleitung, ein
+Vergleich des genauen Textes und die Satz-Bedingung oben. Dazu eine Prüfung, die nur meldet,
+ob überhaupt eine Meldung auf der Seite stand — sie fängt den Zustand wieder ab, in dem die
+Datei leer war.
+
+**Der Vergleich der Beschriftungen zählte mit.** Zwei Einträge auf einer Seite tragen
+zweimal das Kontaktformular, also vier Beschriftungen statt zwei; die Dienstseite trägt
+das Anmeldeformular je Arbeitsdienst. Der Vergleich hielt deshalb vier gegen zwei und
+wurde rot, wenn zwei Einträge auf der Seite standen — er prüfte nicht die
+Beschriftungen, sondern die Zahl der Einträge. Beide Vergleiche lesen die Worte jetzt
+**einmalig je Seite** (`einmalig()` und `worte()`) und vergleichen Mengen, nicht
+Positionen: Die Zahl der Einträge auf einer Seite ist eine Sache für sich und wird
+an anderer Stelle geprüft.
+
+Ein dritter Fehler war derselbe Fehler an anderer Stelle und ist nur durch das Nachsehen
+gefallen: Das Muster für ein Feld mit Attributen endete auf `[^>]*/>`, die ausgelieferten
+Eingabefelder enden aber auf `required>`. Die Prüfung „das Feld steht in derselben Zeile
+wie die Schaltfläche“ hätte gegen keine Zeile gegriffen und wäre ebenfalls für das falsche
+Grün grün gewesen; das Muster ist `[^>]*>`.
 
 ## Mail-Auswertung
 

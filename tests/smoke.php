@@ -1406,6 +1406,11 @@ fg_ok( 'teilnehmer@example.org' === $entry_mail['to'], 'mail sent to the member 
 fg_ok( false !== strpos( (string) $entry_mail['subject'], 'Deine Fahrgemeinschaft ist eingetragen' ), 'subject names the entry', (string) $entry_mail['subject'] );
 $body = fg_mail_bodies();
 fg_contains( 'steht in der Liste', $body, 'the mail says the entry is in the list' );
+// The greeting names the member with both names. The member row cannot be
+// written without a first name and without a last name, so the greeting is not a
+// case that may come out half-empty: it is built from the two names and it goes
+// out whole or not at all.
+fg_contains( 'Hallo Teilnehmer Probe,', $body, 'the mail greets the member with both names' );
 fg_contains( 'es ist nichts mehr zu bestätigen', $body, 'the mail says that nothing is left to confirm' );
 // One link, and it is the way out. A mail that carried a link into a private
 // state would have to be counted here twice: once for the link and once for the
@@ -1511,28 +1516,49 @@ fg_mail_reset();
 list( $location ) = fg_call(
 	array( $fg_actions, 'contact_ride' ),
 	array(
-		'action'           => 'fg_contact_ride',
-		'ride_ref'         => $ride_ref,
-		'fg_contact_email' => 'fremd@example.com',
-		'fg_website'       => '',
-		'form_started_at'  => (string) ( time() - 30 ),
-		'source_url'       => home_url( '/fahrgemeinschaften/' ),
-		'fg_contact_nonce' => wp_create_nonce( 'fg_contact_ride' ),
+		'action'                 => 'fg_contact_ride',
+		'ride_ref'               => $ride_ref,
+		'fg_contact_member_no'   => '300',
+		'fg_contact_email'       => 'fremd@example.com',
+		'fg_website'             => '',
+		'form_started_at'        => (string) ( time() - 30 ),
+		'source_url'             => home_url( '/fahrgemeinschaften/' ),
+		'fg_contact_nonce'       => wp_create_nonce( 'fg_contact_ride' ),
 	)
 );
-fg_ok( 'contact_received' === fg_notice_of( $location ), 'neutral answer for a foreign address', (string) $location );
-fg_ok( 0 === count( $GLOBALS['fg_mail'] ), 'no mail for a non-participant', wp_json_encode( fg_mail_recipients() ) );
+fg_ok( 'contact_received' === fg_notice_of( $location ), 'neutral answer for a right number with a foreign address', (string) $location );
+fg_ok( 0 === count( $GLOBALS['fg_mail'] ), 'no mail for an address of no member', wp_json_encode( fg_mail_recipients() ) );
+
+// Two real values that do not belong together. Every one of the cases around it
+// would end the same way if only the address were looked at, so this is the
+// case that shows the form asks a pair and not an address.
+list( $location ) = fg_call(
+	array( $fg_actions, 'contact_ride' ),
+	array(
+		'action'                 => 'fg_contact_ride',
+		'ride_ref'               => $ride_ref,
+		'fg_contact_member_no'   => '300',
+		'fg_contact_email'       => 'anbieter@example.org',
+		'fg_website'             => '',
+		'form_started_at'        => (string) ( time() - 30 ),
+		'source_url'             => home_url( '/fahrgemeinschaften/' ),
+		'fg_contact_nonce'       => wp_create_nonce( 'fg_contact_ride' ),
+	)
+);
+fg_ok( 'contact_received' === fg_notice_of( $location ), 'a pair of two real members of different people is refused', (string) $location );
+fg_ok( 0 === count( $GLOBALS['fg_mail'] ), 'and sends nothing', wp_json_encode( fg_mail_recipients() ) );
 
 list( $location ) = fg_call(
 	array( $fg_actions, 'contact_ride' ),
 	array(
-		'action'           => 'fg_contact_ride',
-		'ride_ref'         => $ride_ref,
-		'fg_contact_email' => 'sucher@example.org',
-		'fg_website'       => '',
-		'form_started_at'  => (string) ( time() - 30 ),
-		'source_url'       => home_url( '/fahrgemeinschaften/' ),
-		'fg_contact_nonce' => wp_create_nonce( 'fg_contact_ride' ),
+		'action'                 => 'fg_contact_ride',
+		'ride_ref'               => $ride_ref,
+		'fg_contact_member_no'   => '300',
+		'fg_contact_email'       => 'sucher@example.org',
+		'fg_website'             => '',
+		'form_started_at'        => (string) ( time() - 30 ),
+		'source_url'             => home_url( '/fahrgemeinschaften/' ),
+		'fg_contact_nonce'       => wp_create_nonce( 'fg_contact_ride' ),
 	)
 );
 fg_ok( 'contact_received' === fg_notice_of( $location ), 'participant request accepted' );
@@ -1540,19 +1566,25 @@ fg_ok( 2 === count( $GLOBALS['fg_mail'] ), 'creator and requester notified', wp_
 $body = fg_mail_bodies();
 fg_contains( 'Wir haben das Mitglied benachrichtigt, das die Fahrgemeinschaft angeboten hat.', $body, 'exact required sentence present' );
 fg_contains( 'Reply-To: sucher@example.org', implode( "\n", array_map( function ( $m ) { return implode( "\n", (array) $m['headers'] ); }, $GLOBALS['fg_mail'] ) ), 'reply-to set' );
+// Both sides are greeted by both names. The one asking is named in the member
+// list as well, and until version 1.15.0 the two greetings carried the first
+// name alone.
+fg_contains( 'Hallo Sucher Probe,', $body, 'the asking member is greeted with both names' );
+fg_contains( 'Hallo Teilnehmer Probe,', $body, 'the member who offered the ride is greeted with both names' );
 
 echo "[7b] Creator as requester and honeypot stay neutral\n";
 fg_mail_reset();
 list( $location ) = fg_call(
 	array( $fg_actions, 'contact_ride' ),
 	array(
-		'action'           => 'fg_contact_ride',
-		'ride_ref'         => $ride_ref,
-		'fg_contact_email' => 'anbieter@example.org',
-		'fg_website'       => 'https://spam.example',
-		'form_started_at'  => (string) ( time() - 30 ),
-		'source_url'       => home_url( '/fahrgemeinschaften/' ),
-		'fg_contact_nonce' => wp_create_nonce( 'fg_contact_ride' ),
+		'action'                 => 'fg_contact_ride',
+		'ride_ref'               => $ride_ref,
+		'fg_contact_member_no'   => '200',
+		'fg_contact_email'       => 'anbieter@example.org',
+		'fg_website'             => 'https://spam.example',
+		'form_started_at'        => (string) ( time() - 30 ),
+		'source_url'             => home_url( '/fahrgemeinschaften/' ),
+		'fg_contact_nonce'       => wp_create_nonce( 'fg_contact_ride' ),
 	)
 );
 fg_ok( 'contact_received' === fg_notice_of( $location ), 'honeypot answer is identical' );
@@ -2404,7 +2436,19 @@ $anmeldung = $fg_repo->get_registration( $fg_repo->get_event_registrations( $anm
 fg_contains( $anmeldung->public_ref, fg_mail_bodies(), 'the mail carries the way back out' );
 fg_contains( 'fg_duty_action=view', fg_mail_bodies(), 'and it is the two-step link, not a bare token in the mail' );
 fg_contains( 'Anmeldung Server', fg_mail_bodies(), 'the mail names the duty' );
-fg_not_contains( 'Teilnehmer Probe', fg_mail_bodies(), 'the name of the member is not in the mail' );
+// The name stands in the greeting and nowhere else. The rest of the text is the
+// same for every recipient, and a name that stands in a sentence a second time is
+// one piece of personal data too often. Since version 1.16.0 the greeting carries
+// both names, so the check is now the other way round than it was while the
+// greeting carried the first name alone: not "the name is not in the mail", but
+// "the name is in the greeting, and in no other sentence".
+$anmeldung_body = fg_mail_bodies();
+fg_contains( 'Hallo Teilnehmer Probe,', $anmeldung_body, 'the greeting names the member with both names' );
+if ( 1 === substr_count( $anmeldung_body, 'Probe' ) ) {
+	fg_ok( true, 'and the surname stands nowhere else in the mail' );
+} else {
+	fg_ok( false, 'and the surname stands nowhere else in the mail', substr_count( $anmeldung_body, 'Probe' ) . ' times' );
+}
 
 // A second press of the button writes nothing and sends no second mail. Two
 // mails would mean two links in one inbox, and only the newer one would work.

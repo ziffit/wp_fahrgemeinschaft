@@ -38,6 +38,16 @@ h=sys.stdin.read()
 m=re.search(r'name=\"$1\"[^>]*value=\"([^\"]*)\"',h) or re.search(r'value=\"([^\"]*)\"[^>]*name=\"$1\"',h)
 print(m.group(1) if m else '')"; }
 
+# The text of the message a page carries, read out of the page and stripped of
+# its markup. Two notices that are compared have to be compared as the visitor
+# reads them, and looking for one word in the raw HTML would not notice a word
+# that the markup had swallowed.
+hinweis_text() { python3 -c "
+import re,sys,html
+h=sys.stdin.read()
+m=re.search(r'<div id=\"fg-hinweis\"[^>]*>(.*?)</div>', h, re.S)
+print(html.unescape(re.sub(r'<[^>]+>','',m.group(1))).strip() if m else '')"; }
+
 echo "== HTTP level tests =="
 
 # --- 1. public page over HTTPS
@@ -188,7 +198,9 @@ ERSTELLER_MAIL=berta@angeln.example.org
 s drop-registration "$(jq event_id)" "$ERSTELLER_NR" > /dev/null 2>&1
 s register "$(jq event_id)" "$ERSTELLER_NR" "$ERSTELLER_MAIL" > /dev/null
 NICHT_ANGEMELDET=$(jq member_free_mail)
+NICHT_ANGEMELDET_NR=$(jq member_free_no)
 FRAGE=$(jq member_taken_mail)
+FRAGE_NR=$(jq member_taken_no)
 # One counter per name. Reading two counters into one pair of variables and then
 # comparing them with each other is a comparison of two different things, and it
 # answers the wrong question in both directions at once.
@@ -198,6 +210,7 @@ vorher_u=$(ungueltig); vorher_g=$(gueltig)
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_contact_ride" \
 	--data-urlencode "ride_ref=$PUBLISHED_REF" \
+	--data-urlencode "fg_contact_member_no=$FRAGE_NR" \
 	--data-urlencode "fg_contact_email=$FRAGE" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
@@ -212,6 +225,7 @@ vorher_u=$(ungueltig); vorher_g=$(gueltig)
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_contact_ride" \
 	--data-urlencode "ride_ref=$PUBLISHED_REF" \
+	--data-urlencode "fg_contact_member_no=$ERSTELLER_NR" \
 	--data-urlencode "fg_contact_email=$ERSTELLER_MAIL" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
@@ -222,6 +236,7 @@ vorher_u=$(ungueltig); vorher_g=$(gueltig)
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_contact_ride" \
 	--data-urlencode "ride_ref=$PUBLISHED_REF" \
+	--data-urlencode "fg_contact_member_no=$NICHT_ANGEMELDET_NR" \
 	--data-urlencode "fg_contact_email=$NICHT_ANGEMELDET" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
@@ -231,11 +246,35 @@ if [ "$(ungueltig)" -gt "$vorher_u" ]; then ok "and the server counted that one 
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_contact_ride" \
 	--data-urlencode "ride_ref=$PUBLISHED_REF" \
+	--data-urlencode "fg_contact_member_no=" \
 	--data-urlencode "fg_contact_email=fremd@example.com" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 	--data-urlencode "fg_contact_nonce=$contact_nonce")
-if printf '%s' "$loc" | grep -q "fg_notice=contact_received"; then ok "a foreign address answered identically too"; else bad "a foreign address answered identically too" "$loc"; fi
+if printf '%s' "$loc" | grep -q "fg_notice=contact_received"; then ok "an address without a number answered identically too"; else bad "an address without a number answered identically too" "$loc"; fi
+
+# The form asks two values, and both have to belong to the same member. Three of
+# the four cases above would look the same if only the address were checked, so
+# the two halves are separated here: once with a right number and a wrong
+# address, once with a wrong number and a right address. Both must be refused
+# and counted, or the check above would be measuring the wrong thing.
+for falsches_paar in "eine richtige Nummer mit fremder Adresse|$FRAGE_NR|fremd@example.com" "eine fremde Nummer mit richtiger Adresse|9999|$FRAGE" "zwei richtige Angaben, die zu keinem einen Mitglied gehoeren|$FRAGE_NR|$NICHT_ANGEMELDET"; do
+	bezeichnung=${falsches_paar%%|*}
+	praefix=${falsches_paar#*|}
+	nummer=${praefix%%|*}
+	adresse=${praefix#*|}
+	vorher_u=$(ungueltig)
+	loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+		--data-urlencode "action=fg_contact_ride" \
+		--data-urlencode "ride_ref=$PUBLISHED_REF" \
+		--data-urlencode "fg_contact_member_no=$nummer" \
+		--data-urlencode "fg_contact_email=$adresse" \
+		--data-urlencode "fg_website=" \
+		--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
+		--data-urlencode "fg_contact_nonce=$contact_nonce")
+	if printf '%s' "$loc" | grep -q "fg_notice=contact_received"; then ok "$bezeichnung wird neutral beantwortet"; else bad "$bezeichnung wird neutral beantwortet" "$loc"; fi
+	if [ "$(ungueltig)" -gt "$vorher_u" ]; then ok "und der Server zählt sie als abgewiesen ($vorher_u -> $(ungueltig))"; else bad "und der Server zählt sie als abgewiesen" "$vorher_u -> $(ungueltig)"; fi
+done
 s drop-registration "$(jq event_id)" "$ERSTELLER_NR" > /dev/null 2>&1
 
 # --- 5a. after sending, the message is brought into view
@@ -253,6 +292,7 @@ if [ -n "$anchor" ]; then has "that place exists on the page" "$notice_page" "id
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_contact_ride" \
 	--data-urlencode "ride_ref=$PUBLISHED_REF" \
+	--data-urlencode "fg_contact_member_no=0044" \
 	--data-urlencode "fg_contact_email=cem@angeln.example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
@@ -260,6 +300,12 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 if printf '%s' "$loc" | grep -q "fg_notice=form_expired#"; then ok "an expired form jumps to the message as well"; else bad "an expired form jumps to the message as well" "$loc"; fi
 if [ -n "$anchor" ]; then has "the message for the error case carries the same place" "$(curl -sk "$BASE/?page_id=$PAGE_ID&fg_notice=form_expired")" "id=\"$anchor\""; fi
 # a jump that ends under a header which stays in place is no jump
+# The answer to a contact request talks about two values, because the form asks
+# two. An answer that named only the address would send the reader looking for a
+# mistake in the wrong field, and the old wording is what a form asking one
+# value would have said.
+has "the answer names the member number too" "$notice_page" "Mitgliedsnummer und E-Mail-Adresse zu einem Mitglied des Vereins passen"
+hasnt "and the old wording is gone" "$notice_page" "sofern die angegebene Adresse zu einem Mitglied geh"
 struct "$notice_page" "the place to jump to leaves room above itself" "
 import re, sys
 h = sys.stdin.read()
@@ -301,6 +347,9 @@ hasnt "no toggle offers to close the form again" "$body" "Schließen"
 has "the control that opened the form is the only one" "$body" '<summary class="fg-button fg-contact-toggle">Kontaktieren</summary>'
 has "and the line that stands in for it is plain text" "$body" '<span class="fg-contact-latch">Kontaktieren</span>'
 has "the form is sent with a button of its own" "$body" '<button class="fg-button" type="submit">Absenden</button>'
+has "the contact form asks for the member number too" "$body" 'name="fg_contact_member_no"'
+has "and says the two values have to fit one member" "$body" "Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat"
+has "and says that neither of the two is published" "$body" "Deine Mitgliedsnummer und deine E-Mail-Adresse stehen nirgends öffentlich"
 hasnt "the old wording is gone" "$body" "Kontakt aufnehmen"
 # The control and the line of text are both in the document at all times, and
 # this is the only thing that keeps the one away that does not belong to the
@@ -367,17 +416,17 @@ for name in ('fg-contact', 'fg-signup'):
         sys.exit(1)
 sys.exit(0)
 " "one of the two forms keeps a clickable control while it is open, or leaves its line of text standing beside it"
-	struct "$style" "the label of the contact field is kept on one line" "
+	struct "$style" "the label of a member field is kept on one line" "
 import re, sys
 css = re.sub(r'/\*.*?\*/', '', sys.stdin.read(), flags=re.S)
 rules = re.findall(r'([^{}]+)\{([^}]*)\}', css)
 ok = False
 for sel, body in rules:
     s = sel.strip()
-    if 'fg-contact-row' in s and s.endswith('label') and 'white-space: nowrap' in body:
+    if 'fg-member-row' in s and s.endswith('label') and 'white-space: nowrap' in body:
         ok = True
 sys.exit(0 if ok else 1)
-" "nothing keeps the label of the contact field from wrapping"
+" "nothing keeps the label of a member field from wrapping"
 	struct "$style" "a jump leaves room above itself" "
 import re, sys
 css = re.sub(r'/\*.*?\*/', '', sys.stdin.read(), flags=re.S)
@@ -485,14 +534,20 @@ def complete(t):
     return len(parts) == 3 and all(parts)
 sys.exit(0 if titles and all(complete(t) for t in titles) else 1)
 " "a heading is missing mode, origin or name"
-struct "$body" "field and button share one row" "
+struct "$body" "both fields and the button share one row" "
 import re, sys
 h = sys.stdin.read()
-idx = [m.start() for m in re.finditer(r'<div class=\"fg-contact-row\">', h)]
+idx = [m.start() for m in re.finditer(r'<div class=\"fg-member-row\">', h)]
 rows = [h[i:h.find('</form>', i)] for i in idx]
-ok = rows and all('type=\"email\"' in r and '<button' in r and 'type=\"submit\"' in r for r in rows)
+ok = rows and all(
+    'name=\"fg_contact_member_no\"' in r
+    and 'type=\"email\"' in r
+    and '<button' in r
+    and 'type=\"submit\"' in r
+    for r in rows
+)
 sys.exit(0 if ok else 1)
-" "a row is missing the field or the button"
+" "a row is missing one of the two fields or the button"
 # The note is the same for every entry and is therefore stated once. The count
 # only says something with more than one entry, so both belong in one check: a
 # separate one would pass on a page that happens to have a single entry.
@@ -560,6 +615,52 @@ has "the area field carries its examples" "$body" "Abfahrtsort, Stadtteil, z. B.
 hasnt "no address field of the form invites more than the column holds" "$body" 'maxlength="254"'
 has "the address of the form stops at the width of the column" "$body" 'name="fg_member_email" maxlength="190"'
 has "the member number of the form stops at the width of the column" "$body" 'name="fg_member_no" maxlength="40"'
+# The button has to name what the press does. Until version 1.15.0 it said
+# "Eintragung vormerken" and told the visitor their entry was not in the list
+# yet; since then it is in the list the moment the page comes back, and a button
+# that promises a step in front of it is a wrong word on the only control of the
+# form.
+has "the button names what the press does" "$body" '<button class="fg-button" type="submit">Fahrgemeinschaft eintragen</button>'
+hasnt "and no button promises a step in front of the entry" "$body" "vormerken"
+# The layout: the pickup area takes a line of its own, and the two values that
+# name a member share one. Both are read out of the class of the cell, because
+# that is the only place the grid decides where a box stands.
+struct "$body" "the area has a line of its own and the pair shares one" "
+import re, sys
+h = sys.stdin.read()
+start = h.find('<div class=\"fg-form-grid\">')
+g = h[start:h.find('</form>', start)] if start >= 0 else ''
+def zelle(pfad):
+    m = re.search(r'<div class=\"(fg-field[^\"]*)\">\s*' + pfad, g)
+    return m.group(1) if m else None
+area   = zelle(r'<label for=\"fg-origin\">') == 'fg-field fg-field-full'
+nummer = zelle(r'<label for=\"fg-ride-member-no\">') == 'fg-field'
+paar   = bool(re.search(r'name=\"fg_member_no\"[^>]*>\s*</div>\s*<div class=\"fg-field\">\s*<label[^>]*>[^<]*</label>\s*<input[^>]*name=\"fg_member_email\"', g))
+sys.exit(0 if area and nummer and paar else 1)
+" "the area does not span the row, or the two member fields do not share one"
+# The same question in the two forms of this page has to carry the same two
+# words, or a visitor who has typed the pair into one form reads a different
+# question in the other. The words are compared instead of each being looked
+# for on its own, so a new wording in one form alone turns the check red.
+struct "$body" "both forms of the page ask for the pair in the same words" "
+import re, sys
+h = sys.stdin.read()
+def beschriftungen(pfad):
+    return [re.sub(r'\s+', ' ', w).strip() for w in re.findall(r'<label for=\"fg-' + pfad + r'[^\"]*\">([^<]*)</label>', h)]
+# A list can carry several entries, and every one of them has the same two
+# words, so the words are read once each. Without that, a page with two entries
+# would hold four labels against two and the check would be red for the number
+# of entries rather than for the wording.
+def einmalig(woerter):
+    raus = []
+    for w in woerter:
+        if w not in raus:
+            raus.append(w)
+    return raus
+angebot = einmalig(beschriftungen('ride-member-no') + beschriftungen('ride-member-email'))
+kontakt = einmalig(beschriftungen('contact-no') + beschriftungen('contact-email'))
+sys.exit(0 if angebot and angebot == kontakt else 1)
+" "the two forms do not ask for the same pair in the same words"
 
 event_ref=$(printf '%s' "$body" | grep -o '<option value="[0-9a-f]\{32\}"' | head -1 | sed 's/.*value="//;s/"//')
 offer_nonce=$(printf '%s' "$body" | grep -o 'name="fg_submit_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
@@ -672,6 +773,20 @@ if printf '%s' "$loc" | grep -q "fg_notice=not_created"; then
 	ok "a number and an address of two different members are refused"
 else
 	bad "a number and an address of two different members are refused" "$loc"
+fi
+# The two refusals above are read by a member who wants to know what to type next.
+# The form asks two values, so the message names two: the wording that told the
+# visitor to use the address on file is gone, because it would send a reader with
+# a correct number and a stale address looking for the mistake in the wrong
+# field. The sentence is also the one of the signup form; section 9 puts the two
+# next to each other, because a page may show one of them at a time.
+refusal=$(curl -sk "$BASE/?page_id=$PAGE_ID&fg_notice=not_created")
+refusal_text=$(printf '%s' "$refusal" | hinweis_text)
+PAAR_SATZ="Mitgliedsnummer und E-Mail-Adresse müssen zu einem Mitglied des Vereins passen."
+if [ "$refusal_text" = "Die Eintragung konnte nicht angelegt werden. $PAAR_SATZ" ]; then
+	ok "the refusal of the offer form names the pair in one sentence ($refusal_text)"
+else
+	bad "the refusal of the offer form names the pair in one sentence" "$refusal_text"
 fi
 nach_den_refusals=$(curl -sk "$BASE/?page_id=$PAGE_ID")
 hasnt "the ride of the member who is not in the duty is nowhere on the page" "$nach_den_refusals" "Nichtangemeldet"
@@ -1108,10 +1223,39 @@ if [ -n "$SIGN_NONCE" ] && [ -n "$SIGN_REF" ]; then
 else
 	bad "the page hands out a nonce and a reference for the duty" "nonce: $SIGN_NONCE / reference: $SIGN_REF"
 fi
+# The third form of the plugin, and it stands on another page than the two
+# others, so the three are put side by side before they are compared. The claim
+# is about the three together: two forms on the offer page that match each other
+# and a third one that says something else of its own accord are two rules, not
+# one. The labels of a page are read once each, because a page with two entries
+# carries the same pair twice and the comparison would be red for the number of
+# entries rather than for the wording.
+struct "$(printf '%s\n<!-- TRENNER -->\n%s' "$body" "$list")" "the signup form asks for the pair in the words the offer form uses" "
+import re, sys
+teile = sys.stdin.read().split('<!-- TRENNER -->')
+if len(teile) != 2:
+    sys.exit(1)
+def worte(teil, praefixe):
+    gefunden = []
+    for praefix in praefixe:
+        gefunden += re.findall(r'<label for=\"fg-' + praefix + r'[^\"]*\">([^<]*)</label>', teil)
+    raus = []
+    for w in gefunden:
+        w = re.sub(r'\s+', ' ', w).strip()
+        if w not in raus:
+            raus.append(w)
+    return raus
+angebot  = worte(teile[0], ('ride-member-no', 'ride-member-email'))
+anmelde  = worte(teile[1], ('member-no', 'member-email'))
+sys.exit(0 if angebot and angebot == anmelde else 1)
+" "the three forms do not ask for the same pair in the same words"
 
 VORHER=$(s count-registrations "$DIENST")
 PLATZE_VORHER=$(s free-places "$DIENST")
-loc=$(curl -sk -o "$DIR/anmeldung.html" -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+# The body of a 303 carries nothing, so it goes to /dev/null. An earlier version
+# of this line wrote it to a file, and no check ever read that file: a leftover
+# that could only be mistaken for evidence.
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=$SIGN_NONCE" \
 	--data-urlencode "fg_event_ref=$SIGN_REF" \
@@ -1145,15 +1289,20 @@ has "the body names the duty" "$MAIL_BODY" "$DIENST_TITEL"
 has "the body carries the unregister link" "$MAIL_BODY" "fg_duty_action=view"
 has "and the link is for removing the registration" "$MAIL_BODY" "intent=unregister"
 has "the body says that the deletion has to be confirmed" "$MAIL_BODY" "auf der du das Löschen noch einmal bestätigen musst"
-# The name in a mail is a decision, not an accident: the address belongs to a
-# member, the member has a first name in the member list, and a club mail that
-# greets a member with a bare "Hallo" is one of the things a club complains
-# about. The full name does not go out — the first name says who is meant, and
-# the surname is a second piece of personal data that the sentence does not need.
-has "the body greets the member by the first name" "$MAIL_BODY" "Hallo Cem,"
-hasnt "the body does not carry the full name" "$MAIL_BODY" "Cem Cemu"
-hasnt "the body does not carry the surname" "$MAIL_BODY" "Cemu"
-hasnt "and no last name" "$MAIL_BODY" "Cemu"
+# The greeting names the member with both names, because every message of this
+# plugin goes to a member of the club and a club mail that greets a member with
+# a bare "Hallo" is one of the things a club complains about. The surname
+# belongs to the greeting and to nothing else: the rest of the mail is the same
+# text whoever it is addressed to, and a name that stands in a sentence twice is
+# one piece of personal data too often. Until version 1.15.0 the surname did not
+# go out at all; the greeting is the one place the club reads a name of a member
+# as a whole, and the rest of the text still carries the first name alone.
+has "the body greets the member with both names" "$MAIL_BODY" "Hallo Cem Cemu,"
+struct "$MAIL_BODY" "and the surname stands only in the greeting" "
+import sys
+b = sys.stdin.read()
+sys.exit(0 if b.count('Cemu') == 1 and b.lstrip().startswith('Hallo Cem Cemu,') else 1)
+" "the surname stands a second time in the mail, or the greeting is not its first line"
 hasnt "and no record number of the member" "$MAIL_BODY" "member_id"
 ABMELDE_URL=$(printf '%s' "$MAIL_BODY" | grep -o "$BASE/?fg_duty_action=view[^ ]*" | head -1)
 if [ -n "$ABMELDE_URL" ]; then ok "the link out of the mail is extracted"; else bad "the link out of the mail is extracted" "none in the body"; fi
@@ -1305,7 +1454,7 @@ s delete-event "$ZWEITER" >/dev/null
 # else would otherwise be a way to sign somebody else up.
 FREMDE_NR=$(jq member_taken_no)
 FREMDE_MAIL=$(jq member_taken_mail)
-loc=$(curl -sk -o "$DIR/falsches-paar.html" -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+loc=$(curl -skL -o "$DIR/falsches-paar.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=$SIGN_NONCE" \
 	--data-urlencode "fg_event_ref=$SIGN_REF" \
@@ -1314,6 +1463,8 @@ loc=$(curl -sk -o "$DIR/falsches-paar.html" -w '%{redirect_url}' -X POST "$BASE/
 	--data-urlencode "fg_website=" \
 	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
 	--data-urlencode "source_url=$BASE$LIST_PATH")
+# The address the visitor ends on, not the address of the redirect: the redirect
+# was followed above, and %redirect_url is empty once it has been.
 has "a number with the address of somebody else is refused" "$loc" "fg_notice=not_registered"
 if [ "$(s count-registrations "$DIENST")" = "$VORHER" ]; then
 	ok "and writes nothing"
@@ -1322,14 +1473,42 @@ else
 fi
 # The refusal is one sentence for both halves, and it does not say which of the
 # two was wrong. The page is public: a hint would tell a passer-by whether a
-# guessed number exists in the club at all.
-hinweis=$(python3 -c "
-import re,html
-h=open('$DIR/falsches-paar.html',encoding='utf-8').read()
-m=re.search(r'<div id=\"fg-hinweis\"[^>]*>(.*?)</div>', h, re.S)
-print(html.unescape(re.sub(r'<[^>]+>','',m.group(1))).strip() if m else '')")
-hasnt "the refusal does not name the number as wrong" "$hinweis" "Nummer"
-hasnt "and does not name the address as wrong" "$hinweis" "Adresse"
+# guessed number exists in the club at all, and the sentence is read here from
+# the page the visitor really lands on.
+#
+# -L is not a convenience here, it is what the check needs: a refused form ends
+# in a 303 whose body is empty, and the sentence lives on the page that the
+# redirect points at. Without the flag the file below holds nothing, every check
+# on it is green, and the sentence is never looked at.
+hinweis=$(hinweis_text < "$DIR/falsches-paar.html")
+if [ -n "$hinweis" ]; then
+	ok "the refusal is read from the page the redirect leads to"
+else
+	bad "the refusal is read from the page the redirect leads to" "the page carries no message"
+fi
+# It does not say which of the two was wrong. A sentence that names one of the
+# two without the other would do exactly that, so the two are looked at together:
+# every sentence of the message that mentions a field has to mention the other
+# one as well. The wording of the pair is compared further down.
+struct "$hinweis" "no sentence of the refusal names one of the two without the other" "
+import re, sys
+t = sys.stdin.read().strip()
+saetze = [s for s in re.split(r'(?<=[.])\s+', t) if s.strip()]
+# Lower case, because the number sits in a compound word: 'Mitgliedsnummer' has
+# a small n in it, and a check for 'Nummer' would not find the field at all.
+sys.exit(0 if saetze and all(('nummer' in s.lower()) == ('adresse' in s.lower()) for s in saetze) else 1)
+" "a sentence names one of the two fields on its own, so it points at the wrong one"
+# The same rule, the same sentence. All three forms of this plugin ask for the
+# same pair, so a member who is refused by one of them has to read the same
+# sentence in the other: two messages about one rule that differ in wording read
+# as two rules. The two notices differ in their first half on purpose — one form
+# registers a member, the other publishes an entry — so the sentence behind it is
+# what is compared, and it is compared as the visitor reads it.
+if [ "$hinweis" = "Die Anmeldung ist nicht möglich. $PAAR_SATZ" ]; then
+	ok "the signup form refuses in the words the offer form uses"
+else
+	bad "the signup form refuses in the words the offer form uses" "$hinweis"
+fi
 
 # A registration whose mail does not arrive is a place that is taken and cannot
 # be given back: the link that would free it was in that mail. So the row has to

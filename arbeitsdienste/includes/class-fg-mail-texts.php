@@ -78,11 +78,13 @@ final class FG_Mail_Texts {
 	 * the right answer for a name: a greeting that names nobody has to read as a
 	 * sentence. That is also why {{Anrede}} is a placeholder of its own instead of a
 	 * name with a "Hallo" written in front of it — the greeting is the one place
-	 * where an empty name would leave a broken word behind. Since schema 1.4.0 no
-	 * message about a ride reaches an address of nobody, so the fallback only still
-	 * decides the wording and not a real case. It stays, because a member row that
-	 * predates the validation of a first name is a row the code does not get to
-	 * throw away.
+	 * where an empty name would leave a broken word behind.
+	 *
+	 * Since version 1.16.0 it names the member with both names, because every
+	 * message of this plugin goes to a member and a member row cannot be written
+	 * without a first name and a last name. Nothing here has a fallback any more:
+	 * {{Anrede}} is "Hallo " plus the two names, and the person reading it is
+	 * someone the club already knows by both of them.
 	 *
 	 * @return array<string, array<string, mixed>>
 	 */
@@ -94,7 +96,7 @@ final class FG_Mail_Texts {
 				'subject'      => 'Deine Fahrgemeinschaft ist eingetragen – {{Arbeitsdienst}}',
 				'body'         => "{{Anrede}},\n\ndeine Fahrgemeinschaft steht in der Liste. Sie ist sofort öffentlich, es ist nichts mehr zu bestätigen.\n\nDiese Angaben stehen öffentlich:\n\nArt: {{Art}}\nVorname: {{Vorname}}\nArbeitsdienst: {{Arbeitsdienstdetails}}\nAbfahrtsbereich: {{Abfahrtsbereich}}\n\nDein Vorname steht dabei öffentlich. Er stammt aus der Mitgliederverwaltung des Vereins, nicht aus deiner Eingabe. Der Abfahrtsbereich ist das Einzige, was du selbst einträgst.\n\nDu kannst deine Eintragung löschen, wenn du diesen Link aufrufst:\n{{Loeschlink}}\n\nAchtung: Beim endgültigen Löschen erfolgt keine weitere Rückfrage.\n\nWenn sich jemand zu deiner Eintragung meldet, erhältst du eine E-Mail.\nJetzt könnt ihr euch direkt austauschen, zum Beispiel auch über Telefonnummern.\n\nIst der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.\n\nBitte leite diese E-Mail mit dem enthaltenen Link nicht weiter.\n\nBei Fragen nutze das Kontaktformular auf der Webseite.",
 				'placeholders' => array(
-					'{{Anrede}}'           => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Die Mail geht an dasselbe Mitglied, das die Fahrgemeinschaft angeboten hat, und ein Mitglied hat immer einen Vornamen.', 'arbeitsdienste' ),
+					'{{Anrede}}'           => __( 'Anrede mit Vor- und Nachnamen, zum Beispiel „Hallo Anton Berger“. Die Mail geht an dasselbe Mitglied, das die Fahrgemeinschaft angeboten hat, und ein Mitglied hat immer beide Namen.', 'arbeitsdienste' ),
 					'{{Vorname}}'          => __( 'Vorname des Mitglieds, aus der Mitgliederverwaltung. Dieser Name steht öffentlich in der Liste, und niemand kann einen anderen eintragen.', 'arbeitsdienste' ),
 					'{{Name}}'             => __( 'Nachname des Mitglieds, aus der Mitgliederverwaltung. Ein Mitglied hat immer einen, der Platzhalter bleibt also nie leer.', 'arbeitsdienste' ),
 					'{{Art}}'              => __( 'Ob gesucht oder geboten wird, als „Ich suche“ oder „Ich biete“.', 'arbeitsdienste' ),
@@ -107,7 +109,7 @@ final class FG_Mail_Texts {
 					'{{Loeschlink}}' => __( 'Fahrgemeinschaft löschen', 'arbeitsdienste' ),
 				),
 				'sample'       => array(
-					'Anrede'              => 'Hallo Anton',
+					'Anrede'              => 'Hallo Anton Berger',
 					'Vorname'             => 'Anton',
 					'Name'                => 'Berger',
 					'Art'                 => 'Ich biete',
@@ -123,7 +125,7 @@ final class FG_Mail_Texts {
 				'subject'      => 'Interesse an deiner Fahrgemeinschaft – {{Arbeitsdienst}}',
 				'body'         => "{{Anrede}},\n\ndu hast einen Interessenten für deine Eintragung.\n\nE-Mail-Adresse: {{Interessent}}\n\nSchreib der Person direkt eine E-Mail, damit ihr euch abstimmen könnt.\nWenn du möchtest, kannst du deine Telefonnummer direkt in deiner Antwort nennen.\n\nBitte melde dich auch bei dem Interessenten, wenn es nicht klappt. Die Person wartet auf eine Antwort.",
 				'placeholders' => array(
-					'{{Anrede}}'        => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Diese Mail geht nur an das Mitglied, das die Eintragung angeboten hat, hier steht also immer ein Name.', 'arbeitsdienste' ),
+					'{{Anrede}}'        => __( 'Anrede mit Vor- und Nachnamen, zum Beispiel „Hallo Anton Berger“. Diese Mail geht an das Mitglied, das die Eintragung angeboten hat, und ein Mitglied hat immer beide Namen.', 'arbeitsdienste' ),
 					'{{Vorname}}'       => __( 'Vorname des Mitglieds, aus der Mitgliederverwaltung.', 'arbeitsdienste' ),
 					'{{Name}}'          => __( 'Nachname des Mitglieds, aus der Mitgliederverwaltung.', 'arbeitsdienste' ),
 					'{{Arbeitsdienst}}' => __( 'Titel des Arbeitsdienstes, an den die Fahrgemeinschaft gehört.', 'arbeitsdienste' ),
@@ -133,7 +135,7 @@ final class FG_Mail_Texts {
 				// the address of the member who offered the ride stands in the reply field.
 				'links'        => array(),
 				'sample'       => array(
-					'Anrede'        => 'Hallo Anton',
+					'Anrede'        => 'Hallo Anton Berger',
 					'Vorname'       => 'Anton',
 					'Name'          => 'Berger',
 					'Arbeitsdienst' => 'Flussaktion',
@@ -146,14 +148,14 @@ final class FG_Mail_Texts {
 				'subject'      => 'Deine Kontaktanfrage wurde angenommen',
 				'body'         => "{{Anrede}},\n\nWir haben das Mitglied benachrichtigt, das die Fahrgemeinschaft angeboten hat.\nHoffentlich meldet sich bald jemand bei dir.\n\nBitte prüfe auch deinen Spam-Ordner.",
 				'placeholders' => array(
-					'{{Anrede}}'        => __( 'Anrede mit Namen, zum Beispiel „Hallo Marie“. Das Kontaktformular fragt nur nach der Adresse, aber die muss zu einem Mitglied des Vereins gehören — hier steht also immer ein Name.', 'arbeitsdienste' ),
-					'{{Vorname}}'       => __( 'Vorname der anfragenden Person, aus der Mitgliederverwaltung. Wie die Anrede: die Adresse muss zu einem Mitglied gehören, also steht hier immer einer.', 'arbeitsdienste' ),
+					'{{Anrede}}'        => __( 'Anrede mit Vor- und Nachnamen, zum Beispiel „Hallo Marie Kurz“. Das Kontaktformular fragt nach Mitgliedsnummer und Adresse, und beides muss zu einem Mitglied des Vereins passen — hier steht also immer ein Name.', 'arbeitsdienste' ),
+					'{{Vorname}}'       => __( 'Vorname der anfragenden Person, aus der Mitgliederverwaltung. Wie die Anrede: Nummer und Adresse müssen zu einem Mitglied gehören, also steht hier immer einer.', 'arbeitsdienste' ),
 					'{{Name}}'          => __( 'Nachname der anfragenden Person, aus der Mitgliederverwaltung.', 'arbeitsdienste' ),
 					'{{Arbeitsdienst}}' => __( 'Titel des Arbeitsdienstes, an den die Fahrgemeinschaft gehört.', 'arbeitsdienste' ),
 				),
 				'links'        => array(),
 				'sample'       => array(
-					'Anrede'        => 'Hallo Marie',
+					'Anrede'        => 'Hallo Marie Kurz',
 					'Vorname'       => 'Marie',
 					'Name'          => 'Kurz',
 					'Arbeitsdienst' => 'Flussaktion',
@@ -165,9 +167,9 @@ final class FG_Mail_Texts {
 				'subject'      => 'Angemeldet: {{Arbeitsdienst}}',
 				'body'         => "{{Anrede}},\n\ndu bist für folgenden Arbeitsdienst angemeldet:\n\nArbeitsdienst: {{Arbeitsdienst}}\nDatum: {{Datum}}\nBeginn: {{Uhrzeit}}\n\nBitte prüfe, ob der Termin passt. Wenn nicht, meldest du dich mit diesem Link wieder ab:\n{{Abmeldelink}}\n\nDer Link führt zu einer Seite, auf der du das Löschen noch einmal bestätigen musst.\n\nWenn du dich für weitere Arbeitsdienste eintragen möchtest, findest du die Termine auf der Webseite.",
 				'placeholders' => array(
-					'{{Anrede}}'           => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Diese Mail geht nur an Mitglieder, hier steht also fast immer ein Name.', 'arbeitsdienste' ),
-					'{{Vorname}}'          => __( 'Vorname des Mitglieds, um das es geht. Diese E-Mail geht nur an Mitglieder, hier steht also immer einer.', 'arbeitsdienste' ),
-					'{{Name}}'             => __( 'Nachname des Mitglieds, um das es geht. Diese E-Mail geht nur an Mitglieder, hier steht also immer einer.', 'arbeitsdienste' ),
+					'{{Anrede}}'           => __( 'Anrede mit Vor- und Nachnamen, zum Beispiel „Hallo Anton Berger“. Diese Mail geht an das Mitglied, das sich eingetragen hat, also steht hier immer ein Name.', 'arbeitsdienste' ),
+					'{{Vorname}}'          => __( 'Vorname des Mitglieds, um das es geht. Diese E-Mail geht an das Mitglied, das sich eingetragen hat, hier steht also immer einer.', 'arbeitsdienste' ),
+					'{{Name}}'             => __( 'Nachname des Mitglieds, um das es geht. Diese E-Mail geht an das Mitglied, das sich eingetragen hat, hier steht also immer einer.', 'arbeitsdienste' ),
 					'{{Arbeitsdienst}}'    => __( 'Titel des Arbeitsdienstes.', 'arbeitsdienste' ),
 					'{{Arbeitsdienstdetails}}' => __( 'Titel, Datum und Beginn in einer Zeile, zum Beispiel „Flussaktion, Samstag, den 12.06.2027, 08:00“.', 'arbeitsdienste' ),
 					'{{Datum}}'            => __( 'Das Datum des Arbeitsdienstes, ausgeschrieben, zum Beispiel „Samstag, den 12.06.2027“.', 'arbeitsdienste' ),
@@ -178,7 +180,7 @@ final class FG_Mail_Texts {
 					'{{Abmeldelink}}' => __( 'Teilnahme am Arbeitsdienst abmelden', 'arbeitsdienste' ),
 				),
 				'sample'       => array(
-					'Anrede'               => 'Hallo Anton',
+					'Anrede'               => 'Hallo Anton Berger',
 					'Vorname'              => 'Anton',
 					'Name'                 => 'Berger',
 					'Arbeitsdienst'        => 'Flussaktion',
