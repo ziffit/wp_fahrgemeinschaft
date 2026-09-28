@@ -143,8 +143,6 @@ final class FG_Public {
 							<div class="fg-field">
 								<label for="fg-ride-member-email"><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></label>
 								<input type="email" id="fg-ride-member-email" name="fg_member_email" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_EMAIL_MAX ); ?>" autocomplete="email" required>
-								<?php // The same pair and the same rule as the work service form, because it is the same question. The first name in the public list comes from the member administration. A visitor who does not want to appear under their own name cannot choose a different one here; the trade is that a list of hand-written names can no longer carry an address, a telephone number or a full name, and a member who changes their first name does not leave the old one behind. ?>
-								<span class="fg-hint"><?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat. Dein Vorname steht in der Liste öffentlich; E-Mail-Adresse und Mitgliedsnummer nicht.', 'arbeitsdienste' ); ?></span>
 							</div>
 
 							<div class="fg-field fg-field-full">
@@ -160,6 +158,9 @@ final class FG_Public {
 								</label>
 							</div>
 						</div>
+
+						<?php // The note about the pair stands on its own line, over the full width of the form and above the button. In the two other forms of the plugin it is a paragraph under the pair, and the same question gets the same place: a note that hangs in a half-width cell under one of the two fields reads as if it belonged to that field alone, and the two fields are one question. The sentence names what becomes public, because the consent below names the same things in the same words. ?>
+						<p class="fg-hint fg-hint-row"><?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat. Dein Vorname steht in der Liste öffentlich; E-Mail-Adresse und Mitgliedsnummer nicht. Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst.', 'arbeitsdienste' ); ?></p>
 
 						<div class="fg-actions">
 						<?php // The button says what the press does. Until version 1.16.0 it said "Eintragung vormerken" and promised a step in front of the entry that the code no longer takes; a visitor who read that was told their entry was not yet in the list, and since 1.15.0 it is in the list the moment the page comes back. ?>
@@ -295,10 +296,12 @@ final class FG_Public {
 							<label for="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></label>
 							<input type="email" id="fg-contact-email-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_contact_email" maxlength="<?php echo esc_attr( FG_Schema::CONTACT_EMAIL_MAX ); ?>" autocomplete="email" required>
 						</div>
+					</div>
+					<?php // The note stands between the two fields and the button, and so it does in the two other forms. Until version 1.17.0 it stood below the button, and a sentence that explains a question is read after the button that answers it, not before. The button therefore leaves the row of the two fields and gets its own line like the buttons of the other two forms; what it loses is a size, and what it gains is the same place in the same order. The note itself says that neither of the two values is published, and that the mail to the member who offered the ride is the only thing that comes out of them. ?>
+					<p class="fg-hint fg-hint-row"><?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat. Deine Mitgliedsnummer und deine E-Mail-Adresse stehen nirgends öffentlich. Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst.', 'arbeitsdienste' ); ?></p>
+					<div class="fg-actions">
 						<button class="fg-button" type="submit"><?php esc_html_e( 'Absenden', 'arbeitsdienste' ); ?></button>
 					</div>
-					<?php // The two values are not published anywhere. They are the way to find the person, and the reply mail is the only thing that comes out of them. ?>
-					<p class="fg-hint fg-list-hint"><?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat. Deine Mitgliedsnummer und deine E-Mail-Adresse stehen nirgends öffentlich.', 'arbeitsdienste' ); ?></p>
 				</form>
 			</details>
 		</article>

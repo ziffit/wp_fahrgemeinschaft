@@ -350,6 +350,8 @@ has "the form is sent with a button of its own" "$body" '<button class="fg-butto
 has "the contact form asks for the member number too" "$body" 'name="fg_contact_member_no"'
 has "and says the two values have to fit one member" "$body" "Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat"
 has "and says that neither of the two is published" "$body" "Deine Mitgliedsnummer und deine E-Mail-Adresse stehen nirgends öffentlich"
+has "and says that a mail follows, and where to look for it" "$body" "Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst"
+hasnt "the note does not promise the club enters a name any more" "$body" "Vorname und Nachname tragen wir für dich ein"
 hasnt "the old wording is gone" "$body" "Kontakt aufnehmen"
 # The control and the line of text are both in the document at all times, and
 # this is the only thing that keeps the one away that does not belong to the
@@ -534,20 +536,44 @@ def complete(t):
     return len(parts) == 3 and all(parts)
 sys.exit(0 if titles and all(complete(t) for t in titles) else 1)
 " "a heading is missing mode, origin or name"
-struct "$body" "both fields and the button share one row" "
+# The two fields share one row, and the note and the button stand below it.
+# The button used to be the third thing in that row; a note under a button says
+# what the button does after the visitor has read what the button asks for, and
+# a row that holds the two halves of one question should hold nothing else. The
+# order is read out of the document and compared, because a check that only
+# looked for the three parts would stay green when the button moved back up
+# into the row.
+struct "$body" "in every contact form the note stands between the fields and the button" "
 import re, sys
 h = sys.stdin.read()
-idx = [m.start() for m in re.finditer(r'<div class=\"fg-member-row\">', h)]
-rows = [h[i:h.find('</form>', i)] for i in idx]
-ok = rows and all(
-    'name=\"fg_contact_member_no\"' in r
-    and 'type=\"email\"' in r
-    and '<button' in r
-    and 'type=\"submit\"' in r
-    for r in rows
-)
+forms = re.findall(r'<form class=\"fg-contact-form\".*?</form>', h, re.S)
+def stelle(form, muster):
+    m = re.search(muster, form)
+    return m.start() if m else -1
+def vollstaendig(form):
+    n, h2, k = stelle(form, r'name=\"fg_contact_member_no\"'), stelle(form, r'<p class=\"fg-hint fg-hint-row\">'), stelle(form, r'<button class=\"fg-button\" type=\"submit\">')
+    zeile = stelle(form, r'<div class=\"fg-member-row\">')
+    ende = stelle(form, r'</div>\s*<p class=\"fg-hint')
+    return -1 not in (n, h2, k, zeile) and zeile < n < h2 < k and ende > 0
+sys.exit(0 if forms and all(vollstaendig(f) for f in forms) else 1)
+" "a contact form has the note after the button, the button in the row of the fields, or the note without its own line"
+# The note of the offer form stands on a line of its own, over the full width of
+# the form, and not in the cell of the address field where it used to be: a note
+# that hangs under one of the two fields reads as if it belonged to that field
+# alone, and the two fields are one question. It is read out of the document and
+# compared, and it is also compared with the two forms on the other page below.
+struct "$body" "the note of the offer form is a line of its own, between the grid and the button" "
+import re, sys
+h = sys.stdin.read()
+m = re.search(r'name=\"action\" value=\"fg_submit_ride\"', h)
+form = h[h.rfind('<form', 0, m.start()):h.find('</form>', m.start())] if m else ''
+gitter = form.find('</div>')
+hinweis = re.search(r'<p class=\"fg-hint fg-hint-row\">.*?</p>', form, re.S)
+knopf = form.find('<button class=\"fg-button\" type=\"submit\">')
+zelle = re.search(r'<div class=\"fg-field\">\s*<label for=\"fg-ride-member-email\">.*?</div>', form, re.S)
+ok = bool(hinweis) and -1 not in (gitter, knopf) and gitter < hinweis.start() < knopf and not (zelle and 'fg-hint' in zelle.group(0))
 sys.exit(0 if ok else 1)
-" "a row is missing one of the two fields or the button"
+" "the note of the offer form is not a paragraph between the grid and the button, or it still hangs in the cell of the address field"
 # The note is the same for every entry and is therefore stated once. The count
 # only says something with more than one entry, so both belong in one check: a
 # separate one would pass on a page that happens to have a single entry.
@@ -616,6 +642,7 @@ hasnt "the form no longer asks for a name" "$body" 'name="fg_alias"'
 hasnt "the wording about a nickname is gone" "$body" "Vorname oder Spitzname"
 has "the hint names the source of the public name" "$body" "Dein Vorname steht in der Liste öffentlich"
 has "the hint says both values must fit one member" "$body" "Beide Angaben müssen zu einem Mitglied des Vereins passen"
+has "and says that a mail follows, and where to look for it" "$body" "Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst"
 has "the consent names the member list as the source of the name" "$body" "Dazu gehören mein Vorname aus der Mitgliederverwaltung"
 has "the consent keeps the address out of the public" "$body" "Meine E-Mail-Adresse und meine Mitgliedsnummer werden dabei nicht öffentlich angezeigt"
 hasnt "the ambiguous wording in the consent is gone" "$body" "persönlichen Kontaktdaten"
@@ -1257,6 +1284,61 @@ angebot  = worte(teile[0], ('ride-member-no', 'ride-member-email'))
 anmelde  = worte(teile[1], ('member-no', 'member-email'))
 sys.exit(0 if angebot and angebot == anmelde else 1)
 " "the three forms do not ask for the same pair in the same words"
+# The third form stands on this page, and it is the form whose note the club
+# has rewritten. Its two fields share one row, the note stands between that row
+# and the button, and the note says what the club asked for and nothing more.
+# The text is compared as a whole and not looked for in pieces: the sentence
+# about the club entering a name is gone, and a check that looked for the two
+# sentences that are there would not notice an extra one.
+struct "$list" "in the signup form the note stands between the fields and the button" "
+import re, sys
+h = sys.stdin.read()
+form = re.search(r'<form class=\"fg-signup-form\".*?</form>', h, re.S)
+form = form.group(0) if form else ''
+def stelle(muster):
+    m = re.search(muster, form)
+    return m.start() if m else -1
+zeile = stelle(r'<div class=\"fg-member-row\">')
+nummer = stelle(r'name=\"fg_member_no\"')
+adresse = stelle(r'name=\"fg_member_email\"')
+hinweis = re.search(r'<p class=\"fg-hint fg-hint-row\">.*?</p>', form, re.S)
+knopf = stelle(r'<button class=\"fg-button\" type=\"submit\">')
+text = re.sub(r'\\s+', ' ', re.sub(r'<[^>]+>', ' ', hinweis.group(0))).strip() if hinweis else ''
+erwartet = 'Beide Angaben müssen zu einem Mitglied des Vereins passen. Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst.'
+sys.exit(0 if hinweis and -1 not in (zeile, nummer, adresse, knopf) and zeile < nummer < adresse < hinweis.start() < knopf and text == erwartet else 1)
+" "the note of the signup form is not the one sentence between the fields and the button"
+# One sentence about the mailbox in all three forms, and one class for the
+# place the note has in the form. The three forms are on two pages, so both
+# pages go into one input with a marker between them and the three notes are
+# put side by side before they are compared: two forms that match each other
+# and a third with a wording of its own are two rules with an exception. All
+# three texts are compared as a whole, each one exactly, which also catches a
+# fourth wording that nobody asked for.
+struct "$(printf '%s\n<!-- TRENNER -->\n%s' "$body" "$list")" "all three notes stand in the same place and say the same thing about the mailbox" "
+import re, sys
+teile = sys.stdin.read().split('<!-- TRENNER -->')
+if len(teile) != 2:
+    sys.exit(1)
+notizen = re.findall(r'<p class=\"([^\"]*)\">(.*?)</p>', teile[0] + teile[1], re.S)
+# Not every note on the two pages is one of the three: a form carries a second
+# one with the link to the privacy statement, and the list carries a note of its
+# own. The three are told apart by their text, and only those are then asked to
+# carry the class.
+texten = []
+for klasse, inhalt in notizen:
+    text = re.sub(r'\\s+', ' ', re.sub(r'<[^>]+>', ' ', inhalt)).strip()
+    if not text.startswith('Beide Angaben müssen'):
+        continue
+    if klasse.strip() != 'fg-hint fg-hint-row':
+        sys.exit(1)
+    texten.append(text)
+erwartet = {
+    'Beide Angaben müssen zu einem Mitglied des Vereins passen. Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst.',
+    'Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat. Dein Vorname steht in der Liste öffentlich; E-Mail-Adresse und Mitgliedsnummer nicht. Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst.',
+    'Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat. Deine Mitgliedsnummer und deine E-Mail-Adresse stehen nirgends öffentlich. Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst.',
+}
+sys.exit(0 if len(set(texten)) == 3 and set(texten) == erwartet else 1)
+" "a note is not in the class of the other two, or one of the three texts is not the one of its form"
 
 VORHER=$(s count-registrations "$DIENST")
 PLATZE_VORHER=$(s free-places "$DIENST")

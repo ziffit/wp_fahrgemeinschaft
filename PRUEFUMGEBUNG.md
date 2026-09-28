@@ -4,10 +4,21 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **CLI 533, Admin-Ebene 561, öffentliches HTTP 217,
-Mail-Ebene 116, 0 Fehler**, gegen den Stand **Plugin 1.16.0, Schema 1.5.0**. Die
-Mail-Ebene 116 ist die Summe aus 57 Prüfungen im Shell-Satz `mail.sh` und 59 im
-MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und gibt 116 aus.
+Letzter Lauf: 28.09.2026 — **öffentliches HTTP 223, Mail-Ebene 116, Admin-Ebene 561,
+0 Fehler**, gegen den Stand **Plugin 1.17.0, Schema 1.5.0**, dazu **vier Gegenproben, alle
+mit dem gestellten Fehlerbild rot**. Die Mail-Ebene 116 ist die Summe aus 57 Prüfungen im
+Shell-Satz `mail.sh` und 59 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
+gibt 116 aus.
+
+**Die CLI-Suite ist bei diesem Lauf nicht gefahren worden.** Sie stand zuletzt mit **CLI 533**
+gegen den Stand **Plugin 1.16.0** (Commit `9883f85`) und ist damit die einzige der vier
+Zahlen, die nicht zu diesem Stand gehört; sie zu wiederholen wäre ein Lauf, der am Anfang
+alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht, und dafür lag an diesem
+Nachmittag keine Zustimmung vor. Wer nachrechnen will, findet die Zahl also nicht zu 1.17.0,
+sondern zu 1.16.0 — und diese Lücke ist eine bewusste und keine vergessene. Die drei
+HTTP-Suiten brauchen diese Zustimmung nicht, weil sie ihre Fixture selbst aufbauen und
+sonst nichts löschen; `http.sh` und `mail.sh` leeren dabei nur die Daten, die ihre eigene
+Fixture eben angelegt hat.
 
 Die Zahlen vom Vortag desselben Tages waren **CLI 527, Admin-Ebene 555, HTTP 201,
 Mail-Ebene 113** gegen **Plugin 1.15.0**. Dazwischen liegt die Fassung 1.16.0 (Anrede
@@ -392,13 +403,30 @@ läuft aus `/tmp/opencode/fg/`:
 | `gegenprobe.sh` | Sichert die Datei, baut die Bruchstelle ein, kopiert das Plugin in den Container, lässt die Suite laufen, stellt die Datei wieder her. Er nimmt `admin`, `http` und `mail`; `smoke.php` steht nicht darin, weil die Suite am Anfang Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht und das nicht in ein Werkzeug gehört, das eine Datei vorsätzlich kaputt macht |
 | `alle-gegenproben.sh` | Fährt die Liste der Reihe nach ab und schreibt ein Protokoll |
 
-Zwei Vorkehrungen, ohne die das Werkzeug sich selbst widerlegt: Es verlangt, dass die
+Drei Vorkehrungen, ohne die das Werkzeug sich selbst widerlegt: Es verlangt, dass die
 alte Stelle **genau einmal** in der Datei vorkommt, und bricht sonst ab, und es
-protokolliert die eingesetzte Zeile mit (`--- Gebrochen: …`). Ohne beides hat die erste
-Fassung dieser Reihe gemessen, was sie messen sollte, ohne es zu messen: Sie teilte die
-Zeilen mit `cut -d'~'`, obwohl der Trenner `~~~` ist, bekam also einen leeren Dateinamen,
-setzte nichts ein — und meldete ein Suite-Ergebnis. Das Ergebnis war echt, die
+protokolliert die eingesetzte Zeile mit (`--- Gebrochen: …`). Ohne die ersten beiden hat
+die erste Fassung dieser Reihe gemessen, was sie messen sollte, ohne es zu messen: Sie
+teilte die Zeilen mit `cut -d'~'`, obwohl der Trenner `~~~` ist, bekam also einen leeren
+Dateinamen, setzte nichts ein — und meldete ein Suite-Ergebnis. Das Ergebnis war echt, die
 Gegenprobe dazu war es nicht.
+
+Die dritte kam bei der Reihe zu Fassung 1.17.0 hinzu, und sie ist derselbe Fehler an
+einer anderen Stelle: **Die Suite aß den Rest der Liste.** Die Schleife liest die Liste
+über die Standardeingabe, und die Suite erbte sie — ein Lauf, der eine Datei über
+`admin-post.php` prüft, liest gelegentlich selbst von der Standardeingabe, und danach
+war die Liste leer. Der Lauf nach dem ersten war deshalb derselbe wie der erste, und
+zwanzig Einträge im Protokoll waren zwei. Zwei Änderungen im Werkzeug: Die Liste läuft
+über einen eigenen Kanal (`read -u 3 … 3<`), und die Suite bekommt `< /dev/null`. Beide
+sind billig und beide sind beim Schreiben nicht vorherzusehen; ein Werkzeug, das sich
+selbst prüft, findet sie erst, wenn es läuft.
+
+Derselbe Lauf hat einen zweiten Fehler derselben Art gezeigt, nämlich in der Liste
+selbst: Eine Bruchstelle über mehrere Zeilen muss als die zwei Zeichen `\n` in der
+Listendatei stehen und nicht als echter Zeilenumbruch. Sonst zerfällt eine Gegenprobe in
+so viele Zeilen, wie ihre Bruchstelle Zeilen hat, und der Leser meldet für jede „Feldzahl
+3 statt 5“ — das war eindeutig genug, aber die Meldung beweist nur, dass die Liste
+kaputt ist, nicht welche Gegenprobe gemeint war.
 
 Dasselbe Schema hat beim Auswerten des Ergebnisses den einen Fehlbefund dieser Reihe
 erzeugt, den es weiter unten als solchen gibt: Das Werkzeug erkennt eine Gegenprobe, die
@@ -1235,6 +1263,61 @@ gefallen: Das Muster für ein Feld mit Attributen endete auf `[^>]*/>`, die ausg
 Eingabefelder enden aber auf `required>`. Die Prüfung „das Feld steht in derselben Zeile
 wie die Schaltfläche“ hätte gegen keine Zeile gegriffen und wäre ebenfalls für das falsche
 Grün grün gewesen; das Muster ist `[^>]*>`.
+
+## Fassung 1.17.0: die Hinweise der drei Formulare
+
+Der Hinweis unter den beiden Feldern stand im Angebotformular in der Zelle des
+E-Mail-Feldes, also über die halbe Breite, und im Kontaktformular unter der Schaltfläche,
+weil der Knopf in derselben Zeile stand wie die Felder. Seit `1.17.0` steht er in allen
+drei Formularen als Absatz zwischen den Feldern und dem Knopf, und der Knopf des
+Kontaktformulars hat die Feldzeile verlassen. Der Satz über das Postfach steht in allen
+drei; am Arbeitsdienst fiel der Satz „Vorname und Nachname tragen wir für dich ein.“
+weg.
+
+Das ist die vierte Fassung an einem Tag, und damit ist die Regel „ein Lauf, ein Stand“
+wieder wichtig: `http.sh` prüft die Reihenfolge über das gerenderte Markup, nicht über
+den Quelltext, und die Reihenfolge zweier Elemente ist im Quelltext eine Frage der
+Einrückung.
+
+### Was geprüft wird und warum es nicht `has` sein kann
+
+| Prüfung | Ebene | Was sie behauptet |
+| --- | --- | --- |
+| `in every contact form the note stands between the fields and the button` | gerendertes Markup | in **jedem** Kontaktformular: Feldzeile vor der Nummer, Hinweis vor dem Knopf, und der Knopf nicht in der Zeile |
+| `the note of the offer form is a line of its own, between the grid and the button` | gerendertes Markup | der Absatz steht nach dem Raster, vor dem Knopf, und **nicht** in der Zelle des Adressfeldes |
+| `in the signup form the note stands between the fields and the button` | gerendertes Markup | dieselbe Reihenfolge, und der Text **als Ganzes** |
+| `all three notes stand in the same place and say the same thing about the mailbox` | beide Seiten | alle drei Hinweise tragen `fg-hint fg-hint-row`, und die drei Texte sind genau die drei erwarteten |
+
+Eine `has`-Prüfung auf die Reihenfolge wäre für das Falsche grün: Sie würde nur prüfen,
+dass alle drei Stücke da sind, und die Reihenfolge wäre ihr egal. Deshalb wird die
+**Position** gelesen und verglichen (`stelle()` gibt den Index der Fundstelle, und die
+drei Indizes müssen aufsteigen), und deshalb wird beim Textvergleich nicht nach zwei
+Sätzen gesucht, sondern der ganze Absatz mit dem erwarteten Satz verglichen: Der
+weggefallene Satz am Arbeitsdienst ist genau der Fall, an dem eine Suche nach den zwei
+Sätzen, die bleiben, nichts gemerkt hätte.
+
+Die letzte Prüfung vergleicht die **drei** Texte miteinander und nicht jeden für sich: Die
+drei Formulare stehen auf zwei Seiten, also gehen beide Seiten mit einer Trennmarke in
+eine Eingabe, und die Hinweise werden an ihrem Satzanfang erkannt (nicht an ihrer
+Position im Formular) und als Mengen verglichen. Erkannt wird über den Satzanfang, weil
+auf beiden Seiten noch andere Hinweise stehen — der Link zur Datenschutzerklärung in
+jedem Anmeldeformular und der eine Hinweis unter der Liste. Eine Prüfung, die alle
+`<p class="fg-hint">` einsammelt, wäre an der Datenschutzerklärung hängen geblieben.
+
+### Vier Gegenproben
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| der Hinweis am Arbeitsdienst trägt wieder den alten Satz mit den Namen | der Text ist der eine erwartete Satz | 2 Prüfungen: `in the signup form the note stands …` und der Seitenvergleich |
+| der Hinweis im Angebot wird aus dem Absatz gelöscht | er steht zwischen Raster und Knopf | 3 Prüfungen: der Absatz, `the hint names the source of the public name` und der Seitenvergleich |
+| der Knopf des Kontaktformulars wandert zurück in die Feldzeile | er steht unter dem Hinweis | 3 Prüfungen: die Reihenfolge, `and says that neither of the two is published` und der Seitenvergleich |
+| der Satz über das Postfach fehlt im Angebot | alle drei sagen dasselbe darüber | der Seitenvergleich |
+
+Die zweite und die dritte Gegenprobe haben mehr Prüfungen rot gemacht als benannt, und
+das ist richtig so: Beide Bruchstellen haben den Hinweistext gleich mit verschoben oder
+mitgelöscht, und die Prüfungen, die nur auf die **Wörter** des Hinweises sehen, haben
+das mitbekommen. Eine Bruchstelle, die genau eine Prüfung rot macht, ist der Fall, in dem
+man sich das Fehlerbild noch einmal ansieht.
 
 ## Mail-Auswertung
 

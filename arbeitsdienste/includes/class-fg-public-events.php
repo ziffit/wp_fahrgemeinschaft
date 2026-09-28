@@ -265,9 +265,9 @@ final class FG_Public_Events {
 							<input type="email" id="fg-member-email-<?php echo esc_attr( $ref ); ?>" name="fg_member_email" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_EMAIL_MAX ); ?>" autocomplete="email" required>
 						</div>
 					</div>
-					<?php // The name is never asked for and never shown. Both values are looked up in the member administration, and a pair that does not belong to one member is refused. ?>
-					<p class="fg-hint">
-						<?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen. Vorname und Nachname tragen wir für dich ein.', 'arbeitsdienste' ); ?>
+					<?php // The note stands between the two fields and the button, the same place it has in the two other forms of the plugin, and the same class carries its distance in all three. Until version 1.17.0 it also said that the club enters the first and the last name; that sentence is gone, because the mail that goes out is the better place to see them, and it greets with both. The sentence about the mailbox is the one a member needs before they press the button: a registration whose mail did not arrive is a place that is taken and cannot be given back. ?>
+					<p class="fg-hint fg-hint-row">
+						<?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen. Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst.', 'arbeitsdienste' ); ?>
 					</p>
 					<div class="fg-actions">
 						<button class="fg-button" type="submit"><?php esc_html_e( 'verbindlich anmelden', 'arbeitsdienste' ); ?></button>

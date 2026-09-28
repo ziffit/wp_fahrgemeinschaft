@@ -110,6 +110,13 @@ Anzeige:
 - ~~nur die E-Mail-Adresse~~ **Seit 1.16.0** Mitgliedsnummer **und** E-Mail-Adresse nebeneinander
   in einer Zeile, mit einem Hinweis darunter, dass beide zu einem Mitglied passen müssen
   und dass keine der beiden Angaben öffentlich steht
+- **Seit 1.17.0** steht der Hinweis jedes der drei Formulare zwischen den beiden Feldern und
+  der Schaltfläche, und zwar über die ganze Breite; vorher stand er im Angebotformular in der
+  Zelle des E-Mail-Feldes und im Kontaktformular unter der Schaltfläche
+- **Seit 1.17.0** sagen alle drei Hinweise wörtlich dasselbe über das Postfach: „Du bekommst
+  eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst.“ Der Hinweis
+  am Arbeitsdienst trug vorher zusätzlich „Vorname und Nachname tragen wir für dich ein.“,
+  und der ist weg
 
 Nicht öffentlich:
 
@@ -287,7 +294,7 @@ Die Umsetzung folgt dem Plan, ergänzt ihn aber an den folgenden Stellen. Die au
 
 ### Öffentliche Seite und Formulare
 
-- Das Formular enthält kein Freitextfeld für eine Beschreibung und keine Platzanzahl, sondern nur Art, Arbeitsdienst, Abfahrtsbereich, Mitgliedsnummer, E-Mail-Adresse und Einwilligung. ~~Vorname oder Spitzname~~ **Seit 1.14.0** nicht mehr abgefragt, der Vorname kommt aus dem Mitglied. Die Schaltfläche heißt seit `1.16.0` **Fahrgemeinschaft eintragen**; vorher stand dort „Eintragung vormerken“, was einen Schritt vor dem Eintrag versprach, den es seit `1.15.0` nicht gibt. Der Abfahrtsbereich liegt über die volle Breite, die beiden Felder des Paares teilen sich eine Zeile.
+- Das Formular enthält kein Freitextfeld für eine Beschreibung und keine Platzanzahl, sondern nur Art, Arbeitsdienst, Abfahrtsbereich, Mitgliedsnummer, E-Mail-Adresse und Einwilligung. ~~Vorname oder Spitzname~~ **Seit 1.14.0** nicht mehr abgefragt, der Vorname kommt aus dem Mitglied. Die Schaltfläche heißt seit `1.16.0` **Fahrgemeinschaft eintragen**; vorher stand dort „Eintragung vormerken“, was einen Schritt vor dem Eintrag versprach, den es seit `1.15.0` nicht gibt. Der Abfahrtsbereich liegt über die volle Breite, die beiden Felder des Paares teilen sich eine Zeile, und der Hinweis steht als eigener Absatz zwischen den Feldern und der Schaltfläche.
 - Die Serverseite weist zusätzlich personenbezogene Angaben in den öffentlich sichtbaren Feldern ab: E-Mail-Adressen, Telefonnummern und „Straße + Hausnummer“. Solche Versuche landen in der neutralen Antwort `not_created` und im Zähler `publish_personal_data`.
 - Öffentliche Formulare nutzen WordPress-Nonces. Die langlebigen Token-Seiten nutzen stattdessen eine eigene Formularprüfung, die per HMAC mit `wp_salt()` aus Token und Aktion abgeleitet wird. Damit hängt die Prüfung am geheimen Token und nicht an einer Sitzung.
 
@@ -670,3 +677,48 @@ lässt sich ohne Datenverlust an ein geändertes Paar anpassen.
 | `publish_invalid_email` | Abgewiesene Einträge: Nummer und E-Mail-Adresse passen nicht zu einem Mitglied, oder das Mitglied ist für diesen Arbeitsdienst nicht angemeldet |
 | `contact_valid_email` | Kontaktanfragen mit passender Mitgliedsnummer und E-Mail-Adresse |
 | `contact_invalid_email` | Abgewiesene Kontaktanfragen: Nummer und E-Mail-Adresse passen nicht zu einem Mitglied, das Mitglied ist für diesen Arbeitsdienst nicht angemeldet oder die Eintragung ist nicht sichtbar |
+
+## Umsetzungsstand: Die Hinweise der drei Formulare (1.17.0)
+
+Ergänzt um den Auftrag vom 28.09.2026, nach den drei Fassungen desselben Tages. Der Auftrag
+hieß: Der Hinweis unter den beiden Feldern im Angebotformular soll über die ganze Breite gehen,
+im Kontaktformular soll er **oberhalb** der Schaltfläche stehen, am Arbeitsdienst soll ein
+anderer Text stehen, und der Satz über das Postfach soll in allen drei Formularen stehen.
+
+### Derselbe Aufbau in allen drei Formularen
+
+| Vorher (bis 1.16.0) | Jetzt (ab 1.17.0) |
+| --- | --- |
+| Angebot: Hinweis in der Zelle des E-Mail-Feldes, halbe Breite | Hinweis als Absatz zwischen Raster und Schaltfläche |
+| Anmeldung: Hinweis über der Schaltfläche | unverändert, jetzt mit derselben Klasse |
+| Kontakt: Knopf in der Zeile der beiden Felder, Hinweis darunter | Knopf in einem eigenen `.fg-actions`, Hinweis darüber |
+| drei verschiedene Abstände für den Hinweis | eine Klasse `fg-hint-row` für alle drei |
+
+```css
+.fg-hint-row { margin: 0.75rem 0 0; }
+```
+
+Mit dem Umzug des Knopfes fallen zwei Regeln weg, die es nur für ihn gab: die kleine
+Schaltfläche in der Feldzeile (`.fg-member-row .fg-button`) und der Abstand, den das
+Kontaktformular sich über eine fremde Klasse (`fg-list-hint`) auf dem Hinweis gebucht hat. Der
+Knopf des Kontaktformulars ist dadurch größer als vorher — das ist der Preis, und er ist der
+gleiche in allen drei Formularen.
+
+### Die drei Texte
+
+| Formular | Wortlaut ab 1.17.0 |
+| --- | --- |
+| Angebot | Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat. Dein Vorname steht in der Liste öffentlich; E-Mail-Adresse und Mitgliedsnummer nicht. Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst. |
+| Anmeldung | Beide Angaben müssen zu einem Mitglied des Vereins passen. Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst. |
+| Kontakt | Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat. Deine Mitgliedsnummer und deine E-Mail-Adresse stehen nirgends öffentlich. Du bekommst eine E-Mail als Bestätigung. Prüfe deinen Spam-Ordner, wenn du keine erhältst. |
+
+Der weggefallene Satz „Vorname und Nachname tragen wir für dich ein.“ hatte einen Grund, der
+nicht mehr trägt: Die Mail, die ohnehin ankommt, begrüßt seit `1.16.0` mit Vor- und
+Nachnamen, und der bessere Ort für beide Namen ist die Mail und nicht der Hinweis unter einem
+Formular.
+
+**Der Satz über das Postfach steht auch im Angebotformular, obwohl die Mail dort keine
+Bestätigung ist.** Sie sagt selbst „es ist nichts mehr zu bestätigen“, und `smoke.php` prüft
+genau diesen Satz im Mailtext. Die Entscheidung ist bewusst so gefallen: drei Formulare, drei
+Formulierungen wären drei Regeln mit zwei Ausnahmen, und ein Besucher, der den Satz in einem
+Formular liest, soll ihn in den beiden anderen wiedererkennen. Der Mailtext bleibt unangetastet.

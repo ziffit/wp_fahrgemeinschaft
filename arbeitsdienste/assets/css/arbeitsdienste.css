@@ -83,6 +83,16 @@
 	font-size: 0.92rem;
 }
 
+/* The note about the two values a member is asked for, in the three forms of
+   the plugin that ask for them. It stands between the fields and the button in
+   all three, and it is a paragraph on a line of its own, because a note that
+   hangs in a field cell reads as if it belonged to that one field. One class for
+   the distance in all three forms: three different margins for one place would
+   be three places. */
+.fg-hint-row {
+	margin: 0.75rem 0 0;
+}
+
 .fg-form-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -250,11 +260,6 @@ details.fg-contact[open] > .fg-contact-latch {
 	color: var(--fg-button);
 }
 
-/* The hint under the contact form, between the fields and the next card. */
-.fg-contact-form .fg-list-hint {
-	margin: 0.5rem 0 0;
-}
-
 .fg-list-hint {
 	margin-top: 0.5rem;
 }
@@ -378,7 +383,10 @@ details.fg-signup[open] > .fg-signup-latch {
    service and the contact form of a ride. The offer form has the same two
    fields, but as two cells of its own grid, which puts them side by side just
    the same. They are the whole question in all three, so on a wide screen
-   neither of them takes a full line, and the button stands at their foot. */
+   neither of them takes a full line. The row carries the two fields and nothing
+   else: since version 1.17.0 the note and the button stand below it in all
+   three forms, and a button in this row would have to be a third kind of thing
+   in a row that only ever holds the two halves of one question. */
 .fg-member-row {
 	display: flex;
 	flex-wrap: wrap;
@@ -396,11 +404,6 @@ details.fg-signup[open] > .fg-signup-latch {
    put "E-" over "Mail-Adresse". */
 .fg-member-row .fg-field label {
 	white-space: nowrap;
-}
-
-.fg-member-row .fg-button {
-	flex: 0 0 auto;
-	padding: 0.4rem 0.65rem;
 }
 
 .fg-signup-form .fg-hint {
