@@ -75,6 +75,32 @@ else:
         i = naechste.end()
     print(html.unescape(re.sub(r'<[^>]+>',' ', h[m.end():i])).replace('  ',' '))"; }
 report() { rahmen 'fg-import-report'; }
+# The block of the import screen that names the accepted header columns, in a
+# form a caller can work with: one line "text<TAB>..." with the sentences, and
+# one line "names<TAB>label<TAB>name" for every single name, not one line for a
+# row. It reads that block and not the whole page, for the same reason rahmen()
+# exists — the member list stands on the same screen. The names are not looked
+# for one at a time, because a name is text: "name" is a surname here, and a
+# search over the whole page would be answered by the sentence above the table.
+# The sentences stop at the table for the same reason.
+spalten() { python3 -c "
+import re,sys,html
+h=sys.stdin.read()
+m=re.search(r'<details class=\"$1\">(.*?)</details>', h, re.S)
+if not m:
+    print('')
+else:
+    b=m.group(1)
+    text=html.unescape(re.sub(r'<[^>]+>',' ', b.split('<table')[0]))
+    print('text\t'+' '.join(text.split()))
+    for row in re.findall(r'<tr[^>]*>(.*?)</tr>', b, re.S):
+        zellen=re.findall(r'<t[hd][^>]*>(.*?)</t[hd]>', row, re.S)
+        if len(zellen)!=2:
+            continue
+        namen=[html.unescape(x).strip() for x in re.findall(r'<code[^>]*>(.*?)</code>', zellen[1], re.S)]
+        feld=html.unescape(re.sub(r'<[^>]+>','',zellen[0])).strip()
+        for name in namen:
+            print('names\t'+feld+'\t'+name)"; }
 # The number in a named span, without the sentence around it. A screen that
 # prints a count and names it in words makes two claims, and only the span is the
 # one about the number: "Mitglieder sind für keinen Arbeitsdienst angemeldet" is
@@ -1380,6 +1406,144 @@ if [ "$(s member-by-no "0801" id)" = "missing" ] && [ "$(s member-by-no "0802" i
 	ok "the imported members are gone again"
 else
 	bad "the imported members are gone again" "0801=$(s member-by-no "0801" id) 0802=$(s member-by-no "0802" id)"
+fi
+
+# --- the header names the import accepts, and the screen that names them
+# The screen shows the names and the import reads the very same list. Neither
+# claim is checked against a list written into this test: a test that carried its
+# own copy of the names would go on being green when the two drift apart, which
+# is the one thing that must not happen here. So the test asks the screen what it
+# shows, and then offers every answer to the import.
+screen=$(curl -sk -b "$JAR" "$MEMBERS")
+kopfzeilen=$(printf '%s' "$screen" | spalten 'fg-import-columns')
+if [ -n "$kopfzeilen" ]; then
+	ok "the import screen names the columns it accepts"
+else
+	bad "the import screen names the columns it accepts" "no block fg-import-columns on the screen"
+fi
+regel=$(printf '%s\n' "$kopfzeilen" | grep '^text	')
+has "it says the whole cell has to carry one of the names" "$regel" "muss genau einer der unten genannten Namen sein"
+has "and that the case of a name does not matter" "$regel" "Groß- und Kleinschreibung spielt keine Rolle"
+# One line per name, taken from the screen. mapfile and not a for over a list of
+# words: two of the names contain a space ("first name"), and a list of words
+# would cut them in half and ask the import about "first".
+mapfile -t KOPFZEILEN < <(printf '%s\n' "$kopfzeilen" | grep -e '^names	')
+# Four rows, one for each field, and no fifth. The member has four fields, and
+# that is a constant of the thing itself and not a guess about the names in it,
+# so this number can be written down. What cannot be written down is how many
+# names each row carries: that is the import's own list, and a test that carried
+# its own copy of it would go on being green when the two drift apart — which is
+# exactly the failure the loop below is there to catch, from the other side.
+ANZ_FELDER=$(printf '%s\n' "${KOPFZEILEN[@]}" | cut -f2 | sort -u | grep -c .)
+if [ "$ANZ_FELDER" -eq 4 ]; then
+	ok "the screen names a row for each of the four fields"
+else
+	bad "the screen names a row for each of the four fields" "$ANZ_FELDER rows: $(printf '%s\n' "${KOPFZEILEN[@]}" | cut -f2 | sort -u | tr '\n' ' ')"
+fi
+# A fourth name, and the file that goes with it. "Name" is how a lot of German
+# member administrations write the last name, so it is a name the import has to
+# take. The check reads the member that came out of the file and not the report:
+# an import that is accepted proves only that every column of the file found some
+# field. Were "name" in the list of the first names instead, the fourth column
+# would find the first name already taken and the file would be refused; were it
+# in both lists at once, the values below would land in the wrong place.
+printf 'Nummer;E-Mail;Vorname;Name\n0930;name@example.org;Aliase;Musterfrau\n' > "$IMPORT_CSV"
+curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import-name.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv" > /dev/null
+namensbericht=$(report < "$DIR/import-name.html")
+has "a header of Name is not refused" "$namensbericht" "1 neue Mitglieder angelegt"
+if [ "$(s member-by-no "0930" first_name)" = "Aliase" ] && [ "$(s member-by-no "0930" last_name)" = "Musterfrau" ]; then
+	ok "and its values land in the surname, not in the forename"
+else
+	bad "and its values land in the surname, not in the forename" "forename=$(s member-by-no "0930" first_name) surname=$(s member-by-no "0930" last_name)"
+fi
+clean "$(cat "$DIR/import-name.html")" "import of a file with a header of Name"
+# And the other way round. "name" is a surname, so it must not be offered as a
+# first name: a forename column in a real file is not called "name", and one that
+# is would be a file the club wrote itself. The row is read as a set with commas
+# on both sides, so a name that merely starts with "name" is not the name.
+vornamen=$(printf '%s\n' "${KOPFZEILEN[@]}" | grep -e '	Vorname	' | cut -f3)
+case ",$vornamen," in
+	*,name,*) bad "name is not offered as a forename" "found: name" ;;
+	*) ok "name is not offered as a forename" ;;
+esac
+# Every name the screen shows has to work, because a club reads the screen and
+# writes the name down. This is the check that keeps the two from drifting apart,
+# and it is the reason this test carries no list of names of its own: it takes
+# the names off the screen and hands each of them to the import, one file per
+# name. The other three columns of such a file carry the labels, so the name
+# under test is the only one in it that can be refused.
+LAUF=0
+UNBEKANNT=0
+ERFOLG_MITGL=0; ERFOLG_MITGL_FEHLT=""
+ERFOLG_MAIL=0; ERFOLG_MAIL_FEHLT=""
+ERFOLG_VORN=0; ERFOLG_VORN_FEHLT=""
+ERFOLG_NACH=0; ERFOLG_NACH_FEHLT=""
+for zeile in "${KOPFZEILEN[@]}"; do
+	IFS=$'\t' read -r _ feld name <<< "$zeile"
+	[ -n "$name" ] || continue
+	LAUF=$((LAUF+1))
+	case "$feld" in
+		'Mitgliedsnummer') kopf="$name;E-Mail-Adresse;Vorname;Nachname" ;;
+		'E-Mail-Adresse')  kopf="Mitgliedsnummer;$name;Vorname;Nachname" ;;
+		'Vorname')         kopf="Mitgliedsnummer;E-Mail-Adresse;$name;Nachname" ;;
+		'Nachname')        kopf="Mitgliedsnummer;E-Mail-Adresse;Vorname;$name" ;;
+		*) UNBEKANNT=$((UNBEKANNT+1)); continue ;;
+	esac
+	nummer=$(printf '17%02d' "$LAUF")
+	# A number of an earlier run could still be there, and the import would
+	# change that member instead of writing a new one. The check asks whether
+	# the file was taken, so the member has to be gone first.
+	s delete-member "$(s member-by-no "$nummer" id)" > /dev/null 2>&1
+	printf '%s\n%s;kopfzeile%d@example.org;Probe;Probe\n' "$kopf" "$nummer" "$LAUF" > "$IMPORT_CSV"
+	curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import-spalte.html" -X POST "$BASE/wp-admin/admin-post.php" \
+		-F "action=fg_import_members" \
+		-F "fg_import_nonce=$INONCE" \
+		-F "fg_member_file=@$IMPORT_CSV;type=text/csv" > /dev/null
+	angenommen=no
+	if [ "$(s member-by-no "$nummer" id)" != "missing" ]; then angenommen=yes; fi
+	case "$feld:$angenommen" in
+		'Mitgliedsnummer:yes') ERFOLG_MITGL=$((ERFOLG_MITGL+1)) ;;
+		'Mitgliedsnummer:no')  ERFOLG_MITGL_FEHLT="$ERFOLG_MITGL_FEHLT $name" ;;
+		'E-Mail-Adresse:yes')  ERFOLG_MAIL=$((ERFOLG_MAIL+1)) ;;
+		'E-Mail-Adresse:no')   ERFOLG_MAIL_FEHLT="$ERFOLG_MAIL_FEHLT $name" ;;
+		'Vorname:yes')         ERFOLG_VORN=$((ERFOLG_VORN+1)) ;;
+		'Vorname:no')          ERFOLG_VORN_FEHLT="$ERFOLG_VORN_FEHLT $name" ;;
+		'Nachname:yes')        ERFOLG_NACH=$((ERFOLG_NACH+1)) ;;
+		'Nachname:no')         ERFOLG_NACH_FEHLT="$ERFOLG_NACH_FEHLT $name" ;;
+	esac
+done
+clean "$(cat "$DIR/import-spalte.html")" "import of a file for every name on the screen"
+# A row whose label this test does not know is skipped by the loop below, and a
+# skipped row is a row that was never offered to the import. Counting it here
+# keeps a fifth field from passing as four.
+if [ "$UNBEKANNT" -eq 0 ]; then
+	ok "and no row carries a label this test does not know"
+else
+	bad "and no row carries a label this test does not know" "$UNBEKANNT rows"
+fi
+# One check per column and not one for the whole block: a screen that shows four
+# fields has four claims, and a single red line would name the one that failed
+# only by accident. Each of them counts what it accepted, because a block of four
+# empty rows would otherwise pass as four columns that refused nothing.
+if [ "$ERFOLG_MITGL" -gt 0 ] && [ -z "$ERFOLG_MITGL_FEHLT" ]; then ok "every name of the screen is taken for the member number ($ERFOLG_MITGL)"; else bad "every name of the screen is taken for the member number" "$ERFOLG_MITGL taken, refused:$ERFOLG_MITGL_FEHLT"; fi
+if [ "$ERFOLG_MAIL" -gt 0 ] && [ -z "$ERFOLG_MAIL_FEHLT" ]; then ok "and for the address ($ERFOLG_MAIL)"; else bad "and for the address" "$ERFOLG_MAIL taken, refused:$ERFOLG_MAIL_FEHLT"; fi
+if [ "$ERFOLG_VORN" -gt 0 ] && [ -z "$ERFOLG_VORN_FEHLT" ]; then ok "and for the forename ($ERFOLG_VORN)"; else bad "and for the forename" "$ERFOLG_VORN taken, refused:$ERFOLG_VORN_FEHLT"; fi
+if [ "$ERFOLG_NACH" -gt 0 ] && [ -z "$ERFOLG_NACH_FEHLT" ]; then ok "and for the surname ($ERFOLG_NACH)"; else bad "and for the surname" "$ERFOLG_NACH taken, refused:$ERFOLG_NACH_FEHLT"; fi
+# The members of this loop go again, so the screen is not left with them and the
+# sections after this one count what they counted before.
+GERAUMT=0
+for nummer in $(seq -f '17%02g' 1 "$LAUF"); do
+	s delete-member "$(s member-by-no "$nummer" id)" > /dev/null 2>&1
+	[ "$(s member-by-no "$nummer" id)" = "missing" ] && GERAUMT=$((GERAUMT+1))
+done
+s delete-member "$(s member-by-no "0930" id)" > /dev/null 2>&1
+if [ "$GERAUMT" = "$LAUF" ] && [ "$(s member-by-no "0930" id)" = "missing" ]; then
+	ok "the members of the name tests are gone again ($GERAUMT)"
+else
+	bad "the members of the name tests are gone again" "$GERAUMT of $LAUF, 0930=$(s member-by-no "0930" id)"
 fi
 
 

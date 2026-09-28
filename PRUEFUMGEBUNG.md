@@ -4,7 +4,7 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **Admin-Ebene 428, öffentliches HTTP 179, Mail-Ebene 96,
+Letzter Lauf: 28.09.2026 — **Admin-Ebene 443, öffentliches HTTP 179, Mail-Ebene 96,
 0 Fehler**. Die CLI-Suite ist nicht gelaufen, weil `smoke.php` am Anfang
 alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht und dafür eine
 ausdrückliche Zustimmung braucht; ihre 482 Prüfungen stammen aus dem freigegebenen Lauf
@@ -701,6 +701,58 @@ behauptet. Beim ersten Lauf nach den Fehlerbildern ist genau das passiert: Zwei 
 Zeilen in `[10]` über den Bericht, weil Bild 1 in seiner Variante ohne Bedingung auch die
 Fixture-Mitglieder mitgenommen hatte.
 
+### Die siebte Reihe (7 Fehlerbilder an den Spaltennamen des Imports)
+
+Sie ging die Tabelle an, die auf der Importseite sagt, welche Namen die Kopfzeile
+haben darf. Die Behauptung dahinter ist eine Behauptung über **zwei** Dinge, die
+dasselbe sagen müssen: Der Import nimmt einen Namen an, und der Bildschirm nennt
+ihn. Ein Getter (`FG_Member_Import::accepted_columns()`) liefert beiden dieselbe
+Liste, und die Prüfung fragt den Bildschirm ab und bietet **jede** Antwort dem
+Import an — ein Import je Name, 23 Dateien, in allen anderen Spalten die Etiketten.
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| die Anzeige ist eine eigene Liste: `surname` steht da, der Import nimmt es nicht | jeder angezeigte Name wird auch genommen | 1 Prüfung, und sie nennt den Namen: `every name of the screen is taken for the member number :: 8 taken, refused: surname` |
+| `name` steht in der Liste der Vornamen | der Import liest `Name` als Nachnamen | 2 Prüfungen: der Import lehnt die Datei ab, und die Werte stehen nirgends |
+| `name` fehlt in beiden Listen | dasselbe | dieselben 2 Prüfungen |
+| die drei Sätze über der Tabelle fehlen | sie nennen ganze Zelle und Großschreibung | 2 Prüfungen, beide mit dem Wortlaut, den sie vermissten |
+| der Block wird nicht gerendert | der Rahmen steht auf der Seite | 8 Prüfungen: der Rahmen, beide Sätze, die Zahl der Felder und die vier Spalten |
+| eine Zeile der Anzeige fehlt, der Import liest sie | vier Zeilen, eine je Feld | 2 Prüfungen: `3 rows: E-Mail-Adresse Mitgliedsnummer Nachname` und die Spalte Vorname mit `0 taken` |
+| eine fünfte Zeile nur in der Anzeige | vier Felder, und kein Etikett ohne Namen | 2 Prüfungen: `5 rows` und die unbekannten Zeilen |
+
+Fünf Fehlerbilder an dieser Reihe waren Fehler im Prüfrahmen, nicht im Plugin:
+
+- **Der Rahmen behandelte die Liste als Wörter.** Zwei der Namen enthalten ein
+  Leerzeichen (`first name`, `member number`), und eine Schleife über eine
+  Wortliste hätte sie zerschnitten und den Import mit `first` gefragt. Die Namen
+  werden jetzt zeilenweise gelesen und in einem Feld getrennt.
+- **Eine Prüfung suchte einen Vornamen in einer Zeile, die es nicht geben kann.**
+  Die vier Namen standen in einer durch Leerzeichen getrennten Liste, und das
+  Muster `names*Vorname*` passte auf kein einziges Wort. Jetzt wird die Zeile des
+  Vornamen geholt und die Namen als **Menge** mit Komma an beiden Enden verglichen,
+  damit ein Name, der zufällig mit `name` beginnt, nicht für `name` gehalten wird.
+- **Die erste Fassung der Zählprüfung war eine Magic Number.** Sie verlangte „mehr
+  als 20 Namen“, um eine leere Liste zu fangen, und wäre an einem echten Header
+  des Vereins rot geworden, der weniger Namen mitbringt. Jetzt steht dort die
+  Zahl der **Zeilen** — vier, eines je Feld —, und die ist eine Konstante der
+  Sache und keine Vermutung über die Namen darin.
+- **Eine fünfte Zeile wäre durchgerutscht.** Der `case` über die Felder hat einen
+  Zweig `*) continue`, und eine Zeile mit unbekanntem Etikett wäre stillschweigend
+  übersprungen worden — also nie dem Import angeboten. Die Übersprungenen werden
+  gezählt und gemeldet.
+- **Das Fehlerbild mit dem fünften Feld war falsch gewählt.** Es hing ein Feld
+  `Telefon` in **beide** Listen, und der Import brach daran zusammen: alle vier
+  Zeilen fielen in den unbekannten Zweig, und die Prüfung meldete acht rote
+  Zeilen für eine Behauptung, die nur eine betraf. Das Bild ist jetzt eine Zeile
+  nur in der Anzeige — ein Handfehler neben dem Import, nicht in ihm.
+
+Was diese Reihe **nicht** beweisen kann, steht in derselben Liste: Der Import kann
+einen Namen annehmen, den die Seite nicht nennt, und die Prüfung sieht das nicht.
+Sie liest die Namen vom Bildschirm; für die andere Richtung bräuchte sie eine
+zweite Liste, und eine zweite Liste in einem Test ist genau das, was altert. Die
+Lücke ist damit die Umkehrung der, die die Reihe schließt, und sie ist unter
+„Was die Umgebung nicht prüft“ vermerkt.
+
 ## Umstieg von den eigenen Beitragstypen
 
 Die Testinstanz lief ursprünglich mit einer Fassung, die eigene WordPress-Beitragstypen
@@ -857,6 +909,15 @@ wieder entfernt.
   das endgültige Löschen eines Arbeitsdienstes; die fehlende Prüfung ist beim Massenlöschen
   zusätzlich unter den Fehlerbildern der sechsten Reihe aufgeführt worden, mit dem
   Ergebnis „keine“ und ohne den Versuch, das zu überspielen.
+- **Kein Name, den der Import annimmt und die Seite nicht nennt.** Die Prüfungen der
+  siebten Reihe lesen die Namen vom Bildschirm und bieten sie dem Import an; damit
+  ist bewiesen, dass **jeder angezeigte Name funktioniert**, aber nicht, dass **jeder
+  funktionierende Name angezeigt wird**. Die andere Richtung ließe sich nur mit einer
+  zweiten Namenliste im Test prüfen, und eine zweite Liste in einem Test ist genau
+  die, die veraltet: Sie würde grün bleiben, während die Seite veraltet. Der Preis
+  ist eine Lücke zugunsten einer Seite, die dem Verein keinen Namen anbietet, den
+  er nicht probieren kann — und die Liste, die er probieren muss, steht in einer
+  Datei von genau einer Stelle im Plugin.
 - **Keine Barrierefreiheits- und Browserprüfung.** Die HTML-Ausgabe wird auf Struktur und
   Escaping geprüft, nicht auf Darstellung in verschiedenen Browsern. Für die beiden
   `details`-Schaltflächen heißt das auch: Es wird geprüft, dass die offene und die

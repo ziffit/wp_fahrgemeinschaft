@@ -97,7 +97,7 @@ final class FG_Member_Import {
 		'member_no'  => array( 'mitgliedsnummer', 'mitglieds-nr', 'mitglieds-nummer', 'mitglied-nr', 'nummer', 'nr', 'member_no', 'member number' ),
 		'email'      => array( 'e-mail', 'email', 'e-mail-adresse', 'email-adresse', 'mail', 'member_email' ),
 		'first_name' => array( 'vorname', 'first name', 'first_name' ),
-		'last_name'  => array( 'nachname', 'familienname', 'last name', 'last_name', 'surname' ),
+		'last_name'  => array( 'nachname', 'familienname', 'last name', 'last_name', 'surname', 'name' ),
 	);
 
 	/**
@@ -126,6 +126,28 @@ final class FG_Member_Import {
 	 */
 	public function __construct( FG_Repository $repository ) {
 		$this->repository = $repository;
+	}
+
+	/**
+	 * The header names that are accepted, under the label the club knows.
+	 *
+	 * The import screen shows this list, and the import reads the very same one.
+	 * A second list on the screen would be a second truth: it would be the one
+	 * that ages, and the club would try a name it was shown and be refused for a
+	 * reason the screen had already answered. Every alias is listed, including
+	 * the one that is only the label in lower case, because a club reading the
+	 * list has to see that a name works in either spelling.
+	 *
+	 * @return array<string, string[]> Label to accepted header names.
+	 */
+	public static function accepted_columns() {
+		$out = array();
+
+		foreach ( self::$header_aliases as $field => $aliases ) {
+			$out[ self::$field_labels[ $field ] ] = $aliases;
+		}
+
+		return $out;
 	}
 
 	/**

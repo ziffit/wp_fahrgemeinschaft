@@ -301,6 +301,17 @@ Abweichungen und Entscheidungen“, die Prüfungen in `PRUEFUMGEBUNG.md`.
 - Die Spaltenzuordnung ist eine Vermutung über fremde Exportformate. Sie ist an genau einer
   Stelle zu berichtigen (`$header_aliases` in `class-fg-member-import.php`), sobald der
   echte Export des Vereins vorliegt.
+- Die Importseite nennt die Namen, die die Kopfzeile haben darf, und zwar aus derselben
+  Liste, die der Import liest (`FG_Member_Import::accepted_columns()`). Ein abgeschriebener
+  Absatz auf dem Bildschirm wäre die Liste, die altert: Der Verein schreibt einen Namen
+  hin, den ihm die Seite versprochen hat, und wird mit „Spalte fehlt" abgewiesen, ohne zu
+  erfahren, welche Kopfzeile er gelesen hat. Der Satz über der Tabelle — ganze Zelle,
+  Groß- und Kleinschreibung egal — steht dort, weil er jede der drei Meldungen
+  beantwortet, die der Import sonst nur als „Spalte fehlt" melden kann.
+- `name` steht bei den Nachnamen. In deutscher Vereinssoftware heißt die Spalte mit Vor-
+  und Nachname zusammen oft `Name`; der Import liest eine solche Datei als Nachname
+  `Hans Meier`, statt sie abzulehnen. Das ist keine beschädigte Datei, sondern eine
+  andere Bedeutung desselben Wortes.
 
 ### Verwaltung und Folge
 

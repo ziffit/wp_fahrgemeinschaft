@@ -271,12 +271,69 @@ final class FG_Admin_Members {
 			</div>
 		<?php endif; ?>
 		<p><?php esc_html_e( 'Erwartet wird eine CSV-Datei mit einer Kopfzeile und den Spalten für Mitgliedsnummer, E-Mail-Adresse, Vorname und Nachname. Weitere Spalten werden ignoriert. Trennzeichen sind Semikolon und Komma.', 'arbeitsdienste' ); ?></p>
+		<?php $this->render_import_columns(); ?>
 		<form method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<input type="hidden" name="action" value="fg_import_members">
 			<?php wp_nonce_field( 'fg_import_members', 'fg_import_nonce' ); ?>
 			<input type="file" name="fg_member_file" accept=".csv,text/csv,text/plain" required>
 			<?php submit_button( __( 'Import starten', 'arbeitsdienste' ), 'secondary' ); ?>
 		</form>
+		<?php
+	}
+
+	/**
+	 * Render the header names the import accepts, next to the file field.
+	 *
+	 * The names come out of FG_Member_Import::accepted_columns(), which is the
+	 * very list the import reads. A list written out here would be a second
+	 * truth, and a second truth is the one that ages: a club would try a name it
+	 * was shown on this page and be refused for a reason the page had already
+	 * answered. Every alias stands in the list, including the one that is only
+	 * the label in lower case, so that the reader sees it works either way.
+	 *
+	 * The three sentences above the table are not decoration. Each one answers a
+	 * refusal the import would otherwise report as "column missing": that the
+	 * case does not matter, that the name has to be the whole cell, and that the
+	 * order of the columns is free. The first alias of E-Mail-Adresse is "e-mail"
+	 * and not the label in lower case, so a reader who was shown only the
+	 * label would miss the spelling a real export is most likely to use.
+	 *
+	 * It stands in a frame of its own so that a test can read it without the
+	 * member list that is on the same screen: a number is answered there by the
+	 * row of the first member whose number starts with it.
+	 *
+	 * @return void
+	 */
+	private function render_import_columns() {
+		$spalten = FG_Member_Import::accepted_columns();
+		?>
+		<details class="fg-import-columns">
+			<summary><?php esc_html_e( 'Wie die Spalten heißen dürfen', 'arbeitsdienste' ); ?></summary>
+			<p><?php esc_html_e( 'Die Spalten dürfen in beliebiger Reihenfolge stehen. Die Kopfzeile muss genau einer der unten genannten Namen sein: Ein zusätzliches Wort in derselben Zelle, das Wort Pflicht etwa, macht sie zu einem unbekannten Namen. Groß- und Kleinschreibung spielt keine Rolle, Leerzeichen am Ende einer Zelle werden entfernt.', 'arbeitsdienste' ); ?></p>
+			<table>
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'Feld', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Die Kopfzeile darf heißen', 'arbeitsdienste' ); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php
+					foreach ( $spalten as $feld => $namen ) :
+						$stuecke = array();
+						foreach ( $namen as $name ) {
+							$stuecke[] = '<code>' . esc_html( $name ) . '</code>';
+						}
+						?>
+						<tr>
+							<th scope="row"><?php echo esc_html( $feld ); ?></th>
+							<?php // Die Stuecke werden beim Bauen escaped und danach nur noch zusammengesetzt; ein zweites esc_html() wuerde die Tags mitnehmen. ?>
+							<td><?php echo implode( ', ', $stuecke ); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</details>
 		<?php
 	}
 
