@@ -1344,8 +1344,8 @@ wieder entfernt.
   ist eine Vermutung: `class-fg-member-import.php` trägt pro Feld eine Liste von
   Alternativen, und der Test füttert sie mit Namen, die plausibel sind, nicht mit den
   des Vereins. Geprüft ist damit der Importweg, nicht die Erkennung der Spalten des
-  Vereins. Bis eine echte Kopfzeile vorliegt, ist das eine Vermutung, und sie steht an
-  genau einer Stelle im Code.
+  Vereins — und die Liste der Alternativen steht an genau einer Stelle im Code,
+  `FG_Member_Import::$header_aliases`.
 - **Keinen echten SMTP-Transport.** Es läuft kein Mailserver; die Zustellung wird nur
   simuliert. Geprüft wird, was das Plugin übergibt; die Zustellung selbst ist eine
   Betriebsvoraussetzung der Installation

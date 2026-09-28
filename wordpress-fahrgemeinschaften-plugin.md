@@ -586,11 +586,6 @@ Fassung nichts mehr gezählt, und eine Tabelle im Adminbereich, die eine Zahl ze
 wächst, ist schlechter als eine, die es nicht gibt. `publish_deleted` zählt den Weg über den
 Löschlink, `publish_published` jeden Eintrag beim Absenden des Formulars.
 
-### Was offen bleibt
-
-Die echte CSV-Kopfzeile des Vereinsprogramms ist weiterhin offen und wird mit dem Import
-nachgezogen. Sie ist keine Frage dieser Fassung, sondern eine offene Angabe aus dem Auftrag.
-
 ## Umsetzungsstand: Anrede und Kontaktformular (1.16.0)
 
 Ergänzt um den Auftrag vom 28.09.2026, am selben Tag wie die beiden Fassungen davor. Der
@@ -675,8 +670,3 @@ lässt sich ohne Datenverlust an ein geändertes Paar anpassen.
 | `publish_invalid_email` | Abgewiesene Einträge: Nummer und E-Mail-Adresse passen nicht zu einem Mitglied, oder das Mitglied ist für diesen Arbeitsdienst nicht angemeldet |
 | `contact_valid_email` | Kontaktanfragen mit passender Mitgliedsnummer und E-Mail-Adresse |
 | `contact_invalid_email` | Abgewiesene Kontaktanfragen: Nummer und E-Mail-Adresse passen nicht zu einem Mitglied, das Mitglied ist für diesen Arbeitsdienst nicht angemeldet oder die Eintragung ist nicht sichtbar |
-
-### Was offen bleibt
-
-Unverändert offen bleibt die echte CSV-Kopfzeile des Vereinsprogramms; sie wird mit dem Import
-nachgezogen und ist keine Frage dieser Fassung.
