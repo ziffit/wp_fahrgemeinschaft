@@ -82,11 +82,14 @@ final class FG_Mail_Texts {
 	 * screen shows, in `sample` with the invented data the preview uses, and in
 	 * the value list that the sending code builds from the database. A
 	 * placeholder the sending code has nothing for comes out empty, and that is
-	 * the right answer for a name: the recipient is not always a member, and a
-	 * greeting that names nobody has to read as a sentence. That is also why
-	 * {{Anrede}} is a placeholder of its own instead of a name with a "Hallo"
-	 * written in front of it — the greeting is the one place where an empty name
-	 * would leave a broken word behind.
+	 * the right answer for a name: a greeting that names nobody has to read as a
+	 * sentence. That is also why {{Anrede}} is a placeholder of its own instead of a
+	 * name with a "Hallo" written in front of it — the greeting is the one place
+	 * where an empty name would leave a broken word behind. Since schema 1.4.0 no
+	 * message about a ride reaches an address of nobody, so the fallback only still
+	 * decides the wording and not a real case. It stays, because a member row that
+	 * predates the validation of a first name is a row the code does not get to
+	 * throw away.
 	 *
 	 * @return array<string, array<string, mixed>>
 	 */
@@ -94,18 +97,17 @@ final class FG_Mail_Texts {
 		return array(
 			self::RIDE_PENDING     => array(
 				'label'        => __( 'Fahrgemeinschaft bestätigen', 'arbeitsdienste' ),
-				'description'  => __( 'Geht an die Adresse, die die Fahrgemeinschaft angegeben hat, direkt nach dem Absenden des Formulars. Sie enthält den Bestätigen- und den Verwerfen-Link.', 'arbeitsdienste' ),
+				'description'  => __( 'Geht an die E-Mail-Adresse des Mitglieds, das die Fahrgemeinschaft angeboten hat, direkt nach dem Absenden des Formulars. Sie enthält den Bestätigen- und den Verwerfen-Link.', 'arbeitsdienste' ),
 				'subject'      => 'Fahrgemeinschaft bestätigen – {{Arbeitsdienst}}',
-				'body'         => "{{Anrede}},\n\nDeine Eintragung wurde vorgemerkt, aber noch nicht veröffentlicht.\n\nDiese Angaben würden öffentlich erscheinen:\n\nArt: {{Art}}\nVorname oder Spitzname: {{Fahrgemeinschaft}}\nArbeitsdienst: {{Arbeitsdienstdetails}}\nAbfahrtsbereich: {{Abfahrtsbereich}}\n\nBitte prüfe die Angaben sorgfältig. Vorname oder Spitzname stehen öffentlich. Veröffentliche keine privaten Angaben wie vollständige Namen, genaue Adressen, Telefonnummern oder Kennzeichen.\n\nVERÖFFENTLICHUNG BESTÄTIGEN:\n{{Bestaetigungslink}}\n\nDu hast einen Fehler gemacht oder möchtest die Eintragung nicht veröffentlichen?\nEintrag löschen und nicht veröffentlichen:\n{{Verwerfungslink}}\n\nBitte leite diese E-Mail mit den enthaltenen Links nicht weiter.\n\nBei Fragen nutze das Kontaktformular auf der Webseite.",
+				'body'         => "{{Anrede}},\n\nDeine Eintragung wurde vorgemerkt, aber noch nicht veröffentlicht.\n\nDiese Angaben würden öffentlich erscheinen:\n\nArt: {{Art}}\nVorname: {{Vorname}}\nArbeitsdienst: {{Arbeitsdienstdetails}}\nAbfahrtsbereich: {{Abfahrtsbereich}}\n\nDein Vorname steht dabei öffentlich. Er stammt aus der Mitgliederverwaltung des Vereins, nicht aus deiner Eingabe. Der Abfahrtsbereich ist das Einzige, was du selbst einträgst: Gib dort keine genaue Adresse, keine Telefonnummer und kein Kennzeichen an.\n\nVERÖFFENTLICHUNG BESTÄTIGEN:\n{{Bestaetigungslink}}\n\nDu hast einen Fehler gemacht oder möchtest die Eintragung nicht veröffentlichen?\nEintrag löschen und nicht veröffentlichen:\n{{Verwerfungslink}}\n\nBitte leite diese E-Mail mit den enthaltenen Links nicht weiter.\n\nBei Fragen nutze das Kontaktformular auf der Webseite.",
 				'placeholders' => array(
-					'{{Anrede}}'           => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Ohne Namen in der Mitgliederverwaltung steht hier nur „Hallo“, damit kein Wort ohne Namen dasteht.', 'arbeitsdienste' ),
-					'{{Vorname}}'          => __( 'Vorname des Empfängers, wenn die Adresse zu einem Mitglied gehört — ein Mitglied hat immer einen. Leer bleibt er nur bei einer Adresse, die zu niemandem gehört.', 'arbeitsdienste' ),
-					'{{Name}}'             => __( 'Nachname des Empfängers, wenn die Adresse zu einem Mitglied gehört — ein Mitglied hat immer einen. Leer bleibt er nur bei einer Adresse, die zu niemandem gehört.', 'arbeitsdienste' ),
-					'{{Fahrgemeinschaft}}' => __( 'Die öffentliche Bezeichnung der Fahrgemeinschaft, also das, was der Ersteller selbst eingetragen hat.', 'arbeitsdienste' ),
+					'{{Anrede}}'           => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Die Mail geht an das Mitglied, das die Fahrgemeinschaft angeboten hat, und ein Mitglied hat immer einen Vornamen — hier steht also immer ein Name.', 'arbeitsdienste' ),
+					'{{Vorname}}'          => __( 'Vorname des Mitglieds, aus der Mitgliederverwaltung. Dieser Name steht öffentlich in der Liste, und niemand kann einen anderen eintragen.', 'arbeitsdienste' ),
+					'{{Name}}'             => __( 'Nachname des Mitglieds, aus der Mitgliederverwaltung. Ein Mitglied hat immer einen, der Platzhalter bleibt also nie leer.', 'arbeitsdienste' ),
 					'{{Art}}'              => __( 'Ob gesucht oder geboten wird, als „Ich suche“ oder „Ich biete“.', 'arbeitsdienste' ),
 					'{{Arbeitsdienst}}'    => __( 'Titel des Arbeitsdienstes, an den die Fahrgemeinschaft gehört.', 'arbeitsdienste' ),
 					'{{Arbeitsdienstdetails}}' => __( 'Titel und Datum des Arbeitsdienstes in einer Zeile, zum Beispiel „Flussaktion (2027-06-12)“. Steht der Arbeitsdienst ohne Datum dort, steht hier nur der Titel.', 'arbeitsdienste' ),
-					'{{Abfahrtsbereich}}'  => __( 'Der Ort oder das Gebiet, das der Ersteller angegeben hat.', 'arbeitsdienste' ),
+					'{{Abfahrtsbereich}}'  => __( 'Der Ort oder das Gebiet, das das Mitglied angegeben hat.', 'arbeitsdienste' ),
 					'{{Bestaetigungslink}}' => __( 'Link, mit dem die Eintragung veröffentlicht wird. Ohne diesen Link passiert nichts. Mit einem Doppelpunkt und eigenem Wortlaut dahinter wird daraus der Text des Links: {{Bestaetigungslink:Fahrgemeinschaft bestätigen}}}.', 'arbeitsdienste' ),
 					'{{Verwerfungslink}}'  => __( 'Link, mit dem die Eintragung gelöscht wird, ohne veröffentlicht zu werden. Mit einem Doppelpunkt und eigenem Wortlaut dahinter wird daraus der Text des Links: {{Verwerfungslink:Eintragung verwerfen}}}.', 'arbeitsdienste' ),
 				),
@@ -117,7 +119,6 @@ final class FG_Mail_Texts {
 					'Anrede'              => 'Hallo Anton',
 					'Vorname'             => 'Anton',
 					'Name'                => 'Berger',
-					'Fahrgemeinschaft'    => 'Amsel-Gruppe',
 					'Art'                 => 'Ich biete',
 					'Arbeitsdienst'       => 'Flussaktion',
 					'Arbeitsdienstdetails' => 'Flussaktion (2027-06-12)',
@@ -128,73 +129,67 @@ final class FG_Mail_Texts {
 			),
 			self::RIDE_PUBLISHED   => array(
 				'label'        => __( 'Fahrgemeinschaft veröffentlicht', 'arbeitsdienste' ),
-				'description'  => __( 'Geht an dieselbe Adresse, sobald die Veröffentlichung bestätigt wurde. Sie enthält den endgültigen Lösch-Link.', 'arbeitsdienste' ),
+				'description'  => __( 'Geht an die E-Mail-Adresse desselben Mitglieds, sobald die Veröffentlichung bestätigt wurde. Sie enthält den endgültigen Lösch-Link.', 'arbeitsdienste' ),
 				'subject'      => 'Fahrgemeinschaft veröffentlicht – {{Arbeitsdienst}}',
-				'body'         => "{{Anrede}},\n\ndanke für die Veröffentlichung deiner Fahrgemeinschaft {{Fahrgemeinschaft}}.\n\nDu kannst deine Eintragung löschen, wenn du diesen Link aufrufst:\n{{Loeschlink}}\n\nAchtung: Beim endgültigen Löschen erfolgt keine weitere Rückfrage.\n\nWenn sich jemand zu deiner Eintragung meldet, erhältst du eine E-Mail.\nJetzt könnt ihr euch direkt austauschen, zum Beispiel auch über Telefonnummern.\n\nIst der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.\n\nBei Fragen nutze das Kontaktformular auf der Webseite.",
+				'body'         => "{{Anrede}},\n\ndanke für die Veröffentlichung deiner Eintragung.\n\nDu kannst deine Eintragung löschen, wenn du diesen Link aufrufst:\n{{Loeschlink}}\n\nAchtung: Beim endgültigen Löschen erfolgt keine weitere Rückfrage.\n\nWenn sich jemand zu deiner Eintragung meldet, erhältst du eine E-Mail.\nJetzt könnt ihr euch direkt austauschen, zum Beispiel auch über Telefonnummern.\n\nIst der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.\n\nBei Fragen nutze das Kontaktformular auf der Webseite.",
 				'placeholders' => array(
-					'{{Anrede}}'           => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Ohne Namen in der Mitgliederverwaltung steht hier nur „Hallo“.', 'arbeitsdienste' ),
-					'{{Vorname}}'          => __( 'Vorname des Empfängers, wenn die Adresse zu einem Mitglied gehört — ein Mitglied hat immer einen. Leer bleibt er nur bei einer Adresse, die zu niemandem gehört.', 'arbeitsdienste' ),
-					'{{Name}}'             => __( 'Nachname des Empfängers, wenn die Adresse zu einem Mitglied gehört — ein Mitglied hat immer einen. Leer bleibt er nur bei einer Adresse, die zu niemandem gehört.', 'arbeitsdienste' ),
-					'{{Fahrgemeinschaft}}' => __( 'Die öffentliche Bezeichnung der Fahrgemeinschaft.', 'arbeitsdienste' ),
-					'{{Arbeitsdienst}}'    => __( 'Titel des Arbeitsdienstes, an den die Fahrgemeinschaft gehört.', 'arbeitsdienste' ),
-					'{{Loeschlink}}'       => __( 'Link, mit dem die Eintragung endgültig gelöscht wird. Das Löschen erfolgt ohne weitere Rückfrage. Mit einem Doppelpunkt und eigenem Wortlaut dahinter wird daraus der Text des Links: {{Loeschlink:Fahrgemeinschaft löschen}}}.', 'arbeitsdienste' ),
+					'{{Anrede}}'        => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Die Mail geht an dasselbe Mitglied, das die Fahrgemeinschaft angeboten hat, und ein Mitglied hat immer einen Vornamen.', 'arbeitsdienste' ),
+					'{{Vorname}}'       => __( 'Vorname des Mitglieds, aus der Mitgliederverwaltung. Ein Mitglied hat immer einen, der Platzhalter bleibt also nie leer.', 'arbeitsdienste' ),
+					'{{Name}}'          => __( 'Nachname des Mitglieds, aus der Mitgliederverwaltung. Ein Mitglied hat immer einen, der Platzhalter bleibt also nie leer.', 'arbeitsdienste' ),
+					'{{Arbeitsdienst}}' => __( 'Titel des Arbeitsdienstes, an den die Fahrgemeinschaft gehört.', 'arbeitsdienste' ),
+					'{{Loeschlink}}'    => __( 'Link, mit dem die Eintragung endgültig gelöscht wird. Das Löschen erfolgt ohne weitere Rückfrage. Mit einem Doppelpunkt und eigenem Wortlaut dahinter wird daraus der Text des Links: {{Loeschlink:Fahrgemeinschaft löschen}}}.', 'arbeitsdienste' ),
 				),
 				'links'        => array(
 					'{{Loeschlink}}' => __( 'Fahrgemeinschaft löschen', 'arbeitsdienste' ),
 				),
 				'sample'       => array(
-					'Anrede'           => 'Hallo Anton',
-					'Vorname'          => 'Anton',
-					'Name'             => 'Berger',
-					'Fahrgemeinschaft' => 'Amsel-Gruppe',
-					'Arbeitsdienst'    => 'Flussaktion',
-					'Loeschlink'       => 'https://example.org/?fg_ride_action=view&ride_ref=8a1f0c2b&token=e57b0c93f2a148d6b8e0c37a1d94f652',
+					'Anrede'        => 'Hallo Anton',
+					'Vorname'       => 'Anton',
+					'Name'          => 'Berger',
+					'Arbeitsdienst' => 'Flussaktion',
+					'Loeschlink'    => 'https://example.org/?fg_ride_action=view&ride_ref=8a1f0c2b&token=e57b0c93f2a148d6b8e0c37a1d94f652',
 				),
 			),
 			self::CONTACT_CREATOR => array(
-				'label'        => __( 'Kontaktanfrage an den Ersteller', 'arbeitsdienste' ),
-				'description'  => __( 'Geht an den Ersteller der Fahrgemeinschaft, wenn sich jemand gemeldet hat. Sie trägt die Adresse der interessierten Person als Antwortadresse, damit ein Antworten ohne Rückfrage möglich ist.', 'arbeitsdienste' ),
+				'label'        => __( 'Kontaktanfrage an das Mitglied', 'arbeitsdienste' ),
+				'description'  => __( 'Geht an das Mitglied, das die Fahrgemeinschaft angeboten hat, wenn sich jemand gemeldet hat. Sie trägt die Adresse der interessierten Person als Antwortadresse, damit ein Antworten ohne Rückfrage möglich ist.', 'arbeitsdienste' ),
 				'subject'      => 'Interesse an deiner Fahrgemeinschaft – {{Arbeitsdienst}}',
-				'body'         => "{{Anrede}},\n\ndu hast einen Interessenten für deine Fahrgemeinschaft {{Fahrgemeinschaft}}.\n\nE-Mail-Adresse: {{Interessent}}\n\nSchreib der Person direkt eine E-Mail, damit ihr euch abstimmen könnt.\nWenn du möchtest, kannst du deine Telefonnummer direkt in deiner Antwort nennen.\n\nBitte melde dich auch bei dem Interessenten, wenn es nicht klappt. Die Person wartet auf eine Antwort.",
+				'body'         => "{{Anrede}},\n\ndu hast einen Interessenten für deine Eintragung.\n\nE-Mail-Adresse: {{Interessent}}\n\nSchreib der Person direkt eine E-Mail, damit ihr euch abstimmen könnt.\nWenn du möchtest, kannst du deine Telefonnummer direkt in deiner Antwort nennen.\n\nBitte melde dich auch bei dem Interessenten, wenn es nicht klappt. Die Person wartet auf eine Antwort.",
 				'placeholders' => array(
-					'{{Anrede}}'           => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Ohne Namen in der Mitgliederverwaltung steht hier nur „Hallo“.', 'arbeitsdienste' ),
-					'{{Vorname}}'          => __( 'Vorname des Empfängers, wenn die Adresse zu einem Mitglied gehört — ein Mitglied hat immer einen. Leer bleibt er nur bei einer Adresse, die zu niemandem gehört.', 'arbeitsdienste' ),
-					'{{Name}}'             => __( 'Nachname des Empfängers, wenn die Adresse zu einem Mitglied gehört — ein Mitglied hat immer einen. Leer bleibt er nur bei einer Adresse, die zu niemandem gehört.', 'arbeitsdienste' ),
-					'{{Fahrgemeinschaft}}' => __( 'Die öffentliche Bezeichnung der Fahrgemeinschaft.', 'arbeitsdienste' ),
-					'{{Arbeitsdienst}}'    => __( 'Titel des Arbeitsdienstes, an den die Fahrgemeinschaft gehört.', 'arbeitsdienste' ),
-					'{{Interessent}}'      => __( 'Die Adresse, unter der sich die interessierte Person gemeldet hat.', 'arbeitsdienste' ),
+					'{{Anrede}}'        => __( 'Anrede mit Namen, zum Beispiel „Hallo Anton“. Diese Mail geht nur an das Mitglied, das die Eintragung angeboten hat, hier steht also immer ein Name.', 'arbeitsdienste' ),
+					'{{Vorname}}'       => __( 'Vorname des Mitglieds, aus der Mitgliederverwaltung.', 'arbeitsdienste' ),
+					'{{Name}}'          => __( 'Nachname des Mitglieds, aus der Mitgliederverwaltung.', 'arbeitsdienste' ),
+					'{{Arbeitsdienst}}' => __( 'Titel des Arbeitsdienstes, an den die Fahrgemeinschaft gehört.', 'arbeitsdienste' ),
+					'{{Interessent}}'   => __( 'Die Adresse, unter der sich die interessierte Person gemeldet hat.', 'arbeitsdienste' ),
 				),
 				// No link to name here: the interested person answers by e-mail,
-				// the address of the ride creator stands in the reply field.
+				// the address of the member who offered the ride stands in the reply field.
 				'links'        => array(),
 				'sample'       => array(
-					'Anrede'           => 'Hallo Anton',
-					'Vorname'          => 'Anton',
-					'Name'             => 'Berger',
-					'Fahrgemeinschaft' => 'Amsel-Gruppe',
-					'Arbeitsdienst'    => 'Flussaktion',
-					'Interessent'      => 'marie.kurz@example.org',
+					'Anrede'        => 'Hallo Anton',
+					'Vorname'       => 'Anton',
+					'Name'          => 'Berger',
+					'Arbeitsdienst' => 'Flussaktion',
+					'Interessent'   => 'marie.kurz@example.org',
 				),
 			),
 			self::CONTACT_REQUESTER => array(
 				'label'        => __( 'Bestätigung an die anfragende Person', 'arbeitsdienste' ),
-				'description'  => __( 'Geht an die Person, die den Kontaktknopf gedrückt hat — und nur, wenn die Mail an den Ersteller hat gehen können. Sie enthält keine Links, weil es nichts zu bestätigen gibt.', 'arbeitsdienste' ),
+				'description'  => __( 'Geht an die Person, die den Kontaktknopf gedrückt hat — und nur, wenn die Mail an das Mitglied hat gehen können. Sie enthält keine Links, weil es nichts zu bestätigen gibt.', 'arbeitsdienste' ),
 				'subject'      => 'Deine Kontaktanfrage wurde angenommen',
-				'body'         => "{{Anrede}},\n\nWir haben den Ersteller der Fahrgemeinschaft benachrichtigt.\nHoffentlich meldet sich bald jemand bei dir.\n\nBitte prüfe auch deinen Spam-Ordner.",
+				'body'         => "{{Anrede}},\n\nWir haben das Mitglied benachrichtigt, das die Fahrgemeinschaft angeboten hat.\nHoffentlich meldet sich bald jemand bei dir.\n\nBitte prüfe auch deinen Spam-Ordner.",
 				'placeholders' => array(
-					'{{Anrede}}'           => __( 'Anrede mit Namen, zum Beispiel „Hallo Marie“. Das Kontaktformular fragt nicht nach dem Namen, das steht hier nur, wenn die Adresse zu einem Mitglied gehört — sonst bleibt es bei „Hallo“.', 'arbeitsdienste' ),
-					'{{Vorname}}'          => __( 'Vorname der anfragenden Person. Das Kontaktformular fragt nicht nach Namen, also steht hier nur dann einer, wenn die Adresse ausgerechnet zu einem Mitglied gehört.', 'arbeitsdienste' ),
-					'{{Name}}'             => __( 'Nachname der anfragenden Person. Wie der Vorname: leer, solange die Adresse zu keinem Mitglied gehört.', 'arbeitsdienste' ),
-					'{{Fahrgemeinschaft}}' => __( 'Die öffentliche Bezeichnung der Fahrgemeinschaft, an die sich die Person gewandt hat.', 'arbeitsdienste' ),
-					'{{Arbeitsdienst}}'    => __( 'Titel des Arbeitsdienstes, an den die Fahrgemeinschaft gehört.', 'arbeitsdienste' ),
+					'{{Anrede}}'        => __( 'Anrede mit Namen, zum Beispiel „Hallo Marie“. Das Kontaktformular fragt nur nach der Adresse, aber die muss zu einem Mitglied des Vereins gehören — hier steht also immer ein Name.', 'arbeitsdienste' ),
+					'{{Vorname}}'       => __( 'Vorname der anfragenden Person, aus der Mitgliederverwaltung. Wie die Anrede: die Adresse muss zu einem Mitglied gehören, also steht hier immer einer.', 'arbeitsdienste' ),
+					'{{Name}}'          => __( 'Nachname der anfragenden Person, aus der Mitgliederverwaltung.', 'arbeitsdienste' ),
+					'{{Arbeitsdienst}}' => __( 'Titel des Arbeitsdienstes, an den die Fahrgemeinschaft gehört.', 'arbeitsdienste' ),
 				),
 				'links'        => array(),
 				'sample'       => array(
-					'Anrede'           => 'Hallo Marie',
-					'Vorname'          => 'Marie',
-					'Name'             => 'Kurz',
-					'Fahrgemeinschaft' => 'Amsel-Gruppe',
-					'Arbeitsdienst'    => 'Flussaktion',
+					'Anrede'        => 'Hallo Marie',
+					'Vorname'       => 'Marie',
+					'Name'          => 'Kurz',
+					'Arbeitsdienst' => 'Flussaktion',
 				),
 			),
 			self::DUTY_SIGNUP     => array(

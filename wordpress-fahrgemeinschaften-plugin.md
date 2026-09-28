@@ -18,6 +18,16 @@
 > Anmeldung für genau diesen Dienst. Die betroffenen Stellen sind an Ort und Stelle als
 > überholt markiert; was daraus geworden ist, steht unten unter
 > „Umsetzungsstand: Mitgliederverwaltung (1.9.0)“.
+>
+> **Hinweis (28.09.2026):** Der Auftrag ist ein drittes Mal umgestellt worden
+> (Plugin 1.14.0, Schema 1.4.0). Die Mitgliedsnummer ist jetzt der Schlüssel einer
+> Fahrgemeinschaft: Das Angebotformular fragt **Nummer und E-Mail-Adresse** ab, und
+> beides muss zu einem Mitglied passen, weil die Zuordnung an der Nummer hängt. Die
+> Fahrt trägt `member_id`; Bezeichnung (`alias`) und Kontaktadresse
+> (`contact_email`) stehen nicht mehr daran. Jede Nachricht zu einer Fahrgemeinschaft
+> geht damit an ein Mitglied. Die betroffenen Stellen sind an Ort und Stelle als
+> überholt markiert; was daraus geworden ist, steht unten unter
+> „Umsetzungsstand: Mitgliedsnummer als Schlüssel (1.14.0)“.
 
 ## Ziel
 
@@ -59,9 +69,11 @@ Für die einfache Umsetzung werden zwei nicht öffentliche Custom Post Types ver
    - übergeordneter Arbeitsdienst
    - Status `pending` bis zur Bestätigung, danach `publish`
    - Angebot/Suche
-   - Vorname oder Spitzname
+   - ~~Vorname oder Spitzname~~ **Überholt seit 1.14.0:** Der Vorname kommt aus dem
+     Mitglied, zu dem die Fahrt gehört.
    - Abfahrtsbereich
-   - kontakt-E-Mail des Erstellers
+   - ~~kontakt-E-Mail des Erstellers~~ **Überholt seit 1.14.0:** An der Fahrt steht
+     die Mitgliedsnummer; die Adresse gehört zum Mitglied.
    - Revisionen und REST-API-Veröffentlichung deaktiviert
 
 Beim Löschen eines Arbeitsdienstes werden automatisch alle zugehörigen Fahrgemeinschaften und Tokens gelöscht.
@@ -73,7 +85,8 @@ Die öffentliche Seite zeigt ausschließlich veröffentlichte Fahrgemeinschaften
 Anzeige:
 
 - Art: „Ich biete“ oder „Ich suche“
-- Vorname oder Spitzname
+- ~~Vorname oder Spitzname~~ **Seit 1.14.0** der Vorname des Mitglieds, zu dem die
+  Fahrt gehört, und die Mitgliedsnummer mit Vor- und Nachnamen
 - Arbeitsdienst und Datum
 - Abfahrtsbereich als Ort oder Stadtteil, im Formular mit drei Beispielen
 - Schaltfläche „Kontaktieren“; das darunterliegende Kontaktformular erscheint erst auf Wunsch und wird über „Absenden“ gesendet
@@ -118,13 +131,17 @@ Alle Links öffnen zunächst eine Handhabungsseite; die eigentliche Aktion wird 
 2. Mitgliedschaft genau in diesem Arbeitsdienst serverseitig prüfen.
 3. Der öffentlichen Formularseite immer dieselbe neutrale Antwort ausgeben.
 4. Nur bei gültiger Adresse:
-   - den Ersteller per E-Mail informieren,
+   - ~~den Ersteller~~ das Mitglied, das die Fahrt angeboten hat, per E-Mail
+     informieren,
    - dem Anfragenden eine Bestätigung senden.
 5. Bei ungültiger Adresse keine E-Mail versenden und keinen öffentlichen Hinweis auf die Gültigkeit geben.
 
 Neutrale Antwort:
 
-> Vielen Dank für deine Anfrage. Wir informieren den Ersteller, sofern die angegebene E-Mail-Adresse für den gewählten Arbeitsdienst hinterlegt ist.
+> Vielen Dank für deine Anfrage. Wir informieren ~~den Ersteller~~ das Mitglied, das die Fahrgemeinschaft angeboten hat, sofern die angegebene E-Mail-Adresse für den gewählten Arbeitsdienst hinterlegt ist.
+
+> (Wortlaut seit 1.14.0; die Fassung oben ist der ursprüngliche Auftrag und bleibt
+> stehen.)
 
 Zusätzliche Bot-Signale wie ein auffällig kurzer Absendezeitpunkt dürfen statistisch erfasst, aber nicht als Mengenlimit verwendet werden.
 
@@ -183,7 +200,8 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 
 - alle vorgemerkten und veröffentlichten Einträge
 - Filter nach Arbeitsdienst und Status
-- öffentliche Felder und kontakt-E-Mail für berechtigte Administratoren
+- öffentliche Felder, dazu die Mitgliedsnummer des anbietenden Mitglieds; die
+  E-Mail-Adresse des Mitglieds nur auf der Detailseite, nicht in der Liste
 - Ändern und Löschen
 - keine Tokens im Admin anzeigen
 
@@ -191,11 +209,14 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 
 - Nur bestätigte Einträge sind öffentlich sichtbar.
 - E-Mail-Adressen, UUIDs, interne IDs und Tokens sind im öffentlichen Quellcode nicht vorhanden.
-- Ungültige oder fremde E-Mail-Adressen können keinen Eintrag veröffentlichen.
+- ~~Ungültige oder fremde E-Mail-Adressen können keinen Eintrag veröffentlichen.~~
+  **Seit 1.14.0 verschärft:** Es genügt nicht, dass eine Adresse zu einem Mitglied
+  gehört, es muss auch die Nummer dazugehören — und die E-Mail-Adresse wird an der
+  Fahrt überhaupt nicht gespeichert.
 - Bestätigungs- und Löschen-Links funktionieren einmalig und laufen korrekt ab.
 - Eine Vormerkung kann gelöscht und anschließend neu erstellt werden.
 - Der Kontakt erzeugt unabhängig von der Adressgültigkeit dieselbe öffentliche Antwort.
-- ~~Nur gültige Teilnehmeradressen lösen Kontakt-E-Mails aus.~~ **Seit 1.9.0 verschärft:** Es genügt nicht, dass eine Adresse zu einem Mitglied gehört — das Mitglied muss für genau den Arbeitsdienst eingetragen sein, um dessen Eintrag zu kontaktieren. Auf beiden Seiten des Kontakts, Anfragender wie Ersteller.
+- ~~Nur gültige Teilnehmeradressen lösen Kontakt-E-Mails aus.~~ **Seit 1.9.0 verschärft:** Es genügt nicht, dass eine Adresse zu einem Mitglied gehört — das Mitglied muss für genau den Arbeitsdienst eingetragen sein, um dessen Eintrag zu kontaktieren. Auf beiden Seiten des Kontakts, Anfragender wie das anbietende Mitglied.
 - Vergangene Arbeitsdienste verschwinden automatisch aus der öffentlichen Anzeige.
 - Das Löschen eines Arbeitsdienstes löscht auch alle zugehörigen Fahrgemeinschaften.
 - Formulareingaben können weder HTML-/JavaScript-Injection noch SQL-Injection auslösen. Im HTML-Teil der E-Mails werden sie escaped eingesetzt.
@@ -237,7 +258,9 @@ Die Umsetzung folgt dem Plan, ergänzt ihn aber an den folgenden Stellen. Die au
 - Ein abgelaufenes oder manipuliertes Formular-Token führt zu `form_expired`, ohne eine Aktion auszuführen.
 - Kann die Vormerkungs-E-Mail nicht zugestellt werden, wird der eben angelegte Eintrag wieder gelöscht (`email_failed`).
 - Kann die E-Mail mit dem Löschlink nach der Bestätigung nicht zugestellt werden, wird die Veröffentlichung zurückgenommen; die Vormerkungs-Token bleiben gültig, damit derselbe Bestätigungslink erneut funktioniert (`publish_failed`).
-- Die Bestätigungs-Mails enthalten weiterhin wörtlich „Ist der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.“, die Antwortmail an den Anfragenden „Wir haben den Ersteller der Fahrgemeinschaft benachrichtigt.“
+- Die Bestätigungs-Mails enthalten weiterhin wörtlich „Ist der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.“, die Antwortmail an den Anfragenden ~~„Wir haben den Ersteller der Fahrgemeinschaft
+  benachrichtigt.“~~ **Seit 1.14.0 überholt:** Sie lautet „Wir haben das Mitglied
+  benachrichtigt, das die Fahrgemeinschaft angeboten hat.“
 
 ### Betrieb
 
@@ -323,8 +346,8 @@ Abweichungen und Entscheidungen“, die Prüfungen in `PRUEFUMGEBUNG.md`.
   Fahrgemeinschaften, Einstellungen, Statistik. Am Arbeitsdienst steht statt des
   Textfelds eine nur lesbare Liste der Angemeldeten mit einer Löschschaltfläche je Zeile.
 - Die Kontaktvermittlung verlangt jetzt auf **beiden** Seiten die Anmeldung für genau
-  diesen Dienst: Der Anfragende muss eingetragen sein, und der Ersteller des Eintrags
-  ebenso. Ein Arbeitsdienst ohne Bedarf oder ohne freien Platz kann damit auch keine
+  diesen Dienst: Der Anfragende muss eingetragen sein, und das Mitglied, das den
+  Eintrag angeboten hat, ebenso. Ein Arbeitsdienst ohne Bedarf oder ohne freien Platz kann damit auch keine
   Fahrtgemeinschaft anbieten — die Kehrseite derselben Regel, gewollt, weil die
   Arbeitsdienstliste die einzige ist.
 - Adressen sind auf 190 Zeichen begrenzt, weil die Spalten so breit sind. Ohne diese Grenze
@@ -359,6 +382,75 @@ laufenden Betriebs. Schema unverändert `1.2.0`.
   gelesenen Liste. Wer sich zwischen der Übersicht und dem Klick für einen Dienst
   einträgt, behält damit sein Mitglied; mit einer Liste davor ginge es verloren, ohne
   dass es jemand ausgelöst hätte.
-- **Fahrgemeinschaften bleiben.** Eine Fahrt ist ein eigener Eintrag mit eigener
-  Kontaktadresse und gehörte nie zum Mitgliedsdatensatz — dieselbe Semantik wie beim
-  Löschen eines einzelnen Mitglieds.
+- **Fahrgemeinschaften bleiben.** Eine Fahrt ist ein eigener Eintrag und wird nicht
+  mit dem Mitglied gelöscht — dieselbe Semantik wie beim Löschen eines einzelnen
+  Mitglieds. Seit `1.14.0` gilt das mit einer Änderung: Die Fahrt trägt die
+  Mitgliedsnummer, aber keine Adresse mehr, und ohne das Mitglied ist sie eine Zeile
+  ohne Namen. Sie bleibt in der Tabelle, verschwindet aus der öffentlichen Liste und
+  steht im Admin als „Fahrgemeinschaft ohne Mitglied“.
+
+## Umsetzungsstand: Mitgliedsnummer als Schlüssel (1.14.0, Schema 1.4.0)
+
+Ergänzt um den Auftrag vom 28.09.2026. Der Auftrag hieß: Die Mitgliedsnummer soll der
+Schlüssel einer Fahrgemeinschaft sein, das Formular soll Mitgliedsnummer und E-Mail
+abfragen, und beides soll zu einem Mitglied passen. Das ist eine Normalisierung, kein
+Lochstopfen: Eine Fahrt gehörte vorher zu einer Adresse, und eine Adresse sagt nichts
+darüber, **welches** Mitglied gemeint ist — und genau daran hängt die Kontaktvermittlung.
+
+### Das Formular
+
+- **Zwei Felder statt eines.** `fg_member_no` (Text, 40 Zeichen) und `fg_member_email`
+  (E-Mail, 190 Zeichen). Beide stehen mit `maxlength` im HTML.
+- **Beide müssen zu derselben Zeile passen.** Nicht „die Nummer ist bekannt“ und nicht
+  „die Adresse ist bekannt“, sondern `member_no` **und** `email` zusammen. Eine falsche
+  Adresse zu einer richtigen Nummer wird abgewiesen und umgekehrt, und beide Fehler
+  bekommen dieselbe Meldung, damit die Antwort nicht verrät, welche Hälfte falsch war.
+- **Die Adresse wird nicht gespeichert.** Sie ist ein Beweis, kein Feld. In `fg_rides`
+  steht seit `1.4.0` überhaupt keine E-Mail-Adresse mehr; die einzige Adresse eines
+  Mitglieds liegt in `fg_members.email`.
+- **Der Name ist weg.** Es gibt kein `fg_alias` mehr. Der Vorname kommt aus dem Mitglied,
+  und der Abfahrtsbereich ist der einzige Freitext des Formulars.
+
+### Die Tabelle
+
+`fg_rides` bekommt die Spalte `member_id` mit einem Index, und `alias` sowie
+`contact_email` bleiben als leere Spalten stehen — aus demselben Grund wie `participants`:
+ein zurückgerolltes Plugin darf nicht an einem unbekannten Feld scheitern. Die Migration
+läuft über `maybe_install()` und besteht aus drei freistehenden statischen Methoden in
+`FG_Schema`, aufgerufen von `install()`:
+
+| Schritt | Wirkung |
+| --- | --- |
+| `adopt_ride_members()` | `UPDATE … JOIN` von `fg_members.email` auf `fg_rides.contact_email`, mit der Schranke `member_id = 0` im `WHERE` |
+| `clear_legacy_ride_contacts()` | löscht die Zeilen ohne Mitglied und **mit** einer Adresse, leert danach beide Alt-Spalten und schreibt die Zahl in eine Option |
+| `take_dropped_rides_notice()` | gibt die Zahl einmal zurück und löscht sie |
+
+Der Löschpfad ist bewusst `WHERE member_id = 0 AND contact_email <> ''` und nicht bloß
+`member_id = 0`: Jede Zeile einer Fassung vor `1.4.0` hat eine Adresse, weil das Formular
+sie verlangt hat. Eine Zeile **ohne** Adresse und ohne Mitglied kann also nicht aus der
+alten Fassung stammen, gehört zu keiner Fassung und bleibt stehen.
+
+### Was das für den Menschen bedeutet
+
+- **Eine Fahrt ohne Mitglied ist kein Fehler**, aber sie ist auch kein Angebot mehr. Die
+  öffentliche Liste lässt sie weg, die Adminliste nennt sie „Fahrgemeinschaft ohne
+  Mitglied“, und die Detailseite sagt „nicht mehr im Verein“ in **einer** Zeile statt in
+  vier leeren — vier leere Zellen lesen sich wie ein Formular, das niemand ausgefüllt hat.
+- **Jede Nachricht zu einer Fahrgemeinschaft geht an ein Mitglied.** Damit ist der
+  Rückfall „Hallo“ ohne Namen auf diesem Weg nicht mehr erreichbar, und `{{Anrede}}`
+  bleibt trotzdem ein Platzhalter: Ein gespeichertes „Hallo {{Vorname}},“ würde den
+  Vornamen zweimal setzen.
+- **Eine Fahrt, deren Mitglied später austritt, verliert ihre Adresse.** Die Adresse
+  stammt aus dem Mitglied; ohne Mitglied gibt es keine mehr. Genau deshalb bleibt die
+  Fahrt stehen und wird nicht mitgelöscht.
+
+### Was offen bleibt
+
+Der Vormame im Verein kann anders lauten als in der Mitgliederverwaltung, und die
+Mitgliedsnummer ist das, was im Verein gilt. Beides ist eine bewusste Entscheidung für
+die Quelle der Wahrheit: Die Mitgliederverwaltung, nicht das Angebot.
+
+Eine Sperre „eine Fahrt je Mitglied und Dienst“ ist mit dieser Fassung **nicht**
+eingeführt. Sie ist im Auftrag nicht verlangt worden und wäre eine eigene Entscheidung mit
+eigenen Folgen für den öffentlichen Text; sie gehört in einen eigenen Schritt, nicht in
+diesen.

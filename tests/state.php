@@ -139,11 +139,14 @@ switch ( $command ) {
 		fg_state_out( $repo->count_rides( array( 'status' => FG_RIDE_STATUS_PUBLISHED ) ) );
 		break;
 
-	case 'count-alias':
+	// Rides have no name of their own since schema 1.4.0, so the pickup area is
+	// the only free text on a row and the only thing a caller can count by. The
+	// suites give each submission its own area for that reason.
+	case 'count-origin':
 		$needle = isset( $args[0] ) ? (string) $args[0] : '';
 		$found  = 0;
 		foreach ( $repo->get_rides_page( array(), 0, 0 ) as $ride ) {
-			if ( 0 === strpos( $ride->alias, $needle ) ) {
+			if ( 0 === strpos( $ride->origin, $needle ) ) {
 				++$found;
 			}
 		}
@@ -191,9 +194,8 @@ switch ( $command ) {
 			'event_id',
 			'status',
 			'mode',
-			'alias',
 			'origin',
-			'contact_email',
+			'member_id',
 			'public_ref',
 			'confirmed_at',
 			'consent_version',
@@ -387,18 +389,25 @@ switch ( $command ) {
 		}
 		break;
 
+	// make-ride <event_id> <mode> <origin> <member_no> [published]
+	//
+	// A ride belongs to a member since schema 1.4.0, so the name is looked up
+	// from a member number and not passed in. Callers that used to hand in an
+	// address of their own need a member row behind it now, which is the point:
+	// a ride whose member does not exist is a case the plugin has to survive,
+	// and the suites build it on purpose rather than by accident.
 	case 'make-ride':
-		$ride = $repo->create_pending_ride(
+		$mitglied = $repo->get_member_by_number( isset( $args[3] ) ? (string) $args[3] : '' );
+		$ride     = $repo->create_pending_ride(
 			array(
-				'event_id'      => isset( $args[0] ) ? $args[0] : 0,
-				'mode'          => isset( $args[1] ) ? $args[1] : FG_RIDE_MODE_OFFER,
-				'alias'         => isset( $args[2] ) ? $args[2] : 'Fahrt',
-				'origin'        => isset( $args[3] ) ? $args[3] : 'Innenstadt',
-				'contact_email' => isset( $args[4] ) ? $args[4] : 'anton@angeln.example.org',
+				'event_id'  => isset( $args[0] ) ? $args[0] : 0,
+				'mode'      => isset( $args[1] ) ? $args[1] : FG_RIDE_MODE_OFFER,
+				'origin'    => isset( $args[2] ) ? $args[2] : 'Innenstadt',
+				'member_id' => $mitglied ? $mitglied->id : 0,
 			)
 		);
 		$ride_id = $ride['id'];
-		if ( $ride_id && isset( $args[5] ) && FG_RIDE_STATUS_PUBLISHED === $args[5] ) {
+		if ( $ride_id && isset( $args[4] ) && FG_RIDE_STATUS_PUBLISHED === $args[4] ) {
 			$repo->update_ride(
 				$ride_id,
 				array(
@@ -553,11 +562,12 @@ switch ( $command ) {
 		fg_state_out( 'cleared' );
 		break;
 
-	// mail-holdback <event_id>: put a text with a placeholder this version does
-	// not know into the table, then let a real message go out to a real ride and
-	// report what happened. Four numbers, because four different things can fail
-	// on their own: the send can report success, the log can grow anyway, the
-	// club can hear nothing about it, and the log can grow for another reason.
+	// mail-holdback <event_id> <member_no>: put a text with a placeholder this
+	// version does not know into the table, then let a real message go out to a
+	// real ride and report what happened. Four numbers, because four different
+	// things can fail on their own: the send can report success, the log can
+	// grow anyway, the club can hear nothing about it, and the log can grow for
+	// another reason.
 	case 'mail-holdback':
 		global $wpdb;
 
@@ -575,15 +585,16 @@ switch ( $command ) {
 			'Hallo {{Anrede}}, dein Eintrag ist da: {{Erfunden}}.'
 		);
 
+		// A member the caller names, so that the ride has a real address to go
+		// to. The wording in the table is the thing under test, not the ride.
+		$mitglied = $repo->get_member_by_number( isset( $args[1] ) ? (string) $args[1] : '' );
+
 		$ride = $repo->create_pending_ride(
 			array(
-				'event_id'      => isset( $args[0] ) ? (int) $args[0] : 0,
-				'mode'          => FG_RIDE_MODE_OFFER,
-				'alias'         => 'Haltepruefung',
-				'origin'        => 'Innenstadt',
-				// An address that belongs to nobody, so the greeting has to fall
-				// back to the designation the visitor chose.
-				'contact_email' => 'niemand@wohnen.example.org',
+				'event_id'  => isset( $args[0] ) ? (int) $args[0] : 0,
+				'mode'      => FG_RIDE_MODE_OFFER,
+				'origin'    => 'Innenstadt',
+				'member_id' => $mitglied ? $mitglied->id : 0,
 			)
 		);
 
@@ -619,15 +630,16 @@ switch ( $command ) {
 		fg_state_out( implode( "\t", array( $weg ? 'sent' : 'held-back', $vorher, $nachher, $notizen ) ) );
 		break;
 
-	// mail-anrede <event_id> <alias> <contact_email> <requester_email>
+	// mail-anrede <event_id> <creator_member_no> <asker_member_no> [geloescht]
 	//
 	// The two greetings of a contact request, from the messages that really
-	// went out. This is where the fallback lives: the creator is addressed by
-	// the designation they chose themselves when their address belongs to
-	// nobody, and the interested person, whose address belongs to nobody
-	// either, is greeted with a plain "Hallo" — which is the whole reason the
-	// greeting is a placeholder of its own instead of a "Hallo" written in front
-	// of a name.
+	// went out. Both sides are members since schema 1.4.0, so both greetings
+	// carry a first name and the fallback for an address of nobody is not
+	// reachable on this path any more. What replaced it as the case worth a
+	// test is the member who left the club after offering the ride: the ride
+	// still points at the row ID, the row is gone, and there is no name and no
+	// address to write to. The flag "geloescht" builds exactly that — it makes
+	// the ride, deletes the member and then lets the notifier run.
 	case 'mail-anrede':
 		global $wpdb;
 
@@ -636,23 +648,25 @@ switch ( $command ) {
 
 		update_option( 'fg_test_mail_enabled', '1', false );
 
-		$alias         = isset( $args[1] ) ? (string) $args[1] : 'Anredegruppe';
-		$kontakt       = isset( $args[2] ) ? (string) $args[2] : 'niemand@wohnen.example.org';
-		$fragende      = isset( $args[3] ) ? (string) $args[3] : 'fremde.person@example.org';
-		$vorher_id     = (int) $wpdb->get_var( "SELECT COALESCE( MAX( id ), 0 ) FROM $log" );
+		$ersteller = $repo->get_member_by_number( isset( $args[1] ) ? (string) $args[1] : '' );
+		$fragend   = $repo->get_member_by_number( isset( $args[2] ) ? (string) $args[2] : '' );
+		$vorher_id = (int) $wpdb->get_var( "SELECT COALESCE( MAX( id ), 0 ) FROM $log" );
 
 		$ride = $repo->create_pending_ride(
 			array(
-				'event_id'      => isset( $args[0] ) ? (int) $args[0] : 0,
-				'mode'          => FG_RIDE_MODE_OFFER,
-				'alias'         => $alias,
-				'origin'        => 'Innenstadt',
-				'contact_email' => $kontakt,
+				'event_id'  => isset( $args[0] ) ? (int) $args[0] : 0,
+				'mode'      => FG_RIDE_MODE_OFFER,
+				'origin'    => 'Innenstadt',
+				'member_id' => $ersteller ? $ersteller->id : 0,
 			)
 		);
 
+		if ( 'geloescht' === ( isset( $args[3] ) ? (string) $args[3] : '' ) && $ersteller ) {
+			$repo->delete_member( $ersteller->id );
+		}
+
 		$mailer = new FG_Mailer( $repo );
-		$wege   = $mailer->send_contact_notifications( $ride['id'], $fragende );
+		$wege   = $mailer->send_contact_notifications( $ride['id'], $fragend ? $fragend->id : 0 );
 
 		$zeilen = $wpdb->get_col( $wpdb->prepare( "SELECT mail_body FROM $log WHERE id > %d ORDER BY id ASC", $vorher_id ) );
 
@@ -682,7 +696,7 @@ switch ( $command ) {
 		}
 
 		// Tab, not the comma that fg_state_out() uses for a list: a greeting ends
-		// in a comma of its own, and "Hallo Anredegruppe,,Hallo,,1,1" cannot be
+		// in a comma of its own, and "Hallo Greta,,Hallo Frieda,,1,1" cannot be
 		// read back without knowing in which order the parts were joined.
 		fg_state_out(
 			implode(

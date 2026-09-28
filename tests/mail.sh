@@ -24,6 +24,11 @@ ANFRAGER_NR=$(python3 -c "import json;print(json.load(open('$F'))['member_free_n
 ANFRAGER_MAIL=$(python3 -c "import json;print(json.load(open('$F'))['member_free_mail'])")
 ERSTELLER_MAIL=berta@angeln.example.org
 ERSTELLER_NR=0043
+# The one who offers a ride. The form takes a member number and the address that
+# belongs to it, so a submission needs both, and the number comes from the
+# fixture next to the address rather than being written out a second time.
+EINREICHER_NR=$(python3 -c "import json;print(json.load(open('$F'))['member_taken_no'])")
+EINREICHER_MAIL=$(python3 -c "import json;print(json.load(open('$F'))['member_taken_mail'])")
 for paar in "$ANFRAGER_NR $ANFRAGER_MAIL" "$ERSTELLER_NR $ERSTELLER_MAIL"; do
 	# shellcheck disable=SC2086
 	set -- $paar
@@ -82,9 +87,9 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "action=fg_submit_ride" \
 	--data-urlencode "fg_event_ref=$EVENT_REF" \
 	--data-urlencode "fg_mode=offer" \
-	--data-urlencode "fg_alias=Mailtest Trupp" \
+	--data-urlencode "fg_member_no=$EINREICHER_NR" \
 	--data-urlencode "fg_origin=Oststadt" \
-	--data-urlencode "fg_contact_email=anton@angeln.example.org" \
+	--data-urlencode "fg_member_email=$EINREICHER_MAIL" \
 	--data-urlencode "fg_consent=1" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
@@ -98,10 +103,11 @@ MAIL_SUBJECT=$(mail_subject)
 MAIL_TYPE=$(mail_type)
 MAIL_HEADERS=$(mail_headers)
 MAIL_BODY=$(mail_body)
-if [ "$MAIL_TO" = "anton@angeln.example.org" ]; then ok "mail goes to the entered address"; else bad "mail goes to the entered address" "$MAIL_TO"; fi
+if [ "$MAIL_TO" = "$EINREICHER_MAIL" ]; then ok "mail goes to the address of the member number"; else bad "mail goes to the address of the member number" "$MAIL_TO"; fi
 has "subject names the work duty" "$MAIL_SUBJECT" "Fahrgemeinschaft bestätigen – Arbeitsdienst Laber"
 has "body announces the pre-registration" "$MAIL_BODY" "noch nicht veröffentlicht"
-has "body warns about private data" "$MAIL_BODY" "Bitte prüfe die Angaben sorgfältig"
+has "body names the first name from the member list" "$MAIL_BODY" "Vorname: Anton"
+has "body says where the name comes from" "$MAIL_BODY" "Er stammt aus der Mitgliederverwaltung"
 if [ "$MAIL_TYPE" = "text/plain" ]; then ok "plugin forces no content type ($MAIL_TYPE)"; else bad "plugin forces no content type" "$MAIL_TYPE"; fi
 hasnt "headers carry no content type" "$MAIL_HEADERS" "Content-Type"
 hasnt "plain text alternative has no html" "$MAIL_BODY" "<html"
@@ -115,7 +121,8 @@ confirm_url=$(printf '%s' "$MAIL_BODY" | grep -o "$BASE/?fg_ride_action=view&rid
 if [ -n "$confirm_url" ]; then ok "confirm link extracted"; else bad "confirm link extracted" "none"; fi
 html=$(curl -sk "$confirm_url")
 has "link opens the confirmation page" "$html" "Veröffentlichung bestätigen"
-hasnt "confirmation page shows no other entry" "$html" "Amsel-Gruppe"
+has "confirmation page names the first name of the member" "$html" "Anton"
+hasnt "confirmation page shows no other entry" "$html" "Berta"
 
 # --- 2. confirming sends the publication mail with the dictated sentence
 echo "[2] publication mail"
@@ -155,7 +162,7 @@ has "deletion succeeds" "$loc" "fg_notice=deleted"
 after=$(count_mails)
 if [ "$after" = "$before" ]; then ok "deletion does not send a mail"; else bad "deletion does not send a mail" "$((after - before))"; fi
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-hasnt "deleted entry is gone" "$body" "Mailtest Trupp"
+hasnt "deleted entry is gone" "$body" "Oststadt"
 
 # --- 4. contact request
 echo "[4] contact request between participants"
@@ -180,15 +187,16 @@ foreach ( \$wpdb->get_results( 'SELECT mail_to, mail_subject, mail_body FROM ' .
 }")
 requester=$(printf '%s' "$newest" | head -1)
 creator=$(printf '%s' "$newest" | tail -1)
-has "requester receives the dictated answer" "$requester" "Wir haben den Ersteller der Fahrgemeinschaft benachrichtigt."
+has "requester receives the dictated answer" "$requester" "Wir haben das Mitglied benachrichtigt, das die Fahrgemeinschaft angeboten hat."
 hasnt "requester mail has no link" "$requester" "http"
 hasnt "requester mail has no html" "$requester" "<a href"
 has "creator mail carries the requester address" "$creator" "cem@angeln.example.org"
-# The name of the entry stands in the sentence, not beside it: the sentence
-# alone would be sent to every creator of every entry, and one check for each
-# half would stay green if the name had moved into a line of its own where
-# nobody reads it.
-has "creator mail names the entry in the sentence about the interest" "$creator" "du hast einen Interessenten für deine Fahrgemeinschaft Amsel-Gruppe."
+# The sentence names the entry without a name of its own, because a ride has no
+# name of its own any more: it belongs to a member. The sentence alone would go
+# to every member who ever offered a ride, so the greeting beside it is what
+# tells two creators apart, and both halves are checked.
+has "creator mail greets the member who offered the ride" "$creator" "Hallo Berta,"
+has "creator mail says who wrote in" "$creator" "du hast einen Interessenten für deine Eintragung."
 
 echo "[4c] contact request to own entry"
 before=$(count_mails)
@@ -231,17 +239,17 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "action=fg_submit_ride" \
 	--data-urlencode "fg_event_ref=$EVENT_REF" \
 	--data-urlencode "fg_mode=offer" \
-	--data-urlencode "fg_alias=Mailtest Ausfall" \
-	--data-urlencode "fg_origin=Oststadt" \
-	--data-urlencode "fg_contact_email=anton@angeln.example.org" \
+	--data-urlencode "fg_member_no=$EINREICHER_NR" \
+	--data-urlencode "fg_origin=Oststadt-Ausfall" \
+	--data-urlencode "fg_member_email=$EINREICHER_MAIL" \
 	--data-urlencode "fg_consent=1" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 	--data-urlencode "fg_submit_nonce=$submit_nonce")
 has "submission reports the failed delivery" "$loc" "fg_notice=email_failed"
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-hasnt "undelivered entry is gone again" "$body" "Mailtest Ausfall"
-left=$(docker exec wpdev-wordpress-1 php /tmp/fgtests/state.php count-alias "Mailtest Ausfall")
+hasnt "undelivered entry is gone again" "$body" "Oststadt-Ausfall"
+left=$(s count-origin "Oststadt-Ausfall")
 if [ "$left" = "0" ]; then ok "no record is left in the database"; else bad "no record is left in the database" "$left"; fi
 
 mail_fail 0
@@ -249,9 +257,9 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "action=fg_submit_ride" \
 	--data-urlencode "fg_event_ref=$EVENT_REF" \
 	--data-urlencode "fg_mode=offer" \
-	--data-urlencode "fg_alias=Mailtest Ruecknahme" \
-	--data-urlencode "fg_origin=Oststadt" \
-	--data-urlencode "fg_contact_email=anton@angeln.example.org" \
+	--data-urlencode "fg_member_no=$EINREICHER_NR" \
+	--data-urlencode "fg_origin=Oststadt-Ruecknahme" \
+	--data-urlencode "fg_member_email=$EINREICHER_MAIL" \
 	--data-urlencode "fg_consent=1" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
@@ -272,7 +280,7 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "token_nonce=$token_nonce")
 has "confirmation reports the failed delivery" "$loc" "fg_notice=publish_failed"
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-hasnt "unpublished entry stays out of the list" "$body" "Mailtest Ruecknahme"
+hasnt "unpublished entry stays out of the list" "$body" "Oststadt-Ruecknahme"
 
 mail_fail 0
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
@@ -283,7 +291,7 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "token_nonce=$token_nonce")
 has "the same link works again after the failure" "$loc" "fg_notice=published"
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-has "entry is public after the retry" "$body" "Mailtest Ruecknahme"
+has "entry is public after the retry" "$body" "Oststadt-Ruecknahme"
 
 # clean up: remove the test entry again through its own link
 delete_url=$(mail_body | grep -o "$BASE/?fg_ride_action=view&ride_ref=[^ ]*intent=delete[^ ]*" | head -1)
@@ -298,7 +306,7 @@ curl -sk -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "token=$token" \
 	--data-urlencode "token_nonce=$token_nonce"
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-hasnt "cleanup removed the test entry" "$body" "Mailtest Ruecknahme"
+hasnt "cleanup removed the test entry" "$body" "Oststadt-Ruecknahme"
 
 # --- 6. the structure of the finished message
 # The recorder above only sees what the plugin hands to wp_mail(), and that is

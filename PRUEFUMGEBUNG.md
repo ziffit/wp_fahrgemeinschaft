@@ -4,24 +4,25 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **Admin-Ebene 537, öffentliches HTTP 181, Mail-Ebene 163,
-0 Fehler**. Die CLI-Suite ist nicht gelaufen, weil `smoke.php` am Anfang
-alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht und dafür eine
-ausdrückliche Zustimmung braucht; ihre 482 Prüfungen stammen aus dem freigegebenen Lauf
-vom 27.09.2026 und sind seither unverändert. Der Lauf ist damit keine Viersuiten-Zahl,
-und er wird auch nicht als eine angegeben.
+Letzter Lauf: 28.09.2026 — **CLI 511, Admin-Ebene 553, öffentliches HTTP 191,
+Mail-Ebene 166, 0 Fehler**. Alle vier Suiten sind an diesem Tag gegen denselben
+Stand gelaufen. Die CLI-Suite ist mit ausdrücklicher Zustimmung gefahren, weil
+sie am Anfang alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht.
+Sie sind von Hand nacheinander gefahren, nicht über `run-all.sh`.
 
 Der Lauf ist kein `run-all.sh`, und die CLI-Suite ist auch nicht über den normalen Weg
 gefahren: `smoke.php` kennt nur den Schritt `all`, und der löscht am Anfang alle
 Arbeitsdienste, Fahrgemeinschaften und Mitglieder. Das ist beim ersten Versuch dieser
 Reihe passiert und hat sieben von Hand eingetragene Arbeitsdienste und zwei Fahrten
 gekostet; seitdem wird das nur noch mit ausdrücklicher Zustimmung getan. Der CLI-Lauf
-vom 27.09.2026 ist mit Zustimmung gefahren, gegen den Stand, der auch die drei
-anderen Suiten gesehen haben. Vor diesem Lauf ist die Verwaltung aufgeräumt worden:
-142 veröffentlichte Seiten namens „Fahrgemeinschaften“ sowie „Arbeitsdienste“ (ID 106
-und 108) sind gelöscht, geblieben ist die Seite ID 98 mit dem Shortcode, weil
-`http.sh` und `mail.sh` sie brauchen. Das Aufräumen ist eine eigene Handlung gewesen
-und nicht Teil eines Laufs.
+vom 28.09.2026 ist mit Zustimmung gefahren, gegen denselben Stand, den die drei
+anderen Suiten desselben Tages gesehen haben, und zwar zuerst: Ein Lauf, der die
+Tabellen leert, zerstört keinen Zustand, den die anderen Suiten brauchen —
+`http.sh` und `mail.sh` bauen ihre Fixture ohnehin vorher neu auf. Vor diesem Lauf
+ist die Verwaltung aufgeräumt worden: 142 veröffentlichte Seiten namens
+„Fahrgemeinschaften“ sowie „Arbeitsdienste“ (ID 106 und 108) sind gelöscht,
+geblieben ist die Seite ID 98 mit dem Shortcode, weil `http.sh` und `mail.sh` sie
+brauchen. Das Aufräumen ist eine eigene Handlung gewesen und nicht Teil eines Laufs.
 
 Reihenfolge und Zustand: `http.sh` und `mail.sh` lesen `tests/fixture.json` und
 verbrauchen es; die Datei wird deshalb vor ihrem Lauf neu gebaut. `admin.sh` liest sie
@@ -117,9 +118,10 @@ Das Skript ist idempotent und in fünf Schritten aufgeteilt:
   Cron und den Mail-Recorder und meldet, was fehlt.
 
 Nach dem Setup ist die Umgebung in dem Zustand, den die Tests erwarten: Plugin aktiv,
-`fg_schema_version` auf `1.2.0`, die vier Tabellen `wp_fg_events`, `wp_fg_rides`,
-`wp_fg_members` und `wp_fg_event_members` vorhanden,
-`fg_daily_cleanup` geplant, keine Rollenberechtigung des Plugins, Mail-Log leer.
+`fg_schema_version` auf `1.4.0`, die fünf Tabellen `wp_fg_events`, `wp_fg_rides`,
+`wp_fg_members`, `wp_fg_event_members` und `wp_fg_mail_templates` vorhanden, die Spalte
+`member_id` in `wp_fg_rides` angelegt, `fg_daily_cleanup` geplant, keine
+Rollenberechtigung des Plugins, Mail-Log leer.
 
 ## Testlauf
 
@@ -133,8 +135,8 @@ Fahrgemeinschaften und Mitglieder sowie die Statistik-Option, es gibt also keine
 
 | Suite | Datei | Vorgehen |
 | --- | --- | --- |
-| CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–20: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene und die Mitgliederverwaltung; dazu die Abschnitte `[2a]` (die vier freiwilligen Angaben eines Arbeitsdienstes) und `[3c]` (die Liste der Arbeitsdienste) |
-| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data`, Verhalten der Schaltflächen im Stylesheet; dazu die Abschnitte `[8]` für die Arbeitsdienstliste auf einer eigenen Seite und `[9]` für den vollständigen Weg von der Anmeldung über die E-Mail bis zum Abmelden |
+| CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–20: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene und die Mitgliederverwaltung; dazu die Abschnitte `[2a]` (die vier freiwilligen Angaben eines Arbeitsdienstes), `[3c]` (die Liste der Arbeitsdienste) und `[1b]` (die Migration von Schema 1.4.0: eine Fahrt mit einer Adresse, die zu einem Mitglied gehört, wird über einen JOIN an dieses Mitglied gehängt; eine mit einer fremden Adresse wird gelöscht und gezählt; beide Alt-Spalten werden geleert; eine Fahrt ohne Adresse und ohne Mitglied bleibt stehen) |
+| Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Abfahrtsbereich gegen Kontaktdaten über den Zähler `publish_personal_data`, Verhalten der Schaltflächen im Stylesheet; dazu die Abschnitte `[5e]` (die Mitgliedsnummer als Schlüssel: das Formular fragt Nummer und Adresse, nennt keinen Namen mehr, und beide Längenbegrenzungen stehen im HTML), `[8]` für die Arbeitsdienstliste auf einer eigenen Seite und `[9]` für den vollständigen Weg von der Anmeldung über die E-Mail bis zum Abmelden |
 | Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo`, und die Links beider Teile: im HTML ein `<a href>` mit einem Wortlaut, der die Handlung nennt, im Text die Adresse in Klarschrift |
 | Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der sechs Unterseiten auf jeder Seite, die neue Seite E-Mails eingeschlossen), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die Abschnitte `[9]` (Mitgliederverwaltung), `[10]` (CSV-Import), `[11]` (Anmeldung zu einem Dienst) und `[12]` (Aufräumen um alle Mitglieder ohne Arbeitsdienst) und `[13]` mit `[13b]` (Anrede der Nachrichten) und `[13c]` (Zurückhaltung bei einem unbekannten Platzhalter) — Wortlaut der fünf E-Mails, Platzhalter je Nachricht, Vorschau, Zurücksetzen |
 
@@ -145,8 +147,8 @@ Zwei Eigenheiten der Suiten, die man kennen muss, bevor man einem Fehlschlag tra
   Fixture gebaut, laufen `[1]` bis `[6]` gegen Einmalwerte und schlagen mit
   `invalid_token` fehl — nicht, weil das Plugin etwas kaputt gemacht hätte, sondern
   weil die Werte schon verbraucht waren. Das gilt auch, wenn eine Suite von Hand
-  gefahren wird statt über `run-all.sh`: `admin.sh` braucht für den Importbericht den
-  Mitglied `0042` aus derselben Fixture und verbraucht sie dabei. Ein danach gefahrenes
+gefahren wird statt über `run-all.sh`: `admin.sh` braucht für den Importbericht und für
+ein paar Zählerstände das Mitglied `0042` in der Datenbank und liest die Fixture-Datei nicht.
   `http.sh` läuft dann gegen leere Werte und meldet 24 rote Zeilen, von denen keine
   einen Fehler des Plugins bezeichnet. Vor jeder von Hand gefahrenen Suite also
   `http_setup.php` laufen lassen.
@@ -408,7 +410,7 @@ grün, während der Datensatz liegen blieb.
 
 Der Aufbau der öffentlichen Liste wird über die ausgelieferte Seite geprüft, nicht über
 den Quelltext: Arbeitsdienst und Datum stehen in einer gemeinsamen Überschrift, jeder
-Eintrag trägt Angebotsart, Abfahrtsbereich und Vorname oder Spitzname in einer Zeile, Feld und
+Eintrag trägt Angebotsart, Abfahrtsbereich und den Vorname des Mitglieds in einer Zeile, Feld und
 Schaltfläche liegen in derselben Zeile, und der Hinweis zur E-Mail-Adresse steht einmal
 für die ganze Liste statt einmal je Eintrag. Der letzte Punkt prüft Anzahl der Einträge
 und Anzahl der Hinweise in einer Bedingung, weil ein Vergleich auf einer Seite mit nur
@@ -440,17 +442,26 @@ Dass das Label **E-Mail** nicht umbricht, wird im selben Stylesheet geprüft: Es
 eine Regel für das Label in der Kontaktzeile mit `white-space: nowrap`. Ohne sie setzt der
 Browser am Bindestrich um, und aus einer Zeile werden zwei.
 
-Dass das Namensfeld einen Vornamen oder Spitzname erwartet und keine Kontaktdaten, lässt
-sich nicht an der Meldung ablesen: Ein abgewiesener Eintrag und ein Eintrag, der später
-an einer nicht hinterlegten Adresse scheitert, antworten beide mit `not_created`. Der
-Unterschied steht nur im Zähler `publish_personal_data`, den der Server selbst führt. Die
-Prüfung liest ihn vor dem Absenden und danach und verlangt, dass er bei „Peter“, „Käse“
-und „Amsel-Gruppe“ stehen bleibt, bei einer Telefonnummer aber steigt. Dafür nimmt sie
-bewusst eine Adresse, die zu keinem für den Dienst angemeldeten Mitglied gehört: Dann
-entsteht kein Eintrag, und die Probe hinterlässt nichts. Die sieben Textprüfungen desselben Abschnitts sind gegen
-den Stand von `HEAD` geprüft: Aus dem alten Plugin ausgeliefert schlagen alle sieben fehl,
-unter anderem die wegen der Dativform „persönliche**n** Kontaktdaten“ — mit der Endung `n`
-im Suchbegriff wäre sie auch an der alten Fassung vorbeigelaufen und hätte nichts geprüft.
+Dass der einzige Freitext des Formulars — der Abfahrtsbereich — keine Kontaktdaten
+annimmt, lässt sich nicht an der Meldung ablesen: Ein abgewiesener Eintrag und ein
+Eintrag, der später an einer nicht passenden Kombination aus Nummer und Adresse
+scheitert, antworten beide mit `not_created`. Der Unterschied steht nur im Zähler
+`publish_personal_data`, den der Server selbst führt. Die Prüfung liest ihn vor dem
+Absenden und danach und verlangt, dass er bei „Südstadt“, „Langwasser“,
+„Nürnberg Nord“ und „S-Bahnstation Ostring“ stehen bleibt, bei einer Telefonnummer und
+bei einer Straßenadresse aber steigt. Dafür nimmt sie bewusst eine Nummer mit einer
+Adresse, die zu keinem für den Dienst angemeldeten Mitglied gehören: Dann entsteht
+kein Eintrag, und die Probe hinterlässt nichts. Vor der Fassung 1.14.0 stand hier der
+Vorname, und das Namensfeld war derselbe Gegenstand der Prüfung; das Feld gibt es
+nicht mehr, und die Prüfung ist mit ihm auf den Abfahrtsbereich umgezogen statt
+weggefallen. An ihre Stelle ist der Abschnitt `[5e]` getreten: Das Formular fragt
+`fg_member_no` und `fg_member_email`, nennt weder ein Namensfeld noch die alte
+Formulierung „Vorname oder Spitzname“, trägt beide Längenbegrenzungen im HTML und
+sagt im Hinweis, dass beide Angaben zu einem Mitglied passen müssen. Die
+Textprüfungen dieses Abschnitts sind gegen den Stand von `HEAD` geprüft: Aus dem alten
+Plugin ausgeliefert schlagen sie fehl, unter anderem die wegen der Dativform
+„persönliche**n** Kontaktdaten“ — mit der Endung `n` im Suchbegriff wäre sie auch
+an der alten Fassung vorbeigelaufen und hätte nichts geprüft.
 
 Der Hinweis unter dem Abfahrtsbereich nennt drei Beispiele, und die Suite prüft, dass der
 Server alle drei annimmt. Das ist keine Formsache: Ein Hinweis, der Werte anbietet, die der
@@ -569,7 +580,7 @@ Ein Name, der weder `on` noch `off` ist, schaltet nichts und antwortet mit dem Z
 später als Fehler des Plugins gesucht wird.
 
 `tests/state.php` ist die Schnittstelle zwischen den Shell-Suiten und den Tabellen. Es liest
-und schreibt über `FG_Repository` (`statuses`, `count`, `count-published`, `count-alias`,
+und schreibt über `FG_Repository` (`statuses`, `count`, `count-published`, `count-origin`,
 `event`, `ride`, `make-event`, `make-ride`, `find-event`, `exists-*`, `delete-*`, `purge`),
 damit die Skripte den Zustand der Installation prüfen können, ohne WordPress-Beiträge zu
 kennen. Feldzugriffe laufen über eine Whitelist; jeder Befehl gibt genau einen Wert aus.
@@ -578,7 +589,24 @@ Dazu kommen für den Wortlaut der E-Mails `mail-text-rows`, `mail-text-body`,
 `mail-text-clear` — und für die Nachrichten, die wirklich hinausgehen,
 `mail-anrede`, `mail-greeting` und `mail-holdback`. `mail-text-set` schreibt ohne die
 Prüfung des Formulars, weil sonst kein Formular den Zustand bauen könnte, den
-`mail-holdback` prüft. Dazu kommen `settings`, `settings-json` und `settings-restore`
+`mail-holdback` prüft.
+
+Drei Befehfe haben mit der Mitgliedsnummer als Schlüssel ihre Form geändert, und das ist
+der Grund, warum sie hier stehen und nicht nur im Quelltext:
+
+| Befehl | früher | jetzt |
+| --- | --- | --- |
+| `make-ride` | `<event_id> <mode> <origin> <alias> [published]` | `<event_id> <mode> <origin> <member_no> [published]` |
+| `count-alias` | zählte die Fahrten mit diesem Namen | heißt `count-origin` und zählt die Fahrten mit diesem Abfahrtsbereich |
+| `mail-anrede` | `<event_id> <ersteller_mail> <fragende_mail>` | `<event_id> <ersteller_nr> <fragende_nr> [geloescht]` |
+
+`mail-anrede` nimmt Mitglieder**nummern**, weil die Mail über die Nummer geht: Der Rückfall
+„Hallo“ ohne Namen ist auf diesem Weg nicht mehr erreichbar, weil jede Nachricht zu einer
+Fahrgemeinschaft an ein Mitglied geht. Der vierte Schalter sagt, dass der Kontakt zu einer
+Fahrt gehört, die es nicht (mehr) gibt; vorher stand dieser Fall nicht auf der Liste,
+weil eine Fahrt ohne Absenderadresse nicht vorkam.
+
+Dazu kommen `settings`, `settings-json` und `settings-restore`
 für die Option `fg_settings`:
 Die Admin-Suite liest die Option vor dem eigenen Lauf und stellt sie danach wieder her, damit
 eine von Hand gepflegte Fußzeile den Testlauf übersteht. Weil die Option dabei nicht leer
@@ -946,6 +974,35 @@ aktualisiert sie.
 Die Spalte `participants` bleibt in der Tabelle stehen, damit eine ältere Fassung, die
 zurückgerollt wird, nicht an einem unbekannten Feld scheitert. Sie ist ab `1.2.0`
 immer leer.
+
+## Die Mitgliedsnummer als Schlüssel (Schema 1.4.0)
+
+Bis `1.13.0` stand an einer Fahrgemeinschaft eine frei gewählte Bezeichnung (`alias`) und
+die Adresse der anbietenden Person (`contact_email`). Seit `1.4.0` steht dort
+`member_id`, und die beiden alten Spalten sind leer. Die Migration läuft in drei
+Schritten, jeder eine freistehende statische Methode in `FG_Schema`, aufgerufen von
+`install()` — dasselbe Muster wie `clear_legacy_participants()`:
+
+```php
+FG_Schema::adopt_ride_members();          // UPDATE … JOIN contact_email -> fg_members.email
+FG_Schema::clear_legacy_ride_contacts();  // DELETE … WHERE member_id = 0 AND contact_email <> ''
+FG_Schema::take_dropped_rides_notice();   // Zahl in eine Option, danach weg
+```
+
+Der Löschpfad ist bewusst über das `WHERE` verengt und nicht über `member_id = 0` allein.
+Jede Zeile einer Fassung vor `1.4.0` hat eine Adresse in `contact_email` — das Schema der
+alten Spalte ist `NOT NULL DEFAULT ''`, aber sie wurde beim Anlegen immer gefüllt, weil
+das Formular sie verlangt hat. Eine Zeile ohne Adresse **und** ohne Mitglied kann deshalb
+nicht aus der alten Fassung stammen; sie gehört zu keiner Fassung und bleibt stehen. Ohne
+die Verengung hätte die Migration auch solche Zeilen gelöscht, und mit ihnen Daten, die
+niemandem gehören und niemandem schaden.
+
+Der Abschnitt `[1b]` der CLI-Suite prüft alle vier Fälle getrennt: eine Fahrt mit der
+Adresse eines Mitglieds wird an dieses Mitglied gehängt, eine mit einer fremden Adresse
+wird gelöscht und in der Option gemeldet, eine ohne Adresse und ohne Mitglied bleibt
+stehen, und die Zahl in der Option verschwindet nach dem ersten Lesen. Die Reihenfolge
+diese Prüfungen ist wichtig — sie lesen denselben Zustand, und wer sie umstellt, prüft
+eine Option, die schon geleert ist, und meldet zu Recht eine Null.
 
 ## Mail-Auswertung
 

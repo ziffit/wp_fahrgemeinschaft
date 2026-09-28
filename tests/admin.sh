@@ -440,37 +440,67 @@ clean "$newform" "empty work duty form"
 
 # --- ride screens
 echo "[4] ride screens"
+# The member and both rides belong to this run. A ride used to carry a name of
+# its own, so the list had something to show that this file could put there. Now
+# a ride belongs to a member and the list names the member, so the rows have to
+# be built here as well — otherwise the checks would be about whatever the
+# environment happens to hold.
+neu 7301 fahrer@angeln.example.org Frieda Fahrlich
+RIDE_ID=$(s make-ride "$EVENT_ID" offer Innenstadt 7301)
+PUBLISHED_RIDE=$(s make-ride "$EVENT_ID" search Suedstadt 7301 published)
 rides=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides")
-has "ride list renders" "$rides" "Moewe-Trupp"
+has "ride list renders" "$rides" "Fahrgemeinschaften"
 has "event filter present" "$rides" 'name="fg_event_filter"'
 has "status filter present" "$rides" 'name="fg_status_filter"'
-has "contact address is visible to the administrator" "$rides" "anton@angeln.example.org"
+has "the list names the ride after the first name of its member" "$rides" "Frieda"
+has "the list names the member by number" "$rides" "7301"
+has "the list names the member by first and last name" "$rides" "Frieda Fahrlich"
+hasnt "the list does not show the member address" "$rides" "fahrer@angeln.example.org"
 hasnt "no form to change a ride" "$rides" 'name="fg_origin"'
 hasnt "no delete form" "$rides" '<form method="post"'
 clean "$rides" "ride list"
 
-RIDE_ID=$(s make-ride "$EVENT_ID" offer "Wartende Fahrt" Innenstadt anton@angeln.example.org)
 detail=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&ride=$RIDE_ID")
-has "detail screen renders" "$detail" "Wartende Fahrt"
+has "detail screen renders" "$detail" "Innenstadt"
 has "detail shows the status" "$detail" "Vorgemerkt"
+has "detail shows the first name of the member" "$detail" "Frieda"
+has "detail shows the last name of the member" "$detail" "Fahrlich"
+has "detail shows the member number" "$detail" "7301"
+has "detail gives the address of the member" "$detail" "fahrer@angeln.example.org"
 has "detail offers the permanent delete" "$detail" "action=fg_delete_record"
 hasnt "detail has no save button" "$detail" 'name="fg_alias"'
 clean "$detail" "ride detail screen"
 
-# The published ride of this section belongs to this run. It used to be read out
-# of the fixture, which is the fixture of the HTTP suite — and that suite proves
-# it can delete that ride. The filter check then failed whenever the two suites
-# ran in the wrong order, which says nothing about the filter.
-PUBLISHED_RIDE=$(s make-ride "$EVENT_ID" search "Elster-Gruppe" Suedstadt anton@angeln.example.org published)
-
 echo "[4b] filtering the ride list"
+# The two rides of this section sit in different areas, because the area is the
+# only free text a ride has left and the filter check counts on being able to
+# tell them apart. Both belong to the same member, so the name column is the
+# same on both rows and cannot serve as the marker.
 filtered=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&fg_status_filter=pending&fg_event_filter=$EVENT_ID")
-has "pending filter keeps the pending ride" "$filtered" "Wartende Fahrt"
-hasnt "pending filter hides the published ride" "$filtered" "Elster-Gruppe"
+has "pending filter keeps the pending ride" "$filtered" "Innenstadt"
+hasnt "pending filter hides the published ride" "$filtered" "Suedstadt"
 other=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&fg_status_filter=published")
-has "published filter keeps the published ride" "$other" "Elster-Gruppe"
-hasnt "published filter hides the pending ride" "$other" "Wartende Fahrt"
+has "published filter keeps the published ride" "$other" "Suedstadt"
+hasnt "published filter hides the pending ride" "$other" "Innenstadt"
 clean "$other" "filtered ride list"
+
+echo "[4c] a member who left the club after offering a ride"
+# The ride row is complete and points at a member that is not there any more.
+# The list says so in words instead of naming nobody, and the detail screen
+# stands the four member rows up in one, because four empty cells read like a
+# form nobody filled in.
+VERWAIST=$(s make-ride "$EVENT_ID" offer Geistereck 7301)
+s delete-member "$(s member-by-no 7301 id)" > /dev/null
+verwaist_list=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides")
+has "the list names a ride without a member" "$verwaist_list" "Fahrgemeinschaft ohne Mitglied"
+hasnt "the list does not name the member that is gone" "$verwaist_list" "Frieda Fahrlich"
+hasnt "the list does not name the address that is gone" "$verwaist_list" "fahrer@angeln.example.org"
+clean "$verwaist_list" "ride list with a missing member"
+verwaist_detail=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&ride=$VERWAIST")
+has "the detail screen says the member is gone" "$verwaist_detail" "nicht mehr im Verein"
+hasnt "the detail screen has no empty member row" "$verwaist_detail" "Mitgliedsnummer</th>"
+hasnt "the detail screen has no address row of its own" "$verwaist_detail" "E-Mail des Mitglieds"
+clean "$verwaist_detail" "ride detail with a missing member"
 
 # --- save round trip: create a new work duty
 echo "[5] creating a work duty in the admin"
@@ -728,8 +758,8 @@ CASCADE=$(s make-event "Kaskade" "$(date -d '+30 days' +%Y-%m-%d)" 3)
 # registration next to the two rides.
 KASKADE_MEMBER=$(neu "0900" "kette@example.org" "Kette" "Probe")
 s register "$CASCADE" "0900" "kette@example.org" >/dev/null
-s make-ride "$CASCADE" offer "Kaskadenfahrt" Innenstadt kette@example.org published >/dev/null
-s make-ride "$CASCADE" search "Kaskadenfahrt zwei" Suedstadt kette@example.org >/dev/null
+s make-ride "$CASCADE" offer Innenstadt 0900 published >/dev/null
+s make-ride "$CASCADE" search Suedstadt 0900 >/dev/null
 if [ "$(s count-event-rides "$CASCADE")" = "2" ]; then ok "cascade source has two rides"; else bad "cascade source has two rides" "$(s count-event-rides "$CASCADE")"; fi
 form=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$CASCADE")
 has "the delete link itself asks what it takes" "$form" "return confirm("
@@ -2014,7 +2044,7 @@ else
 	bad "the list has one row per message and a header" "$zeilen rows"
 fi
 
-for BESCHRIFTUNG in "Fahrgemeinschaft bestätigen" "Fahrgemeinschaft veröffentlicht" "Kontaktanfrage an den Ersteller" "Bestätigung an die anfragende Person" "Anmeldung zu einem Arbeitsdienst"; do
+for BESCHRIFTUNG in "Fahrgemeinschaft bestätigen" "Fahrgemeinschaft veröffentlicht" "Kontaktanfrage an das Mitglied" "Bestätigung an die anfragende Person" "Anmeldung zu einem Arbeitsdienst"; do
 	has "the list names: $BESCHRIFTUNG" "$list" "$BESCHRIFTUNG"
 done
 
@@ -2396,43 +2426,51 @@ hasnt "an unknown key opens no form" "$fremd_seite" 'name="fg_mail_body"'
 hasnt "an unknown key opens no reset" "$fremd_seite" "Auf Standard zurücksetzen"
 
 echo "[13b] the greeting of the messages"
-# The greeting is the one place in a mail where a missing name shows up as a
-# broken sentence, and it is the one thing a club cannot see: every address that
-# does not belong to a member is a case the screen never shows. All four cases
-# are read out of the messages that really went out.
+# Both sides of a contact request are members since schema 1.4.0, so both
+# greetings carry a first name and the case of an address that belongs to nobody
+# is gone from this path. What took its place is the member who left the club
+# after offering the ride: the ride still points at the row, the row is not there
+# any more, and there is no name and no address to write to. All of it is read
+# out of the messages that really went out.
 
-IFS=$'\t' read -r an_ersteller an_fragend gesendet_e gesendet_f <<< "$(s mail-anrede "$ANREDE" Anredegruppe niemand@wohnen.example.org fremde.person@example.org)"
-if [ "$an_ersteller" = "Hallo Anredegruppe," ]; then
-	ok "an address of nobody is greeted by the designation ($an_ersteller)"
-else
-	bad "an address of nobody is greeted by the designation" "$an_ersteller"
-fi
-if [ "$an_fragend" = "Hallo," ]; then
-	ok "an address of nobody with no designation is greeted plainly ($an_fragend)"
-else
-	bad "an address of nobody with no designation is greeted plainly" "$an_fragend"
-fi
-
-# Both addresses belong to members this section builds itself. Using a member of
-# the fixture would tie the check to what the sections before it leave behind,
-# and one of them prunes every member without a work service — so the address
-# would be a stranger again and the greeting would fall back to the designation,
-# green for a reason that has nothing to do with the code under test.
+# Both members are built here rather than taken from the fixture, because one of
+# the sections before this prunes every member without a work service and the
+# check would then be green for a reason that has nothing to do with the code
+# under test.
 neu 7201 ersteller@angeln.example.org Greta Gruen
-IFS=$'\t' read -r an_ersteller an_fragend _ _ <<< "$(s mail-anrede "$ANREDE" Anredegruppe ersteller@angeln.example.org fremde.person@example.org)"
-if [ "$an_ersteller" = "Hallo Greta," ]; then
-	ok "the member behind the address is greeted by the first name ($an_ersteller)"
-else
-	bad "the member behind the address is greeted by the first name" "$an_ersteller"
-fi
-
 neu 7202 fragende@angeln.example.org Frieda Fraglich
-IFS=$'\t' read -r an_ersteller an_fragend _ _ <<< "$(s mail-anrede "$ANREDE" Anredegruppe niemand@wohnen.example.org fragende@angeln.example.org)"
+IFS=$'\t' read -r an_ersteller an_fragend gesendet_e gesendet_f <<< "$(s mail-anrede "$ANREDE" 7201 7202)"
+if [ "$an_ersteller" = "Hallo Greta," ]; then
+	ok "the member who offered the ride is greeted by the first name ($an_ersteller)"
+else
+	bad "the member who offered the ride is greeted by the first name" "$an_ersteller"
+fi
 if [ "$an_fragend" = "Hallo Frieda," ]; then
 	ok "a member who asks for contact is greeted by the first name ($an_fragend)"
 else
 	bad "a member who asks for contact is greeted by the first name" "$an_fragend"
 fi
+if [ "$gesendet_e" = "1" ] && [ "$gesendet_f" = "1" ]; then
+	ok "and both messages went out"
+else
+	bad "and both messages went out" "creator=$gesendet_e requester=$gesendet_f"
+fi
+
+# The member who offered the ride is deleted while the ride still points at
+# them. The list leaves the ride out, and the notifier has nothing to send to:
+# one withheld message, not two, and no greeting without a name in it.
+IFS=$'\t' read -r an_ersteller an_fragend gesendet_e gesendet_f <<< "$(s mail-anrede "$ANREDE" 7201 7202 geloescht)"
+if [ "$an_ersteller" = "KEINE-MAIL" ] && [ "$an_fragend" = "KEINE-MAIL" ]; then
+	ok "a ride whose member is gone sends no message at all"
+else
+	bad "a ride whose member is gone sends no message at all" "$an_ersteller / $an_fragend"
+fi
+if [ "$gesendet_e" = "0" ] && [ "$gesendet_f" = "0" ]; then
+	ok "and the notifier says so"
+else
+	bad "and the notifier says so" "creator=$gesendet_e requester=$gesendet_f"
+fi
+neu 7201 ersteller@angeln.example.org Greta Gruen
 s delete-member "$(s member-by-no 7201 id)" > /dev/null
 s delete-member "$(s member-by-no 7202 id)" > /dev/null
 
@@ -2443,9 +2481,9 @@ else
 	bad "the signup mail greets the member by the first name" "$anrede_dienst"
 fi
 
-# The greeting has to be there in the finished message and not only in a helper.
-# Two of the four cases above are the two ends of the fallback, and a member's
-# name is a piece of personal data that leaves the club with the mail.
+# The greeting has to be there in the finished message and not only in a helper,
+# and a member's name is a piece of personal data that leaves the club with the
+# mail.
 s mail-text-body duty_signup | grep -q '^{{Anrede}},' && ok "the default text of the signup mail begins with the greeting" || bad "the default text of the signup mail begins with the greeting" "$(s mail-text-body duty_signup | head -1)"
 
 echo "[13c] a stored text with a placeholder this version does not know"
@@ -2453,7 +2491,11 @@ echo "[13c] a stored text with a placeholder this version does not know"
 # text in the table then names a placeholder this version has no value for, and
 # the message must not go out half-empty. The row is written directly, because
 # the screen refuses it — no form can build the state that has to be tested.
-ergebnis=$(s mail-holdback "$ANREDE")
+# A member of its own, because the ride needs a real address to be held back
+# with: a ride without one would be held back for a second reason, and the box
+# would then stay empty for a reason that has nothing to do with the wording.
+neu 7203 gehalten@angeln.example.org Gerd Gerafft
+ergebnis=$(s mail-holdback "$ANREDE" 7203)
 IFS=$'\t' read -r weg vorher nachher notizen <<< "$ergebnis"
 if [ "$weg" = "held-back" ]; then
 	ok "the send reports that it sent nothing ($weg)"
@@ -2493,6 +2535,7 @@ sys.exit(1 if ('Warteschlange' in h or 'geht raus, sobald' in h) else 0)
 " "the notice promises a queue that does not exist"
 
 s mail-text-clear > /dev/null
+s delete-member "$(s member-by-no 7203 id)" > /dev/null
 if [ "$(s mail-text-notices)" = "0" ]; then ok "the notices can be cleared"; else bad "the notices can be cleared" "$(s mail-text-notices) left"; fi
 hasnt "a cleared notice is gone from the screen" "$(curl -sk -b "$JAR" "$MAILS")" "nicht verschickt"
 if [ "$(s mail-text-rows ride_pending)" = "0" ]; then ok "the held-back text is gone again"; else bad "the held-back text is gone again" "$(s mail-text-rows ride_pending) rows"; fi

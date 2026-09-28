@@ -225,7 +225,8 @@ final class FG_Mail_Templates {
 	 *
 	 * A blank line separates two paragraphs, a single line break inside a
 	 * paragraph becomes a line break in the HTML. Every value is escaped: the
-	 * text carries the alias and the origin area a visitor typed in.
+	 * text carries the first name of a member and the origin area a visitor
+	 * typed in.
 	 *
 	 * The links of a message are put in after the escaping, never through it. A
 	 * placeholder for a link is therefore taken out of the text first and put

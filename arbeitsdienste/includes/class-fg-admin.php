@@ -92,6 +92,7 @@ final class FG_Admin {
 		add_action( 'admin_notices', array( $this, 'render_delete_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_notice' ) );
 		add_action( 'admin_notices', array( $this, 'render_tls_notice' ) );
+		add_action( 'admin_notices', array( $this, 'render_dropped_rides_notice' ) );
 	}
 
 	/**
@@ -533,6 +534,47 @@ final class FG_Admin {
 		printf(
 			'<div class="notice notice-warning"><p>%s</p></div>',
 			esc_html__( 'Diese Website ist nicht über HTTPS erreichbar. Die öffentlichen Fahrgemeinschafts-Seiten übertragen E-Mail-Adressen und sollten nur mit TLS betrieben werden.', 'arbeitsdienste' )
+		);
+	}
+
+	/**
+	 * Report once how many rides the update of 1.14.0 removed.
+	 *
+	 * A ride belongs to a member since schema 1.4.0, and the ones that had no
+	 * member behind them could not be carried over: their address belonged to
+	 * nobody the club knows, and there is no guessing which member it was meant
+	 * to be. They were deleted, and a club that loses a public entry without
+	 * being told has no way of finding out. The notice appears once — the number
+	 * is deleted as it is read — and only on the screen where the rides are.
+	 *
+	 * @return void
+	 */
+	public function render_dropped_rides_notice() {
+		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+		if ( ! $screen instanceof WP_Screen || $screen->id !== self::screen_id( FG_RIDES_PAGE_SLUG ) ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			return;
+		}
+
+		// Read after the permission check, so that the number is not consumed by
+		// a request that was never allowed to see it.
+		$dropped = FG_Schema::take_dropped_rides_notice();
+		if ( ! $dropped ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-warning"><p>%s</p></div>',
+			esc_html(
+				sprintf(
+					/* translators: %d: number of removed ride entries. */
+					__( 'Beim Update auf 1.14.0 wurden %d Fahrgemeinschaften aus der öffentlichen Liste entfernt. Sie gehörten zu einer E-Mail-Adresse, die keinem Mitglied des Vereins zugeordnet ist. Seit dieser Fassung wird jede Fahrgemeinschaft über die Mitgliedsnummer einem Mitglied zugeordnet; bitte prüfe, ob die betroffenen Personen sich wieder eintragen können.', 'arbeitsdienste' ),
+					$dropped
+				)
+			)
 		);
 	}
 

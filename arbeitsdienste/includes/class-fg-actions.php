@@ -88,17 +88,27 @@ final class FG_Actions {
 
 		$mode   = sanitize_key( $this->post_value( 'fg_mode' ) );
 		$ref    = sanitize_key( $this->post_value( 'fg_event_ref' ) );
-		$alias  = sanitize_text_field( $this->post_value( 'fg_alias' ) );
 		$origin = sanitize_text_field( $this->post_value( 'fg_origin' ) );
-		$email  = $this->repository->normalize_email( $this->post_value( 'fg_contact_email' ) );
 		$event  = $this->repository->get_event_by_reference( $ref );
 
-		$invalid_email = false === $email;
-		if ( $invalid_email ) {
+		// The form asks for the member number and the address, and both have to
+		// belong to the same member. The pair is the same one the work service
+		// form uses, and it is refused without saying which half was wrong: the
+		// page is public, and a hint would tell a passer-by whether a guessed
+		// member number exists.
+		$member = $this->repository->find_member_for_registration(
+			$this->post_value( 'fg_member_no' ),
+			$this->post_value( 'fg_member_email' )
+		);
+
+		if ( ! $member ) {
 			$this->stats->increment( 'publish_invalid_email' );
 		}
 
-		$personal_data = $this->contains_personal_data( $alias ) || $this->contains_personal_data( $origin );
+		// Only the pickup area is free text now. The name in the public list is
+		// the first name of the member, which the club maintains, so nothing the
+		// visitor types can carry an address or a telephone number into a list.
+		$personal_data = $this->contains_personal_data( $origin );
 		if ( $personal_data ) {
 			$this->stats->increment( 'publish_personal_data' );
 		}
@@ -107,18 +117,16 @@ final class FG_Actions {
 			! in_array( $mode, array( FG_RIDE_MODE_OFFER, FG_RIDE_MODE_SEARCH ), true )
 			|| ! $event
 			|| ! $this->repository->is_event_active( $event->id )
-			|| '' === $alias
-			|| $this->string_length( $alias ) > 80
+			|| ! $member
 			|| '' === $origin
 			|| $this->string_length( $origin ) > 100
 			|| $personal_data
-			|| $invalid_email
 			|| '1' !== $this->post_value( 'fg_consent' )
 		) {
 			FG_Security::redirect_with_notice( 'not_created', $source );
 		}
 
-		if ( ! $this->repository->is_event_participant( $event->id, $email ) ) {
+		if ( ! $this->repository->is_event_participant( $event->id, $member->id ) ) {
 			$this->stats->increment( 'publish_invalid_email' );
 			FG_Security::redirect_with_notice( 'not_created', $source );
 		}
@@ -127,12 +135,11 @@ final class FG_Actions {
 
 		$ride = $this->repository->create_pending_ride(
 			array(
-				'event_id'      => $event->id,
-				'mode'          => $mode,
-				'alias'         => $alias,
-				'origin'        => $origin,
-				'contact_email' => $email,
-				'source_url'    => $source,
+				'event_id'   => $event->id,
+				'mode'       => $mode,
+				'member_id'  => $member->id,
+				'origin'     => $origin,
+				'source_url' => $source,
 			)
 		);
 
@@ -174,30 +181,41 @@ final class FG_Actions {
 			FG_Security::redirect_with_notice( 'contact_received', $source );
 		}
 
-		$ref          = sanitize_key( $this->post_value( 'ride_ref' ) );
-		$email        = $this->repository->normalize_email( $this->post_value( 'fg_contact_email' ) );
-		$ride         = $this->repository->get_ride_by_reference( $ref );
+		$ref   = sanitize_key( $this->post_value( 'ride_ref' ) );
+		$email = $this->repository->normalize_email( $this->post_value( 'fg_contact_email' ) );
+		$ride  = $this->repository->get_ride_by_reference( $ref );
+		$owner = $ride ? $this->repository->get_member( $ride->member_id ) : null;
+
 		$ride_visible = $ride
 			&& $this->repository->is_valid_public_ride( $ride )
+			&& $this->repository->is_displayable_member( $owner )
 			&& '' !== $ride->confirmed_at
 			&& $this->repository->is_event_active( $ride->event_id );
 
-		if ( ! $ride_visible || false === $email || ! $this->repository->is_event_participant( $ride->event_id, $email ) ) {
+		// The one asking becomes a member, not an address that is passed on.
+		// The check below asks whether a member is in the list of this duty, and
+		// that question has been asked of a row ID since schema 1.4.0. Naming the
+		// asker also means the greeting in the reply mail is written from the
+		// member list, and that a member writing to their own entry is caught by
+		// comparing two row IDs rather than two strings.
+		$asker = false !== $email ? $this->repository->get_member_by_email( $email ) : null;
+
+		if ( ! $ride_visible || ! $asker || ! $this->repository->is_event_participant( $ride->event_id, $asker->id ) ) {
 			$this->stats->increment( 'contact_invalid_email' );
 			FG_Security::redirect_with_notice( 'contact_received', $source );
 		}
 
-		$creator_email = $this->repository->normalize_email( $ride->contact_email );
+		$creator_email = $this->repository->get_ride_contact_email( $ride, $owner );
 		if (
 			false === $creator_email
-			|| $creator_email === $email
-			|| ! $this->repository->is_event_participant( $ride->event_id, $creator_email )
+			|| $asker->id === $ride->member_id
+			|| ! $this->repository->is_event_participant( $ride->event_id, $ride->member_id )
 		) {
 			FG_Security::redirect_with_notice( 'contact_received', $source );
 		}
 
 		$this->stats->increment( 'contact_valid_email' );
-		$result = $this->mailer->send_contact_notifications( $ride->id, $email );
+		$result = $this->mailer->send_contact_notifications( $ride->id, $asker->id );
 
 		if ( $result['creator'] ) {
 			$this->stats->increment( 'contact_mail_sent' );
@@ -295,6 +313,7 @@ final class FG_Actions {
 
 		$data      = $this->repository->get_ride_display_data( $ride );
 		$mode      = 'search' === $data['mode'] ? __( 'Ich suche', 'arbeitsdienste' ) : __( 'Ich biete', 'arbeitsdienste' );
+		$mitglied  = $data['member'];
 		$is_delete = 'delete' === $intent;
 		$heading   = $is_delete
 			? __( 'Veröffentlichte Fahrgemeinschaft löschen', 'arbeitsdienste' )
@@ -314,11 +333,19 @@ final class FG_Actions {
 		$body .= '<div class="warning"><p>' . esc_html( $warning ) . '</p></div>';
 		$body .= '<dl>';
 		$body .= '<dt>' . esc_html__( 'Art', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $mode ) . '</dd>';
-		$body .= '<dt>' . esc_html__( 'Vorname oder Spitzname', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $ride->alias ) . '</dd>';
+		// The member is named in one line or in none. A ride whose member has
+		// been removed from the club in the meantime has no name and no number
+		// left, and two empty rows would read like a form that was not filled in.
+		if ( $this->repository->is_displayable_member( $mitglied ) ) {
+			$body .= '<dt>' . esc_html__( 'Vorname', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $data['first_name'] ) . '</dd>';
+			$body .= '<dt>' . esc_html__( 'Mitgliedsnummer', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $mitglied->member_no ) . '</dd>';
+		} else {
+			$body .= '<dt>' . esc_html__( 'Mitglied', 'arbeitsdienste' ) . '</dt><dd>' . esc_html__( 'nicht mehr im Verein', 'arbeitsdienste' ) . '</dd>';
+		}
 		$body .= '<dt>' . esc_html__( 'Arbeitsdienst', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $data['event_label'] . ( $data['event_date'] ? ' (' . $data['event_date'] . ')' : '' ) ) . '</dd>';
 		$body .= '<dt>' . esc_html__( 'Abfahrtsbereich', 'arbeitsdienste' ) . '</dt><dd>' . esc_html( $data['origin'] ) . '</dd>';
 		$body .= '</dl>';
-		$body .= '<p><strong>' . esc_html__( 'Die E-Mail-Adresse wird nicht öffentlich angezeigt.', 'arbeitsdienste' ) . '</strong></p>';
+		$body .= '<p><strong>' . esc_html__( 'Vorname, Mitgliedsnummer und E-Mail-Adresse werden nicht öffentlich angezeigt.', 'arbeitsdienste' ) . '</strong></p>';
 		$body .= '<form action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" method="post">';
 		$body .= '<input type="hidden" name="action" value="fg_process_ride_token">';
 		$body .= '<input type="hidden" name="ride_ref" value="' . esc_attr( $data['public_ref'] ) . '">';
@@ -371,11 +398,15 @@ final class FG_Actions {
 		}
 
 		if ( 'confirm' === $intent ) {
-			$email = $this->repository->normalize_email( $ride->contact_email );
+			// The member is re-read here rather than trusted from the row. A
+			// member who was removed from the club between submitting the form
+			// and clicking the link must not publish an entry that names them,
+			// and the address the mail goes to has to be one that still exists.
+			$member = $this->repository->get_member( $ride->member_id );
 			if (
 				! $this->repository->is_event_active( $ride->event_id )
-				|| false === $email
-				|| ! $this->repository->is_event_participant( $ride->event_id, $email )
+				|| ! $this->repository->is_displayable_member( $member )
+				|| ! $this->repository->is_event_participant( $ride->event_id, $ride->member_id )
 				|| '' === $ride->consent_version
 			) {
 				$this->restore_token( $ride, $intent, $token );

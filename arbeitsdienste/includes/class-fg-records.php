@@ -137,25 +137,11 @@ final class FG_Ride {
 	public $mode = '';
 
 	/**
-	 * Publicly visible label chosen by the creator.
-	 *
-	 * @var string
-	 */
-	public $alias = '';
-
-	/**
 	 * Approximate pickup area.
 	 *
 	 * @var string
 	 */
 	public $origin = '';
-
-	/**
-	 * Private contact address of the creator.
-	 *
-	 * @var string
-	 */
-	public $contact_email = '';
 
 	/**
 	 * Random public reference.
@@ -240,6 +226,21 @@ final class FG_Ride {
 	 * @var string
 	 */
 	public $source_url = '';
+
+	/**
+	 * Row ID of the member who offers the ride.
+	 *
+	 * The key of a ride. Everything that used to be typed by hand — a name for the
+	 * public list and an address for the contact request — is read from this
+	 * member instead, so a ride cannot name a person who is not in the club and
+	 * cannot be answered by an address that belongs to nobody.
+	 *
+	 * Zero means no member: such a row is not shown and the migration of schema
+	 * 1.4.0 removed the ones that existed before the column was there.
+	 *
+	 * @var int
+	 */
+	public $member_id = 0;
 }
 
 /**

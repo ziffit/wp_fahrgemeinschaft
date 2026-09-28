@@ -501,17 +501,17 @@ function fg_submission_post( array $overrides = array() ) {
 
 	$event_ref = $GLOBALS['fg_state']['event_ref'];
 	$base      = array(
-		'action'           => 'fg_submit_ride',
-		'fg_event_ref'     => $event_ref,
-		'fg_mode'          => 'offer',
-		'fg_alias'         => 'Test-Fahrgemeinschaft Nord',
-		'fg_origin'        => 'Innenstadt',
-		'fg_contact_email' => 'teilnehmer@example.org',
-		'fg_consent'       => '1',
-		'fg_website'       => '',
-		'form_started_at'  => (string) ( time() - 30 ),
-		'source_url'       => home_url( '/fahrgemeinschaften/' ),
-		'fg_submit_nonce'  => wp_create_nonce( 'fg_submit_ride' ),
+		'action'          => 'fg_submit_ride',
+		'fg_event_ref'    => $event_ref,
+		'fg_mode'         => 'offer',
+		'fg_member_no'    => '100',
+		'fg_origin'       => 'Innenstadt',
+		'fg_member_email' => 'teilnehmer@example.org',
+		'fg_consent'      => '1',
+		'fg_website'      => '',
+		'form_started_at' => (string) ( time() - 30 ),
+		'source_url'      => home_url( '/fahrgemeinschaften/' ),
+		'fg_submit_nonce' => wp_create_nonce( 'fg_submit_ride' ),
 	);
 
 	return array_merge( $base, $overrides );
@@ -643,6 +643,122 @@ fg_ok(
 );
 $scheduled = wp_next_scheduled( 'fg_daily_cleanup' );
 fg_ok( ! empty( $scheduled ), 'daily cleanup scheduled', var_export( $scheduled, true ) );
+
+/* ----------------------------------------------------------------- 1b */
+/* The migration of schema 1.4.0, on rows the current code cannot write.
+ *
+ * Until 1.4.0 a ride carried the address of its creator and nothing else that
+ * named a person. A ride that got that far had an address that belonged to a
+ * member, and the migration attaches it to that member by a join. A ride whose
+ * address belongs to nobody has no member behind it and is deleted.
+ *
+ * Both rows are written straight into the table, because the store has no
+ * writer for a ride without a member any more — that is the whole point of the
+ * change, so a check that goes through the API could not build the state it is
+ * about. The two rows are planted in one statement, the migration is run, and
+ * every outcome is read back from the table rather than from a return value:
+ * the return value is a number, and what has to be checked is which row is
+ * still there.
+ */
+echo "[1b] The migration that attaches rides to members\n";
+global $wpdb;
+$ride_table = FG_Schema::rides_table();
+$jetzt      = current_time( 'mysql' );
+
+// Write one row straight into the table and hand back its ID. wpdb::insert()
+// returns the number of affected rows, not the new ID, so the ID has to be
+// read out of the property behind it — which is what FG_Store does for every
+// row this plugin writes.
+$fg_rohe_fahrt = static function ( array $felder ) use ( $ride_table ) {
+	global $wpdb;
+
+	$erg = $wpdb->insert( $ride_table, $felder );
+
+	return $erg ? (int) $wpdb->insert_id : 0;
+};
+
+$mit_glied  = $fg_rohe_fahrt(
+	array(
+		'event_id'      => 999001,
+		'status'        => FG_RIDE_STATUS_PUBLISHED,
+		'mode'          => FG_RIDE_MODE_OFFER,
+		'alias'         => 'Fahrt eines Mitglieds',
+		'origin'        => 'Innenstadt',
+		'contact_email' => 'migriert@angeln.example.org',
+		'public_ref'    => 'mig0000000000000000000000000000a',
+		'confirmed_at'  => $jetzt,
+		'created_at'    => $jetzt,
+		'member_id'     => 0,
+	)
+);
+$ohne_glied = $fg_rohe_fahrt(
+	array(
+		'event_id'      => 999001,
+		'status'        => FG_RIDE_STATUS_PUBLISHED,
+		'mode'          => FG_RIDE_MODE_OFFER,
+		'alias'         => 'Fahrt einer Fremdadresse',
+		'origin'        => 'Suedstadt',
+		'contact_email' => 'niemand@wohnen.example.org',
+		'public_ref'    => 'mig0000000000000000000000000000b',
+		'confirmed_at'  => $jetzt,
+		'created_at'    => $jetzt,
+		'member_id'     => 0,
+	)
+);
+$mig_mitglied = fg_make_member( '410', 'migriert@angeln.example.org', 'Migriert', 'Probe' );
+fg_ok(
+	$mit_glied > 0 && $ohne_glied > 0 && $mit_glied !== $ohne_glied,
+	'two rides in the shape of 1.3.0 written',
+	wp_json_encode( array( $mit_glied, $ohne_glied ) )
+);
+
+delete_option( FG_Schema::DROPPED_RIDES_OPTION );
+FG_Schema::install();
+
+$danach = $wpdb->get_results( "SELECT id, member_id, alias, contact_email FROM $ride_table WHERE id IN (" . (int) $mit_glied . ',' . (int) $ohne_glied . ') ORDER BY id ASC', ARRAY_A );
+fg_ok( 1 === count( $danach ), 'the ride of the unknown address is gone', wp_json_encode( $danach ) );
+fg_ok(
+	is_array( $danach[0] )
+	&& (int) $danach[0]['member_id'] === (int) $mig_mitglied->id,
+	'the ride of a known address now points at that member',
+	wp_json_encode( $danach[0] ?? null )
+);
+fg_ok(
+	is_array( $danach[0] ) && '' === $danach[0]['alias'] && '' === $danach[0]['contact_email'],
+	'the two dead columns are empty afterwards',
+	wp_json_encode( $danach[0] ?? null )
+);
+// The notice is read once and then gone, so the number is taken into a
+// variable first. Calling the reader a second time for the failure message
+// would report 0 and hide the number the check is about.
+$gemeldet = FG_Schema::take_dropped_rides_notice();
+fg_ok( 1 === $gemeldet, 'the club is told how many rides went', (string) $gemeldet );
+fg_ok( 0 === FG_Schema::take_dropped_rides_notice(), 'and the notice appears only once' );
+
+// A ride with no member and no address is not a row of the old version, and
+// this version has no writer for it. The migration leaves it alone and the
+// public list leaves it out: an entry nobody can be named for stays a row on a
+// table that only the club sees, and is deleted by the daily cleanup like any
+// other row nobody is waiting for.
+$verwaist = $fg_rohe_fahrt(
+	array(
+		'event_id'   => 999001,
+		'status'     => FG_RIDE_STATUS_PUBLISHED,
+		'mode'       => FG_RIDE_MODE_OFFER,
+		'alias'      => '',
+		'origin'     => 'Oststadt',
+		'public_ref' => 'mig0000000000000000000000000000c',
+		'created_at' => $jetzt,
+		'member_id'  => 0,
+	)
+);
+delete_option( FG_Schema::DROPPED_RIDES_OPTION );
+FG_Schema::install();
+fg_ok( null !== $fg_repo->get_ride( $verwaist ), 'a row the old version never wrote is not deleted', (string) $verwaist );
+fg_ok( ! $fg_repo->is_valid_public_ride( $fg_repo->get_ride( $verwaist ) ), 'but it is not valid in public either' );
+fg_ok( 0 === FG_Schema::take_dropped_rides_notice(), 'and it is not counted as a removed ride' );
+$fg_repo->delete_ride( $verwaist );
+$fg_repo->delete_ride( $mit_glied );
 
 /* ------------------------------------------------------------------ 2 */
 echo "[2] Event creation, identity metadata and activity\n";
@@ -876,6 +992,15 @@ $html = $fg_public->render_shortcode();
 fg_contains( 'Fahrgemeinschaft anbieten', $html, 'submission form rendered' );
 fg_contains( 'Aktuelle Fahrgemeinschaften', $html, 'ride list rendered' );
 fg_contains( $event_ref, $html, 'event public reference used in form' );
+// The form asks for a member number and the address that belongs to it. The
+// name in the public list is the first name of that member, so the field that
+// used to carry a name is gone and nothing can be typed into the list.
+fg_contains( 'name="fg_member_no"', $html, 'the form asks for the member number' );
+fg_contains( 'name="fg_member_email"', $html, 'the form asks for the address' );
+fg_not_contains( 'name="fg_alias"', $html, 'the form no longer asks for a name' );
+fg_not_contains( 'Vorname oder Spitzname', $html, 'the wording about a nickname is gone' );
+fg_contains( 'mein Vorname aus der Mitgliederverwaltung', $html, 'the consent names where the public name comes from' );
+fg_contains( 'Mitgliedsnummer werden dabei nicht öffentlich', $html, 'the consent names the member number as private' );
 fg_not_contains( 'Teilnehmer@example.org', $html, 'no participant address in public markup' );
 fg_not_contains( $event_record->event_uuid, $html, 'no event UUID in public markup' );
 fg_not_contains( 'Vergangener Dienst', $html, 'past event not listed' );
@@ -1237,7 +1362,7 @@ $ride    = fg_newest_ride();
 $ride_id = $ride ? $ride->id : 0;
 fg_ok( $ride_id > 0, 'ride created' );
 fg_ok( FG_RIDE_STATUS_PENDING === $ride->status, 'ride is pending', (string) $ride->status );
-fg_ok( 'Test-Fahrgemeinschaft Nord' === $ride->alias, 'alias stored' );
+fg_ok( (int) $ride->member_id === (int) $teilnehmer->id, 'the ride points at the member the form named', $ride->member_id . ' vs ' . $teilnehmer->id );
 fg_ok( FG_CONSENT_VERSION === $ride->consent_version, 'consent recorded' );
 fg_ok( '' !== $ride->public_ref, 'ride reference created' );
 $ride_ref = $ride->public_ref;
@@ -1274,7 +1399,8 @@ fg_ok( '' !== $html, 'standalone page rendered', $err );
 fg_not_contains( 'Fatal error', $html, 'no fatal error on token page' );
 fg_not_contains( 'Warning:', $html, 'no PHP warning on token page' );
 fg_contains( 'Veröffentlichung bestätigen', $html, 'confirm page heading' );
-fg_contains( 'Test-Fahrgemeinschaft Nord', $html, 'confirm page shows the alias' );
+fg_contains( 'Teilnehmer', $html, 'confirm page shows the first name of the member' );
+fg_contains( '100', $html, 'confirm page shows the member number' );
 fg_not_contains( 'teilnehmer@example.org', $html, 'token page hides the address' );
 fg_contains( 'name="token_nonce"', $html, 'token form carries its verifier' );
 fg_contains( 'name="intent" value="confirm"', $html, 'token form carries the intent' );
@@ -1325,7 +1451,7 @@ fg_ok( '' !== $fg_repo->get_ride( $ride_id )->delete_hash, 'deletion token store
 $GLOBALS['fg_state']['delete_url'] = $delete_url;
 
 $html = $fg_public->render_shortcode();
-fg_contains( 'Test-Fahrgemeinschaft Nord', $html, 'published ride is listed' );
+fg_contains( 'Teilnehmer', $html, 'published ride is listed under the first name of the member' );
 fg_not_contains( 'teilnehmer@example.org', $html, 'published list hides the address' );
 fg_not_contains( $event_record->event_uuid, $html, 'no event UUID in the published list' );
 fg_not_contains( 'fg_fahrgemeinschaft=', $html, 'no ride permalink in the published list' );
@@ -1379,7 +1505,7 @@ list( $location ) = fg_call(
 fg_ok( 'contact_received' === fg_notice_of( $location ), 'participant request accepted' );
 fg_ok( 2 === count( $GLOBALS['fg_mail'] ), 'creator and requester notified', wp_json_encode( fg_mail_recipients() ) );
 $body = fg_mail_bodies();
-fg_contains( 'Wir haben den Ersteller der Fahrgemeinschaft benachrichtigt.', $body, 'exact required sentence present' );
+fg_contains( 'Wir haben das Mitglied benachrichtigt, das die Fahrgemeinschaft angeboten hat.', $body, 'exact required sentence present' );
 fg_contains( 'Reply-To: sucher@example.org', implode( "\n", array_map( function ( $m ) { return implode( "\n", (array) $m['headers'] ); }, $GLOBALS['fg_mail'] ) ), 'reply-to set' );
 
 echo "[7b] Creator as requester and honeypot stay neutral\n";
@@ -1425,7 +1551,7 @@ fg_ok( 0 === fg_count_rides(), 'no row of the deleted ride is left behind' );
 /* ------------------------------------------------------------------ 9 */
 echo "[9] Discard of a pending entry\n";
 fg_mail_reset();
-fg_call( array( $fg_actions, 'submit_ride' ), fg_submission_post( array( 'fg_alias' => 'Wegwerf-Eintrag' ) ) );
+fg_call( array( $fg_actions, 'submit_ride' ), fg_submission_post( array( 'fg_origin' => 'Wegwerf-Bereich' ) ) );
 $discard_ride = fg_newest_ride();
 $discard_id   = $discard_ride ? $discard_ride->id : 0;
 $body         = fg_mail_bodies();
@@ -1455,18 +1581,29 @@ fg_ok( null === $fg_repo->get_ride( $discard_id ), 'pending entry removed' );
 
 /* ------------------------------------------------------------------ 10 */
 echo "[10] Rejected submissions\n";
+// The form asks for a member number and the address that belongs to it, and
+// the pickup area is the only free text left. Every refusal below is one of
+// those three values, and a refusal for a value that no longer exists would
+// test nothing at all.
 $cases = array(
-	'foreign address'   => array( 'fg_contact_email' => 'nicht-teilnehmer@example.com' ),
-	'invalid address'   => array( 'fg_contact_email' => 'keine-mail' ),
-	'missing consent'   => array( 'fg_consent' => '0' ),
-	'empty alias'       => array( 'fg_alias' => '' ),
-	'unknown event'     => array( 'fg_event_ref' => 'gibtesnicht' ),
-	'bad mode'          => array( 'fg_mode' => 'egal' ),
-	'mail in alias'     => array( 'fg_alias' => 'Max Mustermann (max@example.org)' ),
-	'phone in origin'   => array( 'fg_origin' => '0176 12345678' ),
-	'address in origin' => array( 'fg_origin' => 'Hauptstraße 12' ),
-	'honeypot'          => array( 'fg_website' => 'x' ),
-	'oversized alias'   => array( 'fg_alias' => str_repeat( 'a', 81 ) ),
+	'unknown number'     => array( 'fg_member_no' => '9000' ),
+	'address of nobody'  => array( 'fg_member_email' => 'nicht-teilnehmer@example.com' ),
+	'invalid address'    => array( 'fg_member_email' => 'keine-mail' ),
+	// The number of one member with the address of another: both values are
+	// real, and together they name nobody. A form that took the address alone
+	// could not refuse this, and a form that took the number alone would publish
+	// to the address of the wrong person.
+	'mixed pair'         => array( 'fg_member_email' => 'sucher@example.org' ),
+	'missing consent'    => array( 'fg_consent' => '0' ),
+	'empty number'       => array( 'fg_member_no' => '' ),
+	'unknown event'      => array( 'fg_event_ref' => 'gibtesnicht' ),
+	'bad mode'           => array( 'fg_mode' => 'egal' ),
+	'mail in origin'     => array( 'fg_origin' => 'Max Mustermann (max@example.org)' ),
+	'phone in origin'    => array( 'fg_origin' => '0176 12345678' ),
+	'address in origin'  => array( 'fg_origin' => 'Hauptstraße 12' ),
+	'honeypot'           => array( 'fg_website' => 'x' ),
+	'oversized number'   => array( 'fg_member_no' => str_repeat( 'a', 41 ) ),
+	'oversized origin'   => array( 'fg_origin' => str_repeat( 'a', 101 ) ),
 );
 
 foreach ( $cases as $label => $overrides ) {
@@ -1513,13 +1650,13 @@ fg_ok( $pending_before === fg_count_rides( FG_RIDE_STATUS_PENDING ), 'refused re
 /* ------------------------------------------------------------------ 11 */
 echo "[11] Rides are read-only for administrators\n";
 $admin_event = fg_make_event( 'Admin-Dienst', $soon );
-$admin_ride  = $fg_repo->create_pending_ride(
+$admin_member = fg_make_member( '400', 'admin@example.org', 'Admina', 'Probe' );
+$admin_ride   = $fg_repo->create_pending_ride(
 	array(
-		'event_id'      => $admin_event,
-		'mode'          => FG_RIDE_MODE_SEARCH,
-		'alias'         => 'Admin-Eintrag',
-		'origin'        => 'Sued',
-		'contact_email' => 'admin@example.org',
+		'event_id'  => $admin_event,
+		'mode'      => FG_RIDE_MODE_SEARCH,
+		'origin'    => 'Warteschlange',
+		'member_id' => $admin_member->id,
 	)
 );
 $admin_row = $fg_repo->get_ride( $admin_ride['id'] );
@@ -1539,12 +1676,44 @@ $fg_repo->update_ride(
 );
 fg_ok( $fg_repo->is_valid_public_ride( $fg_repo->get_ride( $admin_ride['id'] ) ), 'a complete published ride is public' );
 
-// A published ride that loses a required field must disappear from the public
-// list instead of going out with half a record.
-$fg_repo->update_ride( $admin_ride['id'], array( 'contact_email' => 'keine-mail' ) );
-fg_ok( ! $fg_repo->is_valid_public_ride( $fg_repo->get_ride( $admin_ride['id'] ) ), 'a ride with an unusable address is not public' );
+// A published ride that loses the member behind it must disappear from the
+// public list instead of going out with half a record. A ride with no member is
+// not a ride with a missing first name: there would be nothing to write the
+// mail to and nobody to name.
+$fg_repo->update_ride( $admin_ride['id'], array( 'member_id' => 0 ) );
+fg_ok( ! $fg_repo->is_valid_public_ride( $fg_repo->get_ride( $admin_ride['id'] ) ), 'a ride without a member is not public' );
 $public_html = $fg_public->render_shortcode();
-fg_not_contains( 'Admin-Eintrag', $public_html, 'incomplete ride stays out of the public list' );
+fg_not_contains( 'Warteschlange', $public_html, 'a ride without a member stays out of the public list' );
+
+// A member that is not there any more is a different case from a ride without a
+// member: the ride row is complete and points at a row that is gone. The list
+// leaves it out, and the notifier has nothing to send to.
+$leer_ride = $fg_repo->create_pending_ride(
+	array(
+		'event_id'  => $admin_event,
+		'mode'      => FG_RIDE_MODE_OFFER,
+		'origin'    => 'Geisternummer',
+		'member_id' => $admin_member->id,
+	)
+);
+$fg_repo->update_ride(
+	$leer_ride['id'],
+	array(
+		'status'       => FG_RIDE_STATUS_PUBLISHED,
+		'confirmed_at' => current_time( 'mysql' ),
+	)
+);
+fg_ok( $fg_repo->is_valid_public_ride( $fg_repo->get_ride( $leer_ride['id'] ) ), 'a complete published ride is public even before the member is looked at' );
+fg_ok( ! $fg_repo->is_displayable_member( null ), 'no member at all is not displayable' );
+$weg = $fg_repo->delete_member( $admin_member->id );
+fg_ok( $weg['deleted'], 'the member behind a published ride can be removed', wp_json_encode( $weg ) );
+$leer_row = $fg_repo->get_ride( $leer_ride['id'] );
+fg_ok( null !== $leer_row, 'the ride itself survives the loss of its member' );
+fg_ok( $fg_repo->is_valid_public_ride( $leer_row ), 'the row is still complete' );
+fg_ok( ! $fg_repo->is_displayable_member( $fg_repo->get_member( $leer_row ? $leer_row->member_id : 0 ) ), 'but the member behind it is not displayable' );
+fg_not_contains( 'Geisternummer', $fg_public->render_shortcode(), 'a ride whose member is gone stays out of the public list' );
+fg_ok( ! ( new FG_Mailer( $fg_repo ) )->send_contact_notifications( $leer_ride['id'], fg_member_id( 'sucher' ) )['creator'], 'no creator mail without a member behind the ride' );
+$fg_repo->delete_ride( $leer_ride['id'] );
 
 /* ------------------------------------------------------------------ 12 */
 echo "[12] Event validation and cascade delete\n";
@@ -1582,11 +1751,10 @@ $cascade_event = fg_make_event( 'Kaskade', $soon );
 fg_register( $cascade_event, fg_member_id( 'sucher' ) );
 $fg_repo->create_pending_ride(
 	array(
-		'event_id'      => $cascade_event,
-		'mode'          => FG_RIDE_MODE_OFFER,
-		'alias'         => 'Kaskadenfahrt',
-		'origin'        => 'Innenstadt',
-		'contact_email' => 'kette@example.org',
+		'event_id'  => $cascade_event,
+		'mode'      => FG_RIDE_MODE_OFFER,
+		'origin'    => 'Innenstadt',
+		'member_id' => fg_member_id( 'sucher' ),
 	)
 );
 $cascade_rides = $fg_repo->get_event_ride_ids( $cascade_event );
@@ -1614,13 +1782,13 @@ fg_ok( null !== $fg_repo->get_member_by_number( '300' ), 'the member itself surv
 
 /* ------------------------------------------------------------------ 13 */
 echo "[13] Daily cleanup and statistics retention\n";
-$expired = $fg_repo->create_pending_ride(
+$abgelaufen = fg_make_member( '401', 'abgelaufen@example.org', 'Abgelaufen', 'Probe' );
+$expired    = $fg_repo->create_pending_ride(
 	array(
-		'event_id'      => $event_id,
-		'mode'          => FG_RIDE_MODE_OFFER,
-		'alias'         => 'Abgelaufen',
-		'origin'        => 'Innenstadt',
-		'contact_email' => 'abgelaufen@example.org',
+		'event_id'  => $event_id,
+		'mode'      => FG_RIDE_MODE_OFFER,
+		'origin'    => 'Innenstadt',
+		'member_id' => $abgelaufen->id,
 	)
 );
 $expired_ride = $expired['id'];
@@ -1633,11 +1801,10 @@ $fg_repo->update_ride(
 );
 $expired_published = $fg_repo->create_pending_ride(
 	array(
-		'event_id'      => $event_id,
-		'mode'          => FG_RIDE_MODE_OFFER,
-		'alias'         => 'Veralteter Löschlink',
-		'origin'        => 'Innenstadt',
-		'contact_email' => 'abgelaufen@example.org',
+		'event_id'  => $event_id,
+		'mode'      => FG_RIDE_MODE_OFFER,
+		'origin'    => 'Sued',
+		'member_id' => $abgelaufen->id,
 	)
 );
 $fg_repo->update_ride(
@@ -1687,11 +1854,10 @@ fg_register( $bulk_event, $ander->id );
 for ( $i = 0; $i < 25; $i++ ) {
 	$bulk = $fg_repo->create_pending_ride(
 		array(
-			'event_id'      => $bulk_event,
-			'mode'          => FG_RIDE_MODE_OFFER,
-			'alias'         => 'Datenschutztest ' . $i,
-			'origin'        => 'Innenstadt',
-			'contact_email' => 'opfer@example.org',
+			'event_id'  => $bulk_event,
+			'mode'      => FG_RIDE_MODE_OFFER,
+			'origin'    => 'Innenstadt',
+			'member_id' => $opfer->id,
 		)
 	);
 	$fg_repo->update_ride(
@@ -2011,11 +2177,10 @@ fg_ok(
 
 $viel_ride = $fg_repo->create_pending_ride(
 	array(
-		'event_id'      => $viel_event_a,
-		'mode'          => FG_RIDE_MODE_OFFER,
-		'alias'         => 'Bleibt',
-		'origin'        => 'Innenstadt',
-		'contact_email' => 'viel@example.org',
+		'event_id'  => $viel_event_a,
+		'mode'      => FG_RIDE_MODE_OFFER,
+		'origin'    => 'Innenstadt',
+		'member_id' => $viel->id,
 	)
 );
 $weg = $fg_repo->delete_member( $viel->id );

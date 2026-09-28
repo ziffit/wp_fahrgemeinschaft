@@ -46,9 +46,11 @@ final class FG_Repository {
 
 		// The length is the width of the address columns, not the 254 characters
 		// RFC 5321 allows. An address of 200 characters passes every check below,
-		// reaches `fg_rides.contact_email` or `fg_members.email` and is refused
-		// there by the schema — silently, after the visitor has been told nothing
-		// went wrong. Both columns are 190, so both are checked against 190.
+		// reaches `fg_members.email` and is refused there by the schema —
+		// silently, after the visitor has been told nothing went wrong. The
+		// member table is the only one with an address in it since schema 1.4.0,
+		// but the empty column `fg_rides.contact_email` is still 190 wide, so the
+		// number is the one both columns carry.
 		if ( '' === $email || strlen( $email ) > FG_Schema::CONTACT_EMAIL_MAX || ! is_email( $email ) ) {
 			return false;
 		}
@@ -165,6 +167,19 @@ final class FG_Repository {
 		$event_id = absint( $event_id );
 
 		return $event_id ? $this->store->find_event( $event_id ) : null;
+	}
+
+	/**
+	 * Get several work services at once, keyed by event ID.
+	 *
+	 * A list of rides names a work service on every line, and reading one per
+	 * line would be one query per line. Same shape as get_members_by_ids().
+	 *
+	 * @param int[] $event_ids Work service IDs.
+	 * @return array<int, FG_Event> Work service per ID, absent for unknown IDs.
+	 */
+	public function get_events_by_ids( array $event_ids ) {
+		return $this->store->find_events( $event_ids );
 	}
 
 	/**
@@ -306,33 +321,32 @@ final class FG_Repository {
 	}
 
 	/**
-	 * Check whether an e-mail address belongs to a member registered for an event.
+	 * Check whether a member is registered for an event.
 	 *
 	 * This is the gate for the ride form. Only a person who actually does the
-	 * work service may organise a car to it, and only under the address that
-	 * belongs to them: the member number identifies the member in the member
-	 * administration, but on this page nothing but the address is asked for, so
-	 * the address is what has to be checked, and an address belongs to exactly
-	 * one member.
+	 * work service may organise a car to it. The form asks for the member number
+	 * and the address and looks up the member from the pair, so what arrives here
+	 * is a member of the club and the question is only whether that member is in
+	 * the list of this duty.
 	 *
 	 * Until schema 1.2.0 this compared against a list of addresses the club typed
 	 * into the work service by hand. An address in that list could be anyone's,
 	 * and nobody could ride to a duty for which no list had been maintained. The
 	 * comparison is the same question, asked of data that is true by construction.
 	 *
-	 * @param int    $event_id Event ID.
-	 * @param string $email    E-mail address.
+	 * @param int $event_id  Event ID.
+	 * @param int $member_id Member row ID.
 	 * @return bool
 	 */
-	public function is_event_participant( $event_id, $email ) {
-		$email = $this->normalize_email( $email );
-		if ( false === $email ) {
+	public function is_event_participant( $event_id, $member_id ) {
+		$event_id  = absint( $event_id );
+		$member_id = absint( $member_id );
+
+		if ( ! $event_id || ! $member_id ) {
 			return false;
 		}
 
-		$event_id = absint( $event_id );
-
-		return $event_id ? $this->store->event_has_participant_email( $event_id, $email ) : false;
+		return $this->store->event_has_participant( $event_id, $member_id );
 	}
 
 	/**
@@ -539,7 +553,7 @@ final class FG_Repository {
 	 * raw tokens are returned once so the caller can put them into the
 	 * confirmation mail; only their hashes are stored.
 	 *
-	 * @param array $fields Ride fields: event_id, mode, alias, origin, contact_email, source_url.
+	 * @param array $fields Ride fields: event_id, mode, member_id, origin, source_url.
 	 * @return array{id: int, confirm_token: string, discard_token: string}
 	 */
 	public function create_pending_ride( array $fields ) {
@@ -549,19 +563,17 @@ final class FG_Repository {
 			'discard_token' => '',
 		);
 
-		$event_id = isset( $fields['event_id'] ) ? absint( $fields['event_id'] ) : 0;
-		$mode     = isset( $fields['mode'] ) ? (string) $fields['mode'] : '';
-		$alias    = isset( $fields['alias'] ) ? (string) $fields['alias'] : '';
-		$origin   = isset( $fields['origin'] ) ? (string) $fields['origin'] : '';
-		$email    = $this->normalize_email( isset( $fields['contact_email'] ) ? $fields['contact_email'] : '' );
-		$now      = current_time( 'mysql' );
+		$event_id  = isset( $fields['event_id'] ) ? absint( $fields['event_id'] ) : 0;
+		$mode      = isset( $fields['mode'] ) ? (string) $fields['mode'] : '';
+		$member_id = isset( $fields['member_id'] ) ? absint( $fields['member_id'] ) : 0;
+		$origin    = isset( $fields['origin'] ) ? (string) $fields['origin'] : '';
+		$now       = current_time( 'mysql' );
 
 		if (
 			! $event_id
 			|| ! in_array( $mode, array( FG_RIDE_MODE_OFFER, FG_RIDE_MODE_SEARCH ), true )
-			|| '' === trim( $alias )
+			|| ! $member_id
 			|| '' === trim( $origin )
-			|| false === $email
 		) {
 			return $failed;
 		}
@@ -575,9 +587,8 @@ final class FG_Repository {
 				'event_id'                => $event_id,
 				'status'                  => FG_RIDE_STATUS_PENDING,
 				'mode'                    => $mode,
-				'alias'                   => $alias,
 				'origin'                  => $origin,
-				'contact_email'           => (string) $email,
+				'member_id'               => $member_id,
 				'public_ref'              => $this->create_public_reference( 'rides' ),
 				'confirmed_at'            => null,
 				'consent_version'         => FG_CONSENT_VERSION,
@@ -665,7 +676,46 @@ final class FG_Repository {
 			&& '' !== $ride->public_ref
 			&& in_array( $ride->mode, array( FG_RIDE_MODE_OFFER, FG_RIDE_MODE_SEARCH ), true )
 			&& '' !== trim( $ride->origin )
-			&& false !== $this->normalize_email( $ride->contact_email );
+			&& $ride->member_id > 0;
+	}
+
+	/**
+	 * Check whether a member may be named and written to in public.
+	 *
+	 * A ride is public and a member is a person, so the two questions are asked
+	 * separately: the row of the ride is checked by is_valid_public_ride(), the
+	 * row of the member by this. The caller resolves the members of a whole list
+	 * in one query and pairs the two answers, because a lookup per ride would be
+	 * a lookup per line of a public page.
+	 *
+	 * The address is checked even though it is not shown. It is the address a
+	 * contact request is sent to, and a member row without a valid one would
+	 * leave the two other people of that ride writing to nobody.
+	 *
+	 * @param FG_Member|null $member Member record, null when the ID is unknown.
+	 * @return bool
+	 */
+	public function is_displayable_member( $member ) {
+		return $member instanceof FG_Member
+			&& '' !== trim( (string) $member->first_name )
+			&& false !== $this->normalize_email( $member->email );
+	}
+
+	/**
+	 * Resolve the members of several rides at once.
+	 *
+	 * @param FG_Ride[] $rides Ride records.
+	 * @return array<int, FG_Member> Member per ride ID, absent for unknown members.
+	 */
+	public function get_members_for_rides( array $rides ) {
+		$member_ids = array();
+		foreach ( $rides as $ride ) {
+			if ( $ride instanceof FG_Ride && $ride->member_id > 0 ) {
+				$member_ids[] = $ride->member_id;
+			}
+		}
+
+		return $this->get_members_by_ids( $member_ids );
 	}
 
 	/**
@@ -705,22 +755,52 @@ final class FG_Repository {
 	/**
 	 * Return public display data for a ride.
 	 *
-	 * @param FG_Ride $ride Ride record.
+	 * The member is passed in rather than looked up, because this is called once
+	 * per ride in a list and the list resolves all its members in one query. A
+	 * caller with a single ride passes the member it has or leaves it out.
+	 *
+	 * `first_name` is what the public list shows. It comes from the member
+	 * administration, not from the ride: a ride cannot name a person who is not in
+	 * the club, and a member who changes their first name does not leave an old
+	 * name in a public list behind.
+	 *
+	 * @param FG_Ride       $ride   Ride record.
+	 * @param FG_Member|null $member Member behind the ride, null when unknown.
 	 * @return array<string, mixed>
 	 */
-	public function get_ride_display_data( FG_Ride $ride ) {
-		$event = $this->get_event( $ride->event_id );
+	public function get_ride_display_data( FG_Ride $ride, $member = null ) {
+		$event  = $this->get_event( $ride->event_id );
+		$member = $member instanceof FG_Member ? $member : $this->get_member( $ride->member_id );
 
 		return array(
-			'ride'          => $ride,
-			'event'         => $event,
-			'public_ref'    => $ride->public_ref,
-			'mode'          => $ride->mode,
-			'origin'        => $ride->origin,
-			'contact_email' => $ride->contact_email,
-			'event_label'   => $event ? $event->title : '',
-			'event_date'    => $event ? $this->format_event_date( $event ) : '',
+			'ride'        => $ride,
+			'event'       => $event,
+			'member'      => $member,
+			'public_ref'  => $ride->public_ref,
+			'mode'        => $ride->mode,
+			'origin'      => $ride->origin,
+			'first_name'  => $member ? trim( (string) $member->first_name ) : '',
+			'event_label' => $event ? $event->title : '',
+			'event_date'  => $event ? $this->format_event_date( $event ) : '',
 		);
+	}
+
+	/**
+	 * Return the address a contact request for this ride is sent to.
+	 *
+	 * The address is read through the member, which is where it lives. It is
+	 * never written onto the ride: an address stored there would be a second
+	 * copy of the same personal data, and a member who changes their address
+	 * would have to remember to change it in two places.
+	 *
+	 * @param FG_Ride       $ride   Ride record.
+	 * @param FG_Member|null $member Member behind the ride, null when unknown.
+	 * @return string|false Normalised address, or false when there is none.
+	 */
+	public function get_ride_contact_email( FG_Ride $ride, $member = null ) {
+		$member = $member instanceof FG_Member ? $member : $this->get_member( $ride->member_id );
+
+		return $member ? $this->normalize_email( $member->email ) : false;
 	}
 
 	/**
@@ -736,35 +816,34 @@ final class FG_Repository {
 	}
 
 	/**
-	 * Get the contact addresses of all rides created by one address.
+	 * Get the rides offered by one member.
 	 *
-	 * @param string $email  Contact address.
+	 * The privacy tools hand in an e-mail address, because that is what WordPress
+	 * passes them, and the member behind it is looked up here. Until schema 1.4.0
+	 * the rides table held the address itself, so this was a direct comparison;
+	 * the lookup is the same question one step further along.
+	 *
+	 * @param string $email  Contact address of the member.
 	 * @param int    $limit  Batch size.
 	 * @param int    $offset Offset.
 	 * @return FG_Ride[]
 	 */
 	public function get_rides_by_email( $email, $limit = 10, $offset = 0 ) {
-		$email = $this->normalize_email( $email );
-		if ( false === $email ) {
-			return array();
-		}
+		$member = $this->get_member_by_email( $email );
 
-		return $this->store->rides_by_email( $email, (int) $limit, (int) $offset );
+		return $member ? $this->store->rides_by_member( $member->id, (int) $limit, (int) $offset ) : array();
 	}
 
 	/**
-	 * Count the rides created by one address.
+	 * Count the rides offered by one member.
 	 *
-	 * @param string $email Contact address.
+	 * @param string $email Contact address of the member.
 	 * @return int
 	 */
 	public function count_rides_by_email( $email ) {
-		$email = $this->normalize_email( $email );
-		if ( false === $email ) {
-			return 0;
-		}
+		$member = $this->get_member_by_email( $email );
 
-		return $this->store->count_rides_by_email( $email );
+		return $member ? $this->store->count_rides_by_member( $member->id ) : 0;
 	}
 
 	/**
@@ -795,6 +874,16 @@ final class FG_Repository {
 		$member_id = absint( $member_id );
 
 		return $member_id ? $this->store->find_member( $member_id ) : null;
+	}
+
+	/**
+	 * Get several members at once, keyed by member ID.
+	 *
+	 * @param int[] $member_ids Member IDs.
+	 * @return array<int, FG_Member> Member per ID, absent for unknown IDs.
+	 */
+	public function get_members_by_ids( array $member_ids ) {
+		return $this->store->find_members( $member_ids );
 	}
 
 	/**

@@ -43,13 +43,21 @@ echo "== HTTP level tests =="
 echo "[1] public page"
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
 has "page renders the offer form" "$body" "Fahrgemeinschaft anbieten"
-has "page lists the published ride" "$body" "Amsel-Gruppe"
+has "page lists the published ride" "$body" "Berta"
+has "page lists the ride by the first name of the member" "$body" "Suedstadt"
+# The member number is looked up, never printed. A nonce value on the same page
+# is random alphanumerics, and "0043" could in principle turn up inside one; the
+# nonce values are taken out first so that this check can only fail because the
+# number really is on the page.
+ohne_nonce=$(printf '%s' "$body" | sed -E 's/(name="[^"]*nonce[^"]*"[^>]*value=")[^"]*"/\1"/g')
+hasnt "page shows no member number" "$ohne_nonce" "0043"
 hasnt "page hides the event address" "$body" "anton@angeln.example.org"
 hasnt "page hides the creator address" "$body" "berta@angeln.example.org"
 hasnt "page hides the event uuid" "$body" "$EVENT_UUID"
 hasnt "page hides internal ids" "$body" "fg_fahrgemeinschaft="
 hasnt "page hides internal meta" "$body" "_fg_"
 hasnt "page hides tokens" "$body" "token="
+has "the list says who sees an address" "$body" "Angezeigt wird nur der Vorname aus der Mitgliederverwaltung"
 
 # --- 2. HTTPS enforcement
 echo "[2] HTTPS enforcement"
@@ -73,7 +81,8 @@ echo "[3] token landing page"
 head=$(curl -sk -D - -o "$DIR/confirm.html" "$BASE/?fg_ride_action=view&ride_ref=$PENDING_REF&intent=confirm&token=$CONFIRM_TOKEN")
 html=$(cat "$DIR/confirm.html")
 has "confirm page renders" "$html" "Veröffentlichung bestätigen"
-has "confirm page shows the alias" "$html" "Moewe-Trupp"
+has "confirm page shows the first name of the member" "$html" "Anton"
+has "confirm page shows the member number to the member itself" "$html" "0042"
 hasnt "confirm page hides the address" "$html" "anton@angeln.example.org"
 has "form posts to admin-post.php" "$html" "wp-admin/admin-post.php"
 has "form carries the token verifier" "$html" "name=\"token_nonce\""
@@ -129,7 +138,8 @@ if printf '%s' "$loc" | grep -q "fg_notice=published"; then ok "confirmation suc
 state=$(s count-pending-token)
 if [ "$state" = "0" ]; then ok "pending token is consumed"; else bad "pending token is consumed" "$state"; fi
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-has "confirmed ride appears in the list" "$body" "Moewe-Trupp"
+has "confirmed ride appears in the list" "$body" "Innenstadt"
+has "and under the first name of the member" "$body" "Anton"
 
 echo "[4b] replay of the same token"
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
@@ -487,7 +497,7 @@ struct "$body" "the note about the address is stated once for the whole list" "
 import re, sys
 h = sys.stdin.read()
 entries = len(re.findall(r'<article class=\"fg-ride\">', h))
-notes = h.count('wird nur an den Ersteller der Fahrgemeinschaft gesendet')
+notes = h.count('wird nur an das Mitglied gesendet, das die Fahrgemeinschaft angeboten hat')
 sys.exit(0 if entries > 1 and notes == 1 else 1)
 " "not more than one entry, or the note is not stated exactly once"
 
@@ -525,66 +535,72 @@ if ('id=\"%s\"' % target) not in h:
 sys.exit(0 if label else 1)
 " "the link has no text, or it points at something that is not on the page"
 
-# --- 5e. the name is meant to be a name, contact details are still refused
-# The server counts what it treats as a contact detail. That counter is the
-# only place where the distinction shows: a rejected entry and an entry that
-# fails later look the same to the caller, both answer not_created.
-echo "[5e] a first name is a name"
+# --- 5e. the member number is the key, the area is the only free text
+# Since schema 1.4.0 a ride belongs to a member, so the form asks for a member
+# number and an address instead of a name and an address, and the only thing a
+# visitor types freely is the pickup area. The server counts what it treats as a
+# contact detail. That counter is the only place where the distinction shows: a
+# rejected entry and an entry that fails later look the same to the caller, both
+# answer not_created.
+echo "[5e] the member number is the key"
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-has "the form asks for a first name" "$body" ">Vorname oder Spitzname</label>"
-hasnt "the old field name is gone" "$body" "Öffentliche Bezeichnung"
-has "the name is announced as public" "$body" "Steht in der Liste öffentlich"
-has "the consent names the name as public" "$body" "Dazu gehören mein Vorname oder Spitzname"
+has "the form asks for the member number" "$body" 'name="fg_member_no"'
+has "the form asks for the address" "$body" 'name="fg_member_email"'
+hasnt "the form no longer asks for a name" "$body" 'name="fg_alias"'
+hasnt "the wording about a nickname is gone" "$body" "Vorname oder Spitzname"
+has "the hint names the source of the public name" "$body" "Dein Vorname steht in der Liste öffentlich"
+has "the hint says both values must fit one member" "$body" "Beide Angaben müssen zu einem Mitglied des Vereins passen"
+has "the consent names the member list as the source of the name" "$body" "Dazu gehören mein Vorname aus der Mitgliederverwaltung"
+has "the consent keeps the address out of the public" "$body" "Meine E-Mail-Adresse und meine Mitgliedsnummer werden dabei nicht öffentlich angezeigt"
 hasnt "the ambiguous wording in the consent is gone" "$body" "persönlichen Kontaktdaten"
-hasnt "the hint no longer asks for an unidentifying text" "$body" "nicht identifizierende"
-has "the hint names what the server refuses" "$body" "Telefonnummern und E-Mail-Adressen werden von der Serverseite zurückgewiesen"
 has "the area field carries its examples" "$body" "Abfahrtsort, Stadtteil, z. B. Langwasser, Nürnberg Nord, S-Bahnstation Ostring."
 hasnt "no address field of the form invites more than the column holds" "$body" 'maxlength="254"'
-has "the address of the form stops at the width of the column" "$body" 'name="fg_contact_email" maxlength="190"'
+has "the address of the form stops at the width of the column" "$body" 'name="fg_member_email" maxlength="190"'
+has "the member number of the form stops at the width of the column" "$body" 'name="fg_member_no" maxlength="40"'
 
 event_ref=$(printf '%s' "$body" | grep -o '<option value="[0-9a-f]\{32\}"' | head -1 | sed 's/.*value="//;s/"//')
 offer_nonce=$(printf '%s' "$body" | grep -o 'name="fg_submit_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
-# An address that is on no event, so the probe is refused for that reason and
-# leaves nothing behind. The fixture only registers the three @angeln.example.org
-# addresses as participants; adding this one there would turn the probe into a
-# real entry and the check would quietly start writing rides.
+# A member number and an address that do not belong together, so the probe is
+# refused and leaves nothing behind. The counter is read before the refusal and
+# raised before it, so the personal-data check still runs: that is the point of
+# the counter, and section 7 is where a pair that does fit is tried.
 probe() {
 	curl -sk -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
 		--data-urlencode "action=fg_submit_ride" \
 		--data-urlencode "fg_mode=offer" \
 		--data-urlencode "fg_event_ref=$event_ref" \
-		--data-urlencode "fg_alias=$1" \
-		--data-urlencode "fg_origin=$2" \
-		--data-urlencode "fg_contact_email=fremd@example.com" \
+		--data-urlencode "fg_member_no=0042" \
+		--data-urlencode "fg_origin=$1" \
+		--data-urlencode "fg_member_email=fremd@example.com" \
 		--data-urlencode "fg_consent=1" \
 		--data-urlencode "fg_website=" \
 		--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
 		--data-urlencode "fg_submit_nonce=$offer_nonce"
 }
 # Reads the counter before and after a list of probes and prints "start end".
-# Every argument is one "alias::origin" pair, so that a value can be put into
-# either field. One call can therefore assert on several values at once.
+# Every argument is one value for the pickup area, which is the only free text
+# the form has left. One call can therefore assert on several values at once.
 count_around() {
 	mark=$(s stat publish_personal_data)
-	for pair in "$@"; do
-		probe "${pair%%::*}" "${pair#*::}"
+	for area in "$@"; do
+		probe "$area"
 	done
 	end=$(s stat publish_personal_data)
 	printf '%s %s' "$mark" "$end"
 }
 if [ -n "$event_ref" ] && [ -n "$offer_nonce" ]; then
-	# A first name and a nickname are not contact details. The area stays a
-	# fixed harmless value so that only the alias can move the counter.
-	read -r before after <<< "$(count_around 'Peter::Suedstadt' 'Käse::Suedstadt' 'Amsel-Gruppe::Suedstadt')"
-	if [ "$before" = "$after" ]; then ok "a first name and a nickname are not contact details ($after)"; else bad "a first name and a nickname are not contact details" "$before -> $after"; fi
-	probe "0176 12345678" "Suedstadt"
-	after_phone=$(s stat publish_personal_data)
-	if [ "$after_phone" -gt "$after" ]; then ok "a phone number is still refused ($after -> $after_phone)"; else bad "a phone number is still refused" "$after -> $after_phone"; fi
-	# The three examples under the area field must survive the same filter. A
-	# hint that offers values the server refuses is worse than no hint: the
-	# entry is dropped with the same neutral message as a wrong address.
-	read -r before after <<< "$(count_around 'Peter::Langwasser' 'Peter::Nürnberg Nord' 'Peter::S-Bahnstation Ostring')"
+	# The three examples under the area field must survive the filter, and so
+	# must a plain area. A hint that offers values the server refuses is worse
+	# than no hint: the entry is dropped with the same neutral message as a
+	# wrong address.
+	read -r before after <<< "$(count_around 'Suedstadt' 'Langwasser' 'Nürnberg Nord' 'S-Bahnstation Ostring')"
 	if [ "$before" = "$after" ]; then ok "the three examples of the area hint are accepted ($after)"; else bad "the three examples of the area hint are accepted" "$before -> $after"; fi
+	probe "0176 12345678"
+	after_phone=$(s stat publish_personal_data)
+	if [ "$after_phone" -gt "$after" ]; then ok "a phone number in the area is still refused ($after -> $after_phone)"; else bad "a phone number in the area is still refused" "$after -> $after_phone"; fi
+	probe "Hauptstraße 12"
+	after_street=$(s stat publish_personal_data)
+	if [ "$after_street" -gt "$after_phone" ]; then ok "a street address in the area is still refused ($after_phone -> $after_street)"; else bad "a street address in the area is still refused" "$after_phone -> $after_street"; fi
 else
 	bad "the form offers a work duty to submit against" "no event reference on the page"
 fi
@@ -600,7 +616,8 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID")
 if printf '%s' "$loc" | grep -q "fg_notice=deleted"; then ok "deletion succeeds"; else bad "deletion succeeds" "$loc"; fi
 body=$(curl -sk "$BASE/?page_id=$PAGE_ID")
-hasnt "deleted ride is gone" "$body" "Amsel-Gruppe"
+hasnt "deleted ride is gone" "$body" "Suedstadt"
+has "the ride that is left is untouched" "$body" "Innenstadt"
 
 # --- 7. plain submission over real POST
 echo "[7] submission with a form nonce from the page"
@@ -610,9 +627,9 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "action=fg_submit_ride" \
 	--data-urlencode "fg_event_ref=$event_ref" \
 	--data-urlencode "fg_mode=search" \
-	--data-urlencode "fg_alias=Testfahrt Curl" \
+	--data-urlencode "fg_member_no=$(jq member_taken_no)" \
 	--data-urlencode "fg_origin=Weststadt" \
-	--data-urlencode "fg_contact_email=$(jq member_taken_mail)" \
+	--data-urlencode "fg_member_email=$(jq member_taken_mail)" \
 	--data-urlencode "fg_consent=1" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
@@ -620,16 +637,17 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 if printf '%s' "$loc" | grep -q "fg_notice=pending"; then ok "submission is vorkereed ($loc)"; else bad "submission is vorkereed" "$loc"; fi
 
 # A ride is offered for one duty, and it may only be offered by somebody who is
-# in that duty. The address alone decides, and the member does not even have to
-# know it: whoever signs up for a duty can then find a ride, and whoever does
-# not cannot put their address into the list of a duty they are not part of.
+# in that duty. The pair of member number and address decides, and the member
+# does not even have to know their own number: whoever signs up for a duty can
+# then find a ride, and whoever is not in the duty cannot put their pair into
+# the list of a duty they are not part of.
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_submit_ride" \
 	--data-urlencode "fg_event_ref=$event_ref" \
 	--data-urlencode "fg_mode=search" \
-	--data-urlencode "fg_alias=Fremdfahrt" \
+	--data-urlencode "fg_member_no=$(jq member_free_no)" \
 	--data-urlencode "fg_origin=Weststadt" \
-	--data-urlencode "fg_contact_email=$(jq member_free_mail)" \
+	--data-urlencode "fg_member_email=$(jq member_free_mail)" \
 	--data-urlencode "fg_consent=1" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
@@ -639,15 +657,35 @@ if printf '%s' "$loc" | grep -q "fg_notice=not_created"; then
 else
 	bad "a member who is not in the duty cannot offer a ride" "$loc"
 fi
-hasnt "and the ride is nowhere on the page" "$(curl -sk "$BASE/?page_id=$PAGE_ID")" "Fremdfahrt"
-hasnt "pending ride stays private" "$(curl -sk "$BASE/?page_id=$PAGE_ID")" "Testfahrt Curl"
+# The other half of the same question: a number that belongs to a member and an
+# address that belongs to somebody else. The pair is refused, and nothing in the
+# answer says which of the two was wrong — the page is public, and a hint would
+# tell a passer-by whether a guessed number exists.
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_submit_ride" \
 	--data-urlencode "fg_event_ref=$event_ref" \
 	--data-urlencode "fg_mode=search" \
-	--data-urlencode "fg_alias=Testfahrt Curl" \
+	--data-urlencode "fg_member_no=$(jq member_taken_no)" \
 	--data-urlencode "fg_origin=Weststadt" \
-	--data-urlencode "fg_contact_email=cem@angeln.example.org" \
+	--data-urlencode "fg_member_email=$(jq member_free_mail)" \
+	--data-urlencode "fg_consent=1" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
+	--data-urlencode "fg_submit_nonce=$submit_nonce")
+if printf '%s' "$loc" | grep -q "fg_notice=not_created"; then
+	ok "a number and an address of two different members are refused"
+else
+	bad "a number and an address of two different members are refused" "$loc"
+fi
+hasnt "and the refused ride is nowhere on the page" "$(curl -sk "$BASE/?page_id=$PAGE_ID")" "Weststadt"
+hasnt "pending ride stays private" "$(curl -sk "$BASE/?page_id=$PAGE_ID")" "Anton Weststadt"
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_submit_ride" \
+	--data-urlencode "fg_event_ref=$event_ref" \
+	--data-urlencode "fg_mode=search" \
+	--data-urlencode "fg_member_no=0044" \
+	--data-urlencode "fg_origin=Weststadt" \
+	--data-urlencode "fg_member_email=cem@angeln.example.org" \
 	--data-urlencode "fg_consent=1" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \

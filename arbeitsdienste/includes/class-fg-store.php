@@ -60,9 +60,8 @@ final class FG_Store {
 		'event_id',
 		'status',
 		'mode',
-		'alias',
 		'origin',
-		'contact_email',
+		'member_id',
 		'public_ref',
 		'confirmed_at',
 		'consent_version',
@@ -171,6 +170,38 @@ final class FG_Store {
 		);
 
 		return $row ? $this->to_event( $row ) : null;
+	}
+
+	/**
+	 * Read several work services at once, keyed by event ID.
+	 *
+	 * @param int[] $ids Event IDs.
+	 * @return array<int, FG_Event> Work service per ID, absent for unknown IDs.
+	 */
+	public function find_events( array $ids ) {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $ids ) ) ) );
+
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$table   = FG_Schema::events_table();
+		$columns = implode( ', ', array_fill( 0, count( $ids ), '%d' ) );
+		$rows    = $this->db->get_results(
+			$this->db->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- the placeholder list is built from a count, not from input.
+				"SELECT * FROM $table WHERE id IN ($columns)",
+				$ids
+			),
+			ARRAY_A
+		);
+
+		$events = array();
+		foreach ( (array) $rows as $row ) {
+			$events[ (int) $row['id'] ] = $this->to_event( $row );
+		}
+
+		return $events;
 	}
 
 	/**
@@ -545,14 +576,14 @@ final class FG_Store {
 	}
 
 	/**
-	 * Read rides created by one contact address, for the privacy tools.
+	 * Read rides offered by one member, for the privacy tools.
 	 *
-	 * @param string $email  Contact address.
-	 * @param int    $limit  Batch size.
-	 * @param int    $offset Offset.
+	 * @param int $member_id Member row ID.
+	 * @param int $limit     Batch size.
+	 * @param int $offset    Offset.
 	 * @return FG_Ride[]
 	 */
-	public function rides_by_email( $email, $limit, $offset ) {
+	public function rides_by_member( $member_id, $limit, $offset ) {
 		$table = FG_Schema::rides_table();
 		$clause = $this->db->prepare(
 			'LIMIT %d OFFSET %d',
@@ -561,8 +592,8 @@ final class FG_Store {
 		);
 		$rows = $this->db->get_results(
 			$this->db->prepare(
-				"SELECT * FROM $table WHERE contact_email = %s ORDER BY id ASC $clause",
-				(string) $email
+				"SELECT * FROM $table WHERE member_id = %d ORDER BY id ASC $clause",
+				(int) $member_id
 			),
 			ARRAY_A
 		);
@@ -571,16 +602,16 @@ final class FG_Store {
 	}
 
 	/**
-	 * Count rides of one contact address.
+	 * Count the rides of one member.
 	 *
-	 * @param string $email Contact address.
+	 * @param int $member_id Member row ID.
 	 * @return int
 	 */
-	public function count_rides_by_email( $email ) {
+	public function count_rides_by_member( $member_id ) {
 		$table = FG_Schema::rides_table();
 
 		return (int) $this->db->get_var(
-			$this->db->prepare( "SELECT COUNT(*) FROM $table WHERE contact_email = %s", (string) $email )
+			$this->db->prepare( "SELECT COUNT(*) FROM $table WHERE member_id = %d", (int) $member_id )
 		);
 	}
 
@@ -668,6 +699,43 @@ final class FG_Store {
 		);
 
 		return $row ? $this->to_member( $row ) : null;
+	}
+
+	/**
+	 * Read several members at once, keyed by member ID.
+	 *
+	 * A ride list needs the name behind every entry, and one query per ride would
+	 * be one query per line of a public page. The list of IDs is the same shape
+	 * the count helper above takes, and returns the same sparse array: an ID that
+	 * is not in the table is simply absent, so the caller has to expect that.
+	 *
+	 * @param int[] $member_ids Member row IDs.
+	 * @return array<int, FG_Member> Member per ID, absent for unknown IDs.
+	 */
+	public function find_members( array $member_ids ) {
+		$member_ids = array_values( array_unique( array_filter( array_map( 'absint', $member_ids ) ) ) );
+
+		if ( empty( $member_ids ) ) {
+			return array();
+		}
+
+		$table   = FG_Schema::members_table();
+		$columns = implode( ', ', array_fill( 0, count( $member_ids ), '%d' ) );
+		$rows    = $this->db->get_results(
+			$this->db->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- the placeholder list is built from a count, not from input.
+				"SELECT * FROM $table WHERE id IN ($columns)",
+				$member_ids
+			),
+			ARRAY_A
+		);
+
+		$members = array();
+		foreach ( (array) $rows as $row ) {
+			$members[ (int) $row['id'] ] = $this->to_member( $row );
+		}
+
+		return $members;
 	}
 
 	/**
@@ -950,27 +1018,27 @@ final class FG_Store {
 	}
 
 	/**
-	 * Check whether a registered member of an event owns an e-mail address.
+	 * Check whether a member is registered for a work service.
 	 *
-	 * One joined query, because the question needs both tables and the caller asks
-	 * it once per submitted form.
+	 * One query, and no join: the registration already names the member by its
+	 * row ID. Until schema 1.4.0 this question was asked with an e-mail address
+	 * and needed both tables, because a ride carried an address rather than a
+	 * member. A member who changes their address keeps their rides and their
+	 * registrations this way; with the address as the key, changing it would have
+	 * thrown both away.
 	 *
-	 * @param int    $event_id Work service ID.
-	 * @param string $email    E-mail address.
+	 * @param int $event_id  Work service ID.
+	 * @param int $member_id Member row ID.
 	 * @return bool
 	 */
-	public function event_has_participant_email( $event_id, $email ) {
+	public function event_has_participant( $event_id, $member_id ) {
 		$registrations = FG_Schema::event_members_table();
-		$members       = FG_Schema::members_table();
 
 		$found = $this->db->get_var(
 			$this->db->prepare(
-				"SELECT COUNT(*)
-				FROM $registrations r
-				INNER JOIN $members m ON m.id = r.member_id
-				WHERE r.event_id = %d AND m.email = %s",
+				"SELECT COUNT(*) FROM $registrations WHERE event_id = %d AND member_id = %d",
 				(int) $event_id,
-				(string) $email
+				(int) $member_id
 			)
 		);
 
@@ -1272,9 +1340,8 @@ final class FG_Store {
 		$ride->event_id          = (int) $row['event_id'];
 		$ride->status            = (string) $row['status'];
 		$ride->mode              = (string) $row['mode'];
-		$ride->alias             = (string) $row['alias'];
 		$ride->origin            = (string) $row['origin'];
-		$ride->contact_email     = (string) $row['contact_email'];
+		$ride->member_id         = (int) $row['member_id'];
 		$ride->public_ref        = (string) $row['public_ref'];
 		$ride->confirmed_at      = null === $row['confirmed_at'] ? '' : (string) $row['confirmed_at'];
 		$ride->consent_version   = (string) $row['consent_version'];

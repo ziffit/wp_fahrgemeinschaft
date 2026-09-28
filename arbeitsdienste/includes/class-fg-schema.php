@@ -20,7 +20,7 @@ final class FG_Schema {
 	 *
 	 * @var string
 	 */
-	const VERSION = '1.3.0';
+	const VERSION = '1.4.0';
 
 	/**
 	 * Option name holding the installed schema version.
@@ -28,6 +28,18 @@ final class FG_Schema {
 	 * @var string
 	 */
 	const OPTION = 'fg_schema_version';
+
+	/**
+	 * Option name holding the number of rides the migration of 1.4.0 removed.
+	 *
+	 * The option is not read by the plugin afterwards. It exists so the club is
+	 * told once how many public entries disappeared, and it is deleted the moment
+	 * that notice has been shown. Its existence is therefore the marker for "not
+	 * yet seen", and a stale number is better than a number nobody ever saw.
+	 *
+	 * @var string
+	 */
+	const DROPPED_RIDES_OPTION = 'fg_rides_dropped_in_1_4_0';
 
 	/**
 	 * Longest group text, in characters.
@@ -96,10 +108,12 @@ final class FG_Schema {
 	/**
 	 * Longest accepted e-mail address of a contact for a ride.
 	 *
-	 * The same number as `MEMBER_EMAIL_MAX`, because `fg_rides.contact_email` is
-	 * the same width and for the same reason. It has its own name so that neither
-	 * of the two can be read for the other: one of the two is a member, the other
-	 * is somebody offering a ride, and the two are answered differently.
+	 * The same number as `MEMBER_EMAIL_MAX`, and for the same reason: the widest
+	 * address that can be indexed is the widest address worth accepting. It has
+	 * its own name so that neither of the two can be read for the other. Since
+	 * schema 1.4.0 the address of a ride creator is no longer stored on the ride
+	 * at all — it is looked up through the member — and this bound belongs to the
+	 * address of the person who writes to somebody else's ride.
 	 *
 	 * @var int
 	 */
@@ -210,10 +224,20 @@ final class FG_Schema {
 		$mail_templates = self::mail_templates_table();
 
 		// dbDelta parses this statement; keep one column or key per line and
-		// two spaces after the primary key definition. The four columns behind
+		// two spaces after the primary key definition. The columns behind
 		// created_at stand at the end of the list on purpose: an update appends
 		// missing columns at the end of the existing table, so this way a fresh
-		// installation and an upgrade end up in the same column order.
+		// installation and an upgrade end up in the same column order. That is
+		// why member_id is the last column of the rides table and not next to
+		// event_id, which is where it would be read.
+		//
+		// The two columns alias and contact_email in the rides table have no
+		// reader and no writer left since schema 1.4.0: a ride belongs to a
+		// member now, and the name shown publicly is the first name of that
+		// member. They stay in this statement for the same reason participants
+		// stays in the events table — a WordPress rolled back to an older
+		// version of this plugin must not fail on a field it does not know. The
+		// migration empties them; see clear_legacy_ride_contacts().
 		$statements = array(
 			"CREATE TABLE $events (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -253,10 +277,12 @@ final class FG_Schema {
 	delete_hash char(64) NOT NULL DEFAULT '',
 	delete_expires bigint(20) unsigned NOT NULL DEFAULT 0,
 	source_url varchar(255) NOT NULL DEFAULT '',
+	member_id bigint(20) unsigned NOT NULL DEFAULT 0,
 	PRIMARY KEY  (id),
 	UNIQUE KEY public_ref (public_ref),
 	KEY event (event_id),
-	KEY status (status)
+	KEY status (status),
+	KEY member (member_id)
 ) $charset;",
 			"CREATE TABLE $members (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -300,6 +326,8 @@ final class FG_Schema {
 		}
 
 		self::clear_legacy_participants();
+		self::adopt_ride_members();
+		self::clear_legacy_ride_contacts();
 
 		update_option( self::OPTION, self::VERSION, false );
 	}
@@ -328,6 +356,106 @@ final class FG_Schema {
 		// has no placeholder is a notice on every request.
 		$table = self::events_table();
 		$wpdb->query( "UPDATE $table SET participants = '' WHERE participants IS NOT NULL AND participants <> ''" ); // phpcs:ignore WordPress.DB
+	}
+
+	/**
+	 * Attach every existing ride to the member whose address it stored.
+	 *
+	 * Until schema 1.4.0 a ride carried the contact address of its creator in
+	 * `contact_email` and nothing else that named a person. The address was
+	 * checked against the member administration at every step — the form, the
+	 * confirmation and the contact request — so a ride that got that far belongs
+	 * to a member, and the join below finds that member without guessing.
+	 *
+	 * The match is a join and not a lookup per row because a club may have a few
+	 * hundred rides and this runs on every request until the stored version
+	 * matches. `member_id = 0` is the guard, so running this twice adopts
+	 * nothing twice and cannot overwrite a member that is already set.
+	 *
+	 * @return void
+	 */
+	public static function adopt_ride_members() {
+		global $wpdb;
+
+		$rides   = self::rides_table();
+		$members = self::members_table();
+
+		// A member address is unique in the club's own table, so the join
+		// matches at most one member per ride. An address of nobody matches no
+		// row at all, which is what the next step is about.
+		//
+		// No prepare(): the statement carries no value from outside, only the
+		// two table names this class built, and prepare() with a statement that
+		// has no placeholder is a notice on every request.
+		$wpdb->query( // phpcs:ignore WordPress.DB
+			"UPDATE $rides r INNER JOIN $members m ON m.email = r.contact_email
+			SET r.member_id = m.id
+			WHERE r.member_id = 0 AND r.contact_email <> ''"
+		);
+	}
+
+	/**
+	 * Remove the rides that no member claims, then empty the two dead columns.
+	 *
+	 * A ride whose `member_id` is still 0 and which still carries an address
+	 * belongs to an address the club does not know, or to one it has since
+	 * changed. It cannot be kept: the public list would show a name that belongs
+	 * to nobody, the deletion link would no longer reach a member, and the
+	 * contact request would have nobody to answer. There is no way to attach it
+	 * to a member without guessing which of them meant it, and a wrong entry in
+	 * a public list is worse than a missing one.
+	 *
+	 * The address in the WHERE is what makes this the migration and not a
+	 * blunt instrument. Every ride the code before 1.4.0 wrote carries an
+	 * address, so this catches all of them. A row without an address and without
+	 * a member is one this version has no writer for; leaving it alone lets
+	 * is_valid_public_ride() leave it out of the public list, which is the same
+	 * answer without deleting a row on a guess.
+	 *
+	 * The number goes into an option, because a club that loses a public entry
+	 * from its site without being told has no way of finding out. The admin
+	 * screen Fahrgemeinschaften shows that notice once and then deletes the
+	 * option, so it does not stand there for ever.
+	 *
+	 * @return void
+	 */
+	public static function clear_legacy_ride_contacts() {
+		global $wpdb;
+
+		$table = self::rides_table();
+
+		$dropped = (int) $wpdb->query( "DELETE FROM $table WHERE member_id = 0 AND contact_email <> ''" ); // phpcs:ignore WordPress.DB
+
+		// The two columns keep their place in the table, as participants does, and
+		// are emptied here for the same reason: they hold the personal data of
+		// people who may not be members any more, and a dead column keeps that
+		// data in the database for ever.
+		$wpdb->query( "UPDATE $table SET alias = '', contact_email = '' WHERE alias <> '' OR contact_email <> ''" ); // phpcs:ignore WordPress.DB
+
+		if ( $dropped > 0 ) {
+			add_option( self::DROPPED_RIDES_OPTION, $dropped, '', false );
+		}
+	}
+
+	/**
+	 * How many rides the migration of 1.4.0 removed, and clear the number.
+	 *
+	 * The option is deleted as it is read, which is what makes the notice appear
+	 * once. The number is returned rather than printed so that the caller decides
+	 * where it appears.
+	 *
+	 * @return int Number of removed rides, zero when there was nothing to report.
+	 */
+	public static function take_dropped_rides_notice() {
+		$stored = get_option( self::DROPPED_RIDES_OPTION, false );
+
+		if ( false === $stored ) {
+			return 0;
+		}
+
+		delete_option( self::DROPPED_RIDES_OPTION );
+
+		return (int) $stored;
 	}
 
 	/**

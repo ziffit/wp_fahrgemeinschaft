@@ -20,7 +20,7 @@ final class FG_Stats {
 		return array(
 			'publish_form_total'     => 'Veröffentlichungsformulare gesamt',
 			'publish_valid_email'    => 'Gültige E-Mail-Adresse',
-			'publish_invalid_email'  => 'Ungültige oder nicht hinterlegte E-Mail-Adresse',
+			'publish_invalid_email'  => 'Ungültige, abweichende oder nicht hinterlegte E-Mail-Adresse',
 			'publish_pending'        => 'Vorgemerkte Einträge',
 			'publish_confirmed'      => 'Bestätigte Veröffentlichungen',
 			'publish_deleted'        => 'Gelöschte Vormerkungen/Einträge',
@@ -28,7 +28,7 @@ final class FG_Stats {
 			'contact_total'          => 'Kontaktversuche gesamt',
 			'contact_valid_email'    => 'Gültige Kontaktadressen',
 			'contact_invalid_email'  => 'Ungültige Kontaktadressen',
-			'contact_mail_sent'      => 'Kontakt-E-Mails an Ersteller übergeben',
+			'contact_mail_sent'      => 'Kontakt-E-Mails an Mitglieder übergeben',
 			'contact_requester_mail' => 'Bestätigungen an Anfragende übergeben',
 			'bot_honeypot'           => 'Honeypot-Treffer',
 			'bot_fast_submit'        => 'Auffällig schnelle Absendungen',

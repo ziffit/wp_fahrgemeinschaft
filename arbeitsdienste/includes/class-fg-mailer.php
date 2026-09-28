@@ -45,20 +45,20 @@ final class FG_Mailer {
 			return false;
 		}
 
-		$data = $this->repository->get_ride_display_data( $ride );
-		$to   = $this->repository->normalize_email( $data['contact_email'] );
-		if ( ! $to ) {
+		$data   = $this->repository->get_ride_display_data( $ride );
+		$member = $data['member'];
+		$to     = $this->repository->get_ride_contact_email( $ride, $member );
+		if ( ! $to || ! $member ) {
 			return false;
 		}
 
 		$mail = FG_Mail_Texts::compose(
 			FG_Mail_Texts::RIDE_PENDING,
 			array_merge(
-				$this->person( $to, $data['ride']->alias ),
+				$this->person_from_member( $member ),
 				array(
-					'Fahrgemeinschaft'    => (string) $data['ride']->alias,
-					'Art'                 => $this->mode_label( $data['mode'] ),
-					'Arbeitsdienst'       => (string) $data['event_label'],
+					'Art'                  => $this->mode_label( $data['mode'] ),
+					'Arbeitsdienst'        => (string) $data['event_label'],
 					'Arbeitsdienstdetails' => $data['event_label'] . ( $data['event_date'] ? ' (' . $data['event_date'] . ')' : '' ),
 					'Abfahrtsbereich'     => (string) $data['origin'],
 					'Bestaetigungslink'   => (string) $confirm_url,
@@ -87,20 +87,20 @@ final class FG_Mailer {
 			return false;
 		}
 
-		$data = $this->repository->get_ride_display_data( $ride );
-		$to   = $this->repository->normalize_email( $data['contact_email'] );
-		if ( ! $to ) {
+		$data   = $this->repository->get_ride_display_data( $ride );
+		$member = $data['member'];
+		$to     = $this->repository->get_ride_contact_email( $ride, $member );
+		if ( ! $to || ! $member ) {
 			return false;
 		}
 
 		$mail = FG_Mail_Texts::compose(
 			FG_Mail_Texts::RIDE_PUBLISHED,
 			array_merge(
-				$this->person( $to, $ride->alias ),
+				$this->person_from_member( $member ),
 				array(
-					'Fahrgemeinschaft' => (string) $ride->alias,
-					'Arbeitsdienst'    => (string) $data['event_label'],
-					'Loeschlink'       => (string) $delete_url,
+					'Arbeitsdienst' => (string) $data['event_label'],
+					'Loeschlink'    => (string) $delete_url,
 				)
 			)
 		);
@@ -115,11 +115,11 @@ final class FG_Mailer {
 	/**
 	 * Notify both sides of a valid contact request.
 	 *
-	 * @param int    $ride_id        Ride ID.
-	 * @param string $requester_email Verified participant address.
+	 * @param int $ride_id     Ride ID.
+	 * @param int $asker_id    Row ID of the member who wrote in.
 	 * @return array{creator: bool, requester: bool}
 	 */
-	public function send_contact_notifications( $ride_id, $requester_email ) {
+	public function send_contact_notifications( $ride_id, $asker_id ) {
 		$ride = $this->repository->get_ride( $ride_id );
 		if ( ! $ride ) {
 			return array(
@@ -129,9 +129,10 @@ final class FG_Mailer {
 		}
 
 		$data          = $this->repository->get_ride_display_data( $ride );
-		$creator_email = $this->repository->normalize_email( $data['contact_email'] );
-		$requester_email = $this->repository->normalize_email( $requester_email );
-		if ( ! $creator_email || ! $requester_email ) {
+		$owner         = $data['member'];
+		$asker         = $this->repository->get_member( $asker_id );
+		$creator_email = $this->repository->get_ride_contact_email( $ride, $owner );
+		if ( ! $creator_email || ! $owner || ! $asker ) {
 			return array(
 				'creator'  => false,
 				'requester' => false,
@@ -141,11 +142,10 @@ final class FG_Mailer {
 		$creator = FG_Mail_Texts::compose(
 			FG_Mail_Texts::CONTACT_CREATOR,
 			array_merge(
-				$this->person( $creator_email, $ride->alias ),
+				$this->person_from_member( $owner ),
 				array(
-					'Fahrgemeinschaft' => (string) $ride->alias,
-					'Arbeitsdienst'    => (string) $data['event_label'],
-					'Interessent'      => (string) $requester_email,
+					'Arbeitsdienst' => (string) $data['event_label'],
+					'Interessent'   => (string) $asker->email,
 				)
 			)
 		);
@@ -153,13 +153,11 @@ final class FG_Mailer {
 		$requester = FG_Mail_Texts::compose(
 			FG_Mail_Texts::CONTACT_REQUESTER,
 			array_merge(
-				// No name to fall back to: the contact form asks for an address and
-				// nothing else, so an address that belongs to no member is greeted
-				// with a plain "Hallo" instead of the designation of a ride.
-				$this->person( $requester_email, '' ),
+				// Both parties are members of the club and both are named from the
+				// member administration, so neither greeting has to fall back.
+				$this->person_from_member( $asker ),
 				array(
-					'Fahrgemeinschaft' => (string) $ride->alias,
-					'Arbeitsdienst'    => (string) $data['event_label'],
+					'Arbeitsdienst' => (string) $data['event_label'],
 				)
 			)
 		);
@@ -170,7 +168,7 @@ final class FG_Mailer {
 				$creator_email,
 				$creator['subject'],
 				$creator['body'],
-				array( 'Reply-To: ' . $requester_email ),
+				array( 'Reply-To: ' . $asker->email ),
 				$creator['links']
 			);
 		}
@@ -178,7 +176,7 @@ final class FG_Mailer {
 		$requester_sent = false;
 		if ( $creator_sent && $requester ) {
 			$requester_sent = $this->send(
-				$requester_email,
+				$asker->email,
 				$requester['subject'],
 				$requester['body'],
 				null,
@@ -266,23 +264,37 @@ final class FG_Mailer {
 	 * and that is the one case where a missing name is not a missing name but a
 	 * broken sentence.
 	 *
-	 * Without a member the greeting falls back to the designation the visitor
-	 * chose themselves, and to nothing at all when there is none. A name is
-	 * therefore never invented and never left half-written.
+	 * The ride messages do not come through here any more, because they know
+	 * their member; see person_from_member() below.
 	 *
-	 * @param string $email        Recipient address.
-	 * @param string $ersatz_name  Name to use when the address belongs to nobody.
+	 * @param string $email       Recipient address.
+	 * @param string $ersatz_name Name to use when the address belongs to nobody.
 	 * @return array<string, string>
 	 */
 	private function person( $email, $ersatz_name ) {
-		$member   = $this->repository->get_member_by_email( $email );
+		return $this->person_from_member( $this->repository->get_member_by_email( $email ), $ersatz_name );
+	}
+
+	/**
+	 * The name fields of a member that is already at hand.
+	 *
+	 * The same three values as person(), from a record the caller already has.
+	 * Every ride message knows its member, because a ride points at one, and
+	 * looking the address up again would be a second query for an answer that
+	 * was in the row.
+	 *
+	 * @param FG_Member|null $member      Member record.
+	 * @param string          $ersatz_name Name to use when there is no member.
+	 * @return array<string, string>
+	 */
+	private function person_from_member( $member, $ersatz_name = '' ) {
 		$vorname = $member ? trim( (string) $member->first_name ) : '';
 		$name    = $member ? trim( (string) $member->last_name ) : '';
 
 		// The first name alone, and not "first name, else last name": a member
 		// row without a first name cannot be written, FG_Repository refuses it,
-		// so the second name is never the only one there is. The fallback for an
-		// address that belongs to nobody is the designation the visitor chose,
+		// so the second name is never the only one there is. The fallback for a
+		// recipient that belongs to nobody is a designation the caller passes in,
 		// and where there is none the greeting stays a bare "Hallo".
 		$ansprache = '' !== $vorname ? $vorname : trim( (string) $ersatz_name );
 

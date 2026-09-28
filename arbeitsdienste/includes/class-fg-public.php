@@ -128,31 +128,30 @@ final class FG_Public {
 							</div>
 
 							<div class="fg-field">
-								<label for="fg-alias"><?php esc_html_e( 'Vorname oder Spitzname', 'arbeitsdienste' ); ?></label>
-								<input type="text" id="fg-alias" name="fg_alias" maxlength="80" required>
-								<?php // The name is the one thing that is meant to be read by people who know the member. ?>
-								<span class="fg-hint"><?php esc_html_e( 'Steht in der Liste öffentlich. Wer nicht mit Namen auftreten möchte, tritt unter einem Spitznamen auf.', 'arbeitsdienste' ); ?></span>
-							</div>
-
-							<div class="fg-field">
 								<label for="fg-origin"><?php esc_html_e( 'Abfahrtsbereich', 'arbeitsdienste' ); ?></label>
 								<input type="text" id="fg-origin" name="fg_origin" maxlength="100" required>
 								<?php // The three examples are the ones the server also accepts. Each of them was checked against the personal data filter; see the note in PRUEFUMGEBUNG.md about values that end in a street word. ?>
 								<span class="fg-hint"><?php esc_html_e( 'Abfahrtsort, Stadtteil, z. B. Langwasser, Nürnberg Nord, S-Bahnstation Ostring.', 'arbeitsdienste' ); ?></span>
 							</div>
 
-							<div class="fg-field fg-field-full">
-								<label for="fg-contact-email"><?php esc_html_e( 'E-Mail für die Kontaktaufnahme', 'arbeitsdienste' ); ?></label>
-								<input type="email" id="fg-contact-email" name="fg_contact_email" maxlength="<?php echo esc_attr( FG_Schema::CONTACT_EMAIL_MAX ); ?>" autocomplete="email" required>
-								<span class="fg-hint"><?php esc_html_e( 'Die E-Mail-Adresse wird nicht öffentlich angezeigt. Sie muss zu einem Mitglied gehören, das sich für diesen Arbeitsdienst eingetragen hat.', 'arbeitsdienste' ); ?></span>
+							<div class="fg-field">
+								<label for="fg-ride-member-no"><?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?></label>
+								<input type="text" id="fg-ride-member-no" name="fg_member_no" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_NO_MAX ); ?>" required>
+							</div>
+
+							<div class="fg-field">
+								<label for="fg-ride-member-email"><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></label>
+								<input type="email" id="fg-ride-member-email" name="fg_member_email" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_EMAIL_MAX ); ?>" autocomplete="email" required>
+								<?php // The same pair and the same rule as the work service form, because it is the same question. The first name in the public list comes from the member administration. A visitor who does not want to appear under their own name cannot choose a different one here; the trade is that a list of hand-written names can no longer carry an address, a telephone number or a full name, and a member who changes their first name does not leave the old one behind. ?>
+								<span class="fg-hint"><?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen, das sich für diesen Arbeitsdienst eingetragen hat. Dein Vorname steht in der Liste öffentlich; E-Mail-Adresse und Mitgliedsnummer nicht.', 'arbeitsdienste' ); ?></span>
 							</div>
 
 							<div class="fg-field fg-field-full">
 								<label class="fg-consent" for="fg-consent">
 									<input id="fg-consent" type="checkbox" name="fg_consent" value="1" required>
 									<span>
-										<?php // The consent names what becomes public. "Meine persönlichen Kontaktdaten" was ambiguous: it could be read as covering a name, and a name is expected in the public list. ?>
-										<?php esc_html_e( 'Ich möchte die oben gemachten Angaben zur Organisation der Fahrgemeinschaft öffentlich anzeigen lassen. Dazu gehören mein Vorname oder Spitzname, die Art des Angebots, der Abfahrtsbereich und der Arbeitsdienst. Meine E-Mail-Adresse und meine Telefonnummer werden dabei nicht öffentlich angezeigt.', 'arbeitsdienste' ); ?>
+										<?php // The consent names what becomes public. It has to name the first name from the member administration, because that is what appears in the list and nobody is asked for it here. Naming the source of the name is what makes the sentence checkable: a member who does not recognise the name in the list can see that it came from the club's own records. ?>
+										<?php esc_html_e( 'Ich möchte die oben gemachten Angaben zur Organisation der Fahrgemeinschaft öffentlich anzeigen lassen. Dazu gehören mein Vorname aus der Mitgliederverwaltung, die Art des Angebots, der Abfahrtsbereich und der Arbeitsdienst. Meine E-Mail-Adresse und meine Mitgliedsnummer werden dabei nicht öffentlich angezeigt.', 'arbeitsdienste' ); ?>
 										<?php if ( $privacy ) : ?>
 											<a href="<?php echo esc_url( $privacy ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'arbeitsdienste' ); ?></a>
 										<?php endif; ?>
@@ -196,12 +195,23 @@ final class FG_Public {
 			<h2 id="fg-list-heading"><?php esc_html_e( 'Aktuelle Fahrgemeinschaften', 'arbeitsdienste' ); ?></h2>
 			<?php foreach ( $events as $event ) : ?>
 				<?php
-				$rides = array_values(
-					array_filter(
-						$this->repository->get_published_rides( $event->id ),
-						array( $this->repository, 'is_valid_public_ride' )
-					)
-				);
+				// One query for all rides of the duty and one for all their
+				// members, not one member per line of the list. A ride whose
+				// member has been removed from the club is left out: it could
+				// neither be named nor answered.
+				$alle    = $this->repository->get_published_rides( $event->id );
+				$members = $this->repository->get_members_for_rides( $alle );
+				$rides   = array();
+				foreach ( $alle as $kandidat ) {
+					if (
+						$this->repository->is_valid_public_ride( $kandidat )
+						&& $this->repository->is_displayable_member(
+							isset( $members[ $kandidat->member_id ] ) ? $members[ $kandidat->member_id ] : null
+						)
+					) {
+						$rides[] = $kandidat;
+					}
+				}
 				if ( empty( $rides ) ) {
 					continue;
 				}
@@ -215,7 +225,7 @@ final class FG_Public {
 					</h3>
 					<div class="fg-rides">
 						<?php foreach ( $rides as $ride ) : ?>
-							<?php $this->render_ride( $ride, $admin_url, $source ); ?>
+							<?php $this->render_ride( $ride, $admin_url, $source, $members ); ?>
 						<?php endforeach; ?>
 					</div>
 				</div>
@@ -225,7 +235,7 @@ final class FG_Public {
 			<?php else : ?>
 				<?php // The note says the same thing for every entry, so it is stated once for the whole list. ?>
 				<p class="fg-hint fg-list-hint">
-					<?php esc_html_e( 'Deine E-Mail-Adresse wird nur an den Ersteller der Fahrgemeinschaft gesendet, sofern sie zu einem Mitglied gehört, das sich für den Arbeitsdienst dieses Eintrags eingetragen hat.', 'arbeitsdienste' ); ?>
+					<?php esc_html_e( 'Deine E-Mail-Adresse wird nur an das Mitglied gesendet, das die Fahrgemeinschaft angeboten hat, sofern sie zu einem Mitglied gehört, das sich für den Arbeitsdienst dieses Eintrags eingetragen hat. Angezeigt wird nur der Vorname aus der Mitgliederverwaltung.', 'arbeitsdienste' ); ?>
 					<?php if ( $privacy_url ) : ?>
 						<a href="<?php echo esc_url( $privacy_url ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'arbeitsdienste' ); ?></a>
 					<?php endif; ?>
@@ -244,17 +254,19 @@ final class FG_Public {
 	 * reveal is a native details element and needs no script; a form that only a
 	 * script could open would be unreachable without it.
 	 *
-	 * @param FG_Ride $ride      Ride record.
-	 * @param string  $admin_url Form endpoint.
-	 * @param string  $source    Source URL.
+	 * @param FG_Ride               $ride      Ride record.
+	 * @param string                $admin_url Form endpoint.
+	 * @param string                $source    Source URL.
+	 * @param array<int, FG_Member> $members   Members of the whole list, keyed by ID.
 	 * @return void
 	 */
-	private function render_ride( FG_Ride $ride, $admin_url, $source ) {
-		$data       = $this->repository->get_ride_display_data( $ride );
+	private function render_ride( FG_Ride $ride, $admin_url, $source, array $members = array() ) {
+		$member     = isset( $members[ $ride->member_id ] ) ? $members[ $ride->member_id ] : null;
+		$data       = $this->repository->get_ride_display_data( $ride, $member );
 		$mode_label = FG_RIDE_MODE_SEARCH === $data['mode'] ? __( 'Ich suche', 'arbeitsdienste' ) : __( 'Ich biete', 'arbeitsdienste' );
 		?>
 		<article class="fg-ride">
-			<h4 class="fg-ride-title"><span class="fg-badge"><?php echo esc_html( $mode_label ); ?></span> · <span class="fg-origin"><?php echo esc_html( $data['origin'] ); ?></span> · <?php echo esc_html( $ride->alias ); ?></h4>
+			<h4 class="fg-ride-title"><span class="fg-badge"><?php echo esc_html( $mode_label ); ?></span> · <span class="fg-origin"><?php echo esc_html( $data['origin'] ); ?></span> · <?php echo esc_html( $data['first_name'] ); ?></h4>
 			<details class="fg-contact">
 				<?php // As on the signup form: one label, no closing button, and a plain
 				// line of text stands in for the control once the form stands open. A
@@ -299,7 +311,7 @@ final class FG_Public {
 			'pending'          => array( __( 'Deine Eintragung wurde vorgemerkt. Bitte prüfe deine E-Mail und bestätige die Veröffentlichung über den enthaltenen Link.', 'arbeitsdienste' ), false ),
 			'published'        => array( __( 'Deine Fahrgemeinschaft wurde erfolgreich veröffentlicht.', 'arbeitsdienste' ), false ),
 			'deleted'          => array( __( 'Die Eintragung wurde gelöscht.', 'arbeitsdienste' ), false ),
-			'contact_received' => array( __( 'Vielen Dank für deine Anfrage. Wir informieren den Ersteller, sofern die angegebene Adresse zu einem Mitglied gehört, das sich für den gewählten Arbeitsdienst eingetragen hat.', 'arbeitsdienste' ), false ),
+			'contact_received' => array( __( 'Vielen Dank für deine Anfrage. Wir informieren das Mitglied, das die Fahrgemeinschaft angeboten hat, sofern die angegebene Adresse zu einem Mitglied gehört, das sich für den gewählten Arbeitsdienst eingetragen hat.', 'arbeitsdienste' ), false ),
 			'not_created'      => array( __( 'Die Eintragung konnte nicht angelegt werden. Bitte prüfe die Eingaben und verwende die im Verein hinterlegte E-Mail-Adresse.', 'arbeitsdienste' ), true ),
 			'email_failed'     => array( __( 'Die Eintragung konnte nicht angelegt werden, weil die Bestätigungs-E-Mail nicht zugestellt werden konnte. Bitte versuche es später erneut.', 'arbeitsdienste' ), true ),
 			'publish_failed'   => array( __( 'Die Veröffentlichung wurde zurückgenommen, weil die E-Mail mit dem Lösch-Link nicht zugestellt werden konnte. Bitte bestätige die Veröffentlichung über den Link der ersten E-Mail erneut.', 'arbeitsdienste' ), true ),

@@ -150,15 +150,18 @@ $ohne_bedarf_id = $repo->insert_event(
 	)
 );
 
-// Pending ride with a known confirmation token.
+// Pending ride with a known confirmation token. A ride belongs to a member
+// since schema 1.4.0, so the fixture names a member, not an address and not a
+// label of its own: what the public list shows is the first name of that
+// member, so a check for a name has to look for "Anton" and not for a word that
+// only the fixture knows.
 $confirm_token = 'httpconfirmtoken0000000000000000000000A';
 $pending       = $repo->create_pending_ride(
 	array(
-		'event_id'      => $event_id,
-		'mode'          => FG_RIDE_MODE_OFFER,
-		'alias'         => 'Moewe-Trupp',
-		'origin'        => 'Innenstadt',
-		'contact_email' => 'anton@angeln.example.org',
+		'event_id'  => $event_id,
+		'mode'      => FG_RIDE_MODE_OFFER,
+		'origin'    => 'Innenstadt',
+		'member_id' => $mitglied_ids['0042'],
 	)
 );
 $pending_id = $pending['id'];
@@ -172,15 +175,16 @@ $repo->update_ride(
 	)
 );
 
-// Published ride with a known delete token.
+// Published ride with a known delete token. It belongs to the second member, so
+// that the two entries in the list carry two different names and a check cannot
+// pass on one of them by accident.
 $delete_token = 'httpdeletetoken00000000000000000000000C';
 $published    = $repo->create_pending_ride(
 	array(
-		'event_id'      => $event_id,
-		'mode'          => FG_RIDE_MODE_SEARCH,
-		'alias'         => 'Amsel-Gruppe',
-		'origin'        => 'Suedstadt',
-		'contact_email' => 'berta@angeln.example.org',
+		'event_id'  => $event_id,
+		'mode'      => FG_RIDE_MODE_SEARCH,
+		'origin'    => 'Suedstadt',
+		'member_id' => $mitglied_ids['0043'],
 	)
 );
 $published_id = $published['id'];

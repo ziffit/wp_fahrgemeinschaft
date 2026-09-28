@@ -63,6 +63,20 @@ final class FG_Admin_Rides {
 		$total   = $this->repository->count_rides( $filters );
 		$page    = max( 1, FG_Admin::query_int( 'paged' ) );
 		$rides   = $this->repository->get_rides_page( $filters, ( $page - 1 ) * FG_Admin::PER_PAGE, FG_Admin::PER_PAGE );
+
+		// One query each for the members and the work services of the whole page,
+		// so a page of twenty entries does not become forty queries. A member that
+		// has been removed from the club is simply absent, and the row says so
+		// instead of naming a person that is not there any more.
+		$members = $this->repository->get_members_for_rides( $rides );
+		$events  = $this->repository->get_events_by_ids(
+			array_map(
+				static function ( $ride ) {
+					return $ride->event_id;
+				},
+				$rides
+			)
+		);
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Fahrgemeinschaften', 'arbeitsdienste' ); ?></h1>
@@ -91,11 +105,11 @@ final class FG_Admin_Rides {
 			<table class="widefat striped">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'Vorname oder Spitzname', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Vorname', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Art', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Arbeitsdienst', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Abfahrtsbereich', 'arbeitsdienste' ); ?></th>
-						<th><?php esc_html_e( 'Kontakt-E-Mail', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Mitglied', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Status', 'arbeitsdienste' ); ?></th>
 					</tr>
 				</thead>
@@ -106,15 +120,28 @@ final class FG_Admin_Rides {
 						</tr>
 					<?php endif; ?>
 					<?php foreach ( $rides as $ride ) : ?>
-						<?php $data = $this->repository->get_ride_display_data( $ride ); ?>
+						<?php
+						// The member and the work service are resolved from the
+						// queries above, not per row.
+						$member = isset( $members[ $ride->member_id ] ) ? $members[ $ride->member_id ] : null;
+						$event  = isset( $events[ $ride->event_id ] ) ? $events[ $ride->event_id ] : null;
+						?>
 						<tr>
 							<td>
-								<a href="<?php echo esc_url( $this->detail_url( $ride->id ) ); ?>"><strong><?php echo esc_html( $ride->alias ); ?></strong></a>
+								<a href="<?php echo esc_url( $this->detail_url( $ride->id ) ); ?>"><strong><?php echo esc_html( $this->ride_name( $member ) ); ?></strong></a>
 							</td>
 							<td><?php echo esc_html( $this->mode_label( $ride->mode ) ); ?></td>
-							<td><?php echo esc_html( $data['event_label'] ); ?></td>
+							<td><?php echo esc_html( $event ? $event->title : '' ); ?></td>
 							<td><?php echo esc_html( $ride->origin ); ?></td>
-							<td><?php echo esc_html( $ride->contact_email ); ?></td>
+							<?php // The member number, not the address: the address is the member's own data and it is one click away in the member list, where it belongs. ?>
+							<td>
+								<?php if ( $member ) : ?>
+									<?php echo esc_html( $member->member_no ); ?>
+									<span class="fg-hint"><?php echo esc_html( $this->ride_name( $member ) . ' ' . $member->last_name ); ?></span>
+								<?php else : ?>
+									<em><?php esc_html_e( 'Mitglied nicht mehr vorhanden', 'arbeitsdienste' ); ?></em>
+								<?php endif; ?>
+							</td>
 							<td><?php echo esc_html( $this->status_label( $ride->status ) ); ?></td>
 						</tr>
 					<?php endforeach; ?>
@@ -132,24 +159,42 @@ final class FG_Admin_Rides {
 	 * @return void
 	 */
 	private function render_detail( FG_Ride $ride ) {
-		$data = $this->repository->get_ride_display_data( $ride );
+		$data   = $this->repository->get_ride_display_data( $ride );
+		$member = $data['member'];
 
-		$rows = array(
-			array( __( 'Status', 'arbeitsdienste' ), $this->status_label( $ride->status ) ),
-			array( __( 'Art', 'arbeitsdienste' ), $this->mode_label( $ride->mode ) ),
-			array( __( 'Vorname oder Spitzname', 'arbeitsdienste' ), $ride->alias ),
-			array( __( 'Arbeitsdienst', 'arbeitsdienste' ), $data['event_label'] ),
-			array( __( 'Datum', 'arbeitsdienste' ), $data['event_date'] ),
-			array( __( 'Abfahrtsbereich', 'arbeitsdienste' ), $ride->origin ),
-			array( __( 'Kontakt-E-Mail', 'arbeitsdienste' ), $ride->contact_email ),
-			array( __( 'Angemeldet am', 'arbeitsdienste' ), $ride->created_at ),
-			array( __( 'Bestätigt am', 'arbeitsdienste' ), '' !== $ride->confirmed_at ? $ride->confirmed_at : __( 'noch nicht', 'arbeitsdienste' ) ),
-			array( __( 'Einwilligung', 'arbeitsdienste' ), $ride->consent_version . ' (' . $ride->consented_at . ')' ),
-			array( __( 'Öffentliche Referenz', 'arbeitsdienste' ), $ride->public_ref ),
+		// The four rows about the member stand in one row when there is no
+		// member. Four empty cells would read like a form nobody filled in, and
+		// the point of the screen is to say what is there and what is not.
+		$mitglied = $member
+			? array(
+				array( __( 'Vorname', 'arbeitsdienste' ), (string) $member->first_name ),
+				array( __( 'Nachname', 'arbeitsdienste' ), (string) $member->last_name ),
+				array( __( 'Mitgliedsnummer', 'arbeitsdienste' ), (string) $member->member_no ),
+				array( __( 'E-Mail des Mitglieds', 'arbeitsdienste' ), (string) $member->email ),
+			)
+			: array(
+				array( __( 'Mitglied', 'arbeitsdienste' ), __( 'nicht mehr im Verein', 'arbeitsdienste' ) ),
+			);
+
+		$rows = array_merge(
+			array(
+				array( __( 'Status', 'arbeitsdienste' ), $this->status_label( $ride->status ) ),
+				array( __( 'Art', 'arbeitsdienste' ), $this->mode_label( $ride->mode ) ),
+			),
+			$mitglied,
+			array(
+				array( __( 'Arbeitsdienst', 'arbeitsdienste' ), $data['event_label'] ),
+				array( __( 'Datum', 'arbeitsdienste' ), $data['event_date'] ),
+				array( __( 'Abfahrtsbereich', 'arbeitsdienste' ), $ride->origin ),
+				array( __( 'Angemeldet am', 'arbeitsdienste' ), $ride->created_at ),
+				array( __( 'Bestätigt am', 'arbeitsdienste' ), '' !== $ride->confirmed_at ? $ride->confirmed_at : __( 'noch nicht', 'arbeitsdienste' ) ),
+				array( __( 'Einwilligung', 'arbeitsdienste' ), $ride->consent_version . ' (' . $ride->consented_at . ')' ),
+				array( __( 'Öffentliche Referenz', 'arbeitsdienste' ), $ride->public_ref ),
+			)
 		);
 		?>
 		<div class="wrap">
-			<h1><?php echo esc_html( $ride->alias ); ?></h1>
+			<h1><?php echo esc_html( $this->ride_name( $member ) ); ?></h1>
 			<table class="widefat striped">
 				<tbody>
 					<?php foreach ( $rows as $row ) : ?>
@@ -190,6 +235,25 @@ final class FG_Admin_Rides {
 			'event_id' => FG_Admin::query_int( 'fg_event_filter' ),
 			'status'   => in_array( $status, array( FG_RIDE_STATUS_PENDING, FG_RIDE_STATUS_PUBLISHED ), true ) ? $status : '',
 		);
+	}
+
+	/**
+	 * The name to show for a ride.
+	 *
+	 * The first name of the member, exactly as it is written in the list the
+	 * members see. A ride whose member has been removed from the club gets the
+	 * wording of that fact rather than an empty cell, so a row is never read as
+	 * an entry that simply forgot its name.
+	 *
+	 * @param FG_Member|null $member Member behind the ride.
+	 * @return string
+	 */
+	private function ride_name( $member ) {
+		if ( $member && '' !== trim( (string) $member->first_name ) ) {
+			return (string) $member->first_name;
+		}
+
+		return __( 'Fahrgemeinschaft ohne Mitglied', 'arbeitsdienste' );
 	}
 
 	/**

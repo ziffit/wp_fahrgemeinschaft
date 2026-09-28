@@ -49,7 +49,7 @@ final class FG_Privacy {
 		}
 
 		$text  = '<p>' . esc_html__( 'Fahrgemeinschaften für Arbeitsdienste: Die Website speichert den von der angemeldeten Person angegebenen Vornamen oder Spitznamen, die Art des Angebots, den ungefähren Abfahrtsbereich sowie den zugehörigen Arbeitsdienst. Vorname oder Spitzname, Angebotsart, Abfahrtsbereich und Arbeitsdienst werden in der öffentlichen Liste angezeigt; wer nicht mit Namen auftreten möchte, gibt einen Spitznamen an. Die private E-Mail-Adresse wird nicht öffentlich ausgegeben. Eine Eintragung wird erst nach Bestätigung per E-Mail veröffentlicht.', 'arbeitsdienste' ) . '</p>';
-		$text .= '<p>' . esc_html__( 'Für die Kontaktvermittlung kann eine Person ihre E-Mail-Adresse an den Ersteller einer veröffentlichten Fahrgemeinschaft senden. Die Anfrage wird nur zur Weiterleitung dieser Kontaktaufnahme verwendet; es werden keine Kontaktverläufe gespeichert. Die öffentliche Antwort ist unabhängig von der Gültigkeit einer Adresse gleich.', 'arbeitsdienste' ) . '</p>';
+		$text .= '<p>' . esc_html__( 'Für die Kontaktvermittlung kann eine Person ihre E-Mail-Adresse an das Mitglied senden, das eine veröffentlichte Fahrgemeinschaft angeboten hat. Die Anfrage wird nur zur Weiterleitung dieser Kontaktaufnahme verwendet; es werden keine Kontaktverläufe gespeichert. Die öffentliche Antwort ist unabhängig von der Gültigkeit einer Adresse gleich.', 'arbeitsdienste' ) . '</p>';
 		$text .= '<p>' . esc_html__( 'Bestätigungs- und Löschlinks enthalten zufällige Tokens. Diese werden nur als Hash gespeichert und laufen nach 48 Stunden beziehungsweise nach dem Ablauf des Arbeitsdienstes plus 30 Tagen ab. Die tägliche Missbrauchsstatistik enthält nur aggregierte Zähler ohne E-Mail-Adressen, Namen, IP-Adressen oder Rohformulare und wird nach 90 Tagen gelöscht.', 'arbeitsdienste' ) . '</p>';
 
 		wp_add_privacy_policy_content( __( 'Fahrgemeinschaften', 'arbeitsdienste' ), wp_kses_post( $text ) );
@@ -105,18 +105,35 @@ final class FG_Privacy {
 
 		$rides = $this->repository->get_rides_by_email( $email, self::BATCH_SIZE, ( $page - 1 ) * self::BATCH_SIZE );
 
+		// The members and work services of the whole batch in one query each.
+		// The export runs over a member's own rides, so they all point at one
+		// member — but the work services differ per ride, and one query per row
+		// here would be one query per exported line.
+		$members = $this->repository->get_members_for_rides( $rides );
+		$events  = $this->repository->get_events_by_ids(
+			array_map(
+				static function ( $ride ) {
+					return $ride->event_id;
+				},
+				$rides
+			)
+		);
+
 		$data = array();
 		foreach ( $rides as $ride ) {
-			$ride_data = $this->repository->get_ride_display_data( $ride );
-			$data[]    = array(
+			$member     = isset( $members[ $ride->member_id ] ) ? $members[ $ride->member_id ] : null;
+			$event      = isset( $events[ $ride->event_id ] ) ? $events[ $ride->event_id ] : null;
+			$ride_data  = $this->repository->get_ride_display_data( $ride, $member );
+			$data[]     = array(
 				'group_id'    => 'fahrgemeinschaften-rides',
 				'group_label' => __( 'Fahrgemeinschaften', 'arbeitsdienste' ),
 				'item_id'     => 'fg-ride-' . $ride->id,
 				'data'        => array(
 					array( 'name' => __( 'Status', 'arbeitsdienste' ), 'value' => $ride->status ),
 					array( 'name' => __( 'Art', 'arbeitsdienste' ), 'value' => $ride_data['mode'] ),
-					array( 'name' => __( 'Vorname oder Spitzname', 'arbeitsdienste' ), 'value' => $ride->alias ),
-					array( 'name' => __( 'Arbeitsdienst', 'arbeitsdienste' ), 'value' => $ride_data['event_label'] ),
+					array( 'name' => __( 'Vorname', 'arbeitsdienste' ), 'value' => $member ? $member->first_name : '' ),
+					array( 'name' => __( 'Nachname', 'arbeitsdienste' ), 'value' => $member ? $member->last_name : '' ),
+					array( 'name' => __( 'Arbeitsdienst', 'arbeitsdienste' ), 'value' => $event ? $event->title : '' ),
 					array( 'name' => __( 'Datum', 'arbeitsdienste' ), 'value' => $ride_data['event_date'] ),
 					array( 'name' => __( 'Abfahrtsbereich', 'arbeitsdienste' ), 'value' => $ride_data['origin'] ),
 					array( 'name' => __( 'E-Mail', 'arbeitsdienste' ), 'value' => $email ),

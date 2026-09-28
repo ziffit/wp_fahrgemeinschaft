@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Arbeitsdienste
  * Description:       Arbeitsdienste eines Vereins planen, Mitglieder eintragen und öffentlich anbieten, mit Anmeldung zum Dienst und zu den Fahrgemeinschaften je Dienst.
- * Version:           1.13.0
+ * Version:           1.14.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            Verein
@@ -31,7 +31,7 @@ defined( 'ABSPATH' ) || exit;
  * Verein eine neue Version, die es nicht gibt, und liefert beim Update die alte
  * Optik zur neuen. Beide Zahlen werden deshalb zusammen gesetzt.
  */
-define( 'FG_VERSION', '1.13.0' );
+define( 'FG_VERSION', '1.14.0' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
 /**
  * Name of the element that carries a message after a form was sent.
@@ -59,8 +59,21 @@ define( 'FG_STATISTICS_RETENTION_DAYS', 90 );
  * Raised to 1.1 when the consent began to name what becomes public. A first
  * name or nickname is expected in the list, and the sentence no longer leaves
  * open whether a name counts as a contact detail.
+ *
+ * Raised to 1.2 in version 1.14.0, because the consent now names the source of
+ * the name as well as the name. Until then the visitor typed the name into the
+ * form and the sentence talked about "my first name or nickname". The name that
+ * appears in the list is now the first name of the member in the club's member
+ * administration, and the sentence says so — a person reading the list can then
+ * see where the name came from. The member number joins the address in the part
+ * that is named as not being published.
+ *
+ * The version is written to every new ride and is only read back in the admin,
+ * so raising it asks nobody anything. Rides consented to under 1.1 keep their
+ * note: they were consented to for exactly the fields that were shown then, and
+ * the only field that disappeared is the one the visitor used to choose.
  */
-define( 'FG_CONSENT_VERSION', '1.1' );
+define( 'FG_CONSENT_VERSION', '1.2' );
 define( 'FG_RIDE_STATUS_PENDING', 'pending' );
 define( 'FG_RIDE_STATUS_PUBLISHED', 'published' );
 define( 'FG_RIDE_MODE_OFFER', 'offer' );
