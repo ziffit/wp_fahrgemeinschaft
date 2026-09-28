@@ -2743,25 +2743,27 @@ $fg_repo->delete_event( $abmelde_event );
 
 /* The expired token is not a token any more, and the entry stays: a duty that
  * is over is a fact about the past, and who did it is part of that fact.
+ * Since schema 1.7.0 the tokens stand in their own table, so the expiry is put
+ * there and not in a column of the registration.
  */
 $verfallen_event = fg_make_event( 'Anmeldung verfallen', $soon, '', true, array( 'demand' => 3 ) );
 $verfallen       = fg_register( $verfallen_event, $ander->id );
 
-// The expiry is a column, and a test has to be able to put a date in the past.
-// That is a store operation, so it goes to the store and not through the
-// domain layer, which has no reason to offer "make this link older".
+// The expiry is a column of the token row, and a test has to be able to put a
+// date in the past. That is a store operation, so it goes to the store and not
+// through the domain layer, which has no reason to offer "make this link older".
 $fg_store = new FG_Store();
-$fg_store->update_event_member( $verfallen['id'], array( 'unregister_expires' => time() - 10 ) );
+$fg_store->update_event_member_token( $verfallen['id'], FG_Security::hash_token( $verfallen['unregister_token'] ), time() - 10 );
 $verfallen_row = $fg_repo->get_registration( $verfallen['id'] );
 fg_ok( ! $fg_repo->valid_unregister_token( $verfallen_row, $verfallen['unregister_token'] ), 'an expired token is refused' );
-fg_ok( in_array( $verfallen['id'], $fg_repo->get_expired_unregister_registration_ids(), true ), 'and the cleanup finds the row', wp_json_encode( $fg_repo->get_expired_unregister_registration_ids() ) );
+fg_ok( 1 === $fg_store->count_event_member_tokens( $verfallen['id'] ), 'and the token is still there, only past its date', (string) $fg_store->count_event_member_tokens( $verfallen['id'] ) );
 
 $stats_option = (array) get_option( FG_STATS_OPTION, array() );
 $stats_option[ gmdate( 'Y-m-d' ) ]['publish_form_total'] = 1;
 update_option( FG_STATS_OPTION, $stats_option, false );
 $fg_actions->daily_cleanup();
 fg_ok( null !== $fg_repo->get_registration( $verfallen['id'] ), 'the registration itself is kept after the cleanup' );
-fg_ok( '' === $fg_repo->get_registration( $verfallen['id'] )->unregister_hash, 'only the token is dropped', var_export( $fg_repo->get_registration( $verfallen['id'] )->unregister_hash, true ) );
+fg_ok( 0 === $fg_store->count_event_member_tokens( $verfallen['id'] ), 'only the token is dropped', (string) $fg_store->count_event_member_tokens( $verfallen['id'] ) );
 
 $stats = (array) get_option( FG_STATS_OPTION, array() );
 $heute = isset( $stats[ gmdate( 'Y-m-d' ) ] ) ? (array) $stats[ gmdate( 'Y-m-d' ) ] : array();

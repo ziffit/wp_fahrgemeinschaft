@@ -53,9 +53,7 @@
 .fg-event-card,
 .fg-ride {
 	margin: 0 0 1.5rem;
-	padding: 1.25rem;
-	border: 1px solid var(--fg-border);
-	border-radius: 6px;
+	padding: 1.25rem 0;
 	background: #fff;
 }
 

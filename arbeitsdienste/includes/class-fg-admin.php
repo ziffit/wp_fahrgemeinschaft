@@ -81,7 +81,7 @@ final class FG_Admin {
 	public function __construct( FG_Repository $repository = null, FG_Stats $stats = null ) {
 		$this->repository = $repository ? $repository : new FG_Repository();
 		$this->stats      = $stats ? $stats : new FG_Stats();
-		$this->events     = new FG_Admin_Events( $this->repository );
+		$this->events     = new FG_Admin_Events( $this->repository, $this->stats );
 		$this->members    = new FG_Admin_Members( $this->repository );
 		$this->rides      = new FG_Admin_Rides( $this->repository );
 		$this->settings   = new FG_Admin_Settings();

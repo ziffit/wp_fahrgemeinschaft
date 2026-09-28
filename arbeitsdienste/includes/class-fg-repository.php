@@ -1340,6 +1340,21 @@ final class FG_Repository {
 	}
 
 	/**
+	 * Read the registration of one member for one work service.
+	 *
+	 * `has_registration()` answers the same question with a yes or no, and the
+	 * admin list needs the row itself: the notification counter, the tokens and
+	 * the flag that says who entered the member all stand in it.
+	 *
+	 * @param int $event_id  Work service ID.
+	 * @param int $member_id Member ID.
+	 * @return FG_Event_Member|null
+	 */
+	public function find_registration_pair( $event_id, $member_id ) {
+		return $this->store->find_event_member_pair( absint( $event_id ), absint( $member_id ) );
+	}
+
+	/**
 	 * Register a member for a work service and return the unregistration token.
 	 *
 	 * The registration is made at once, with no pending state and no second
@@ -1348,14 +1363,20 @@ final class FG_Repository {
 	 * confirm; the e-mail to the member confirms it and carries the way back out.
 	 *
 	 * The token is returned once so the caller can put it into that e-mail. Only
-	 * its hash is stored.
+	 * its hash is stored, and it stands in the token table since schema 1.7.0,
+	 * which lets a registration have one token per mail instead of one in all.
 	 *
-	 * @param int    $event_id   Work service ID.
-	 * @param int    $member_id  Member ID.
-	 * @param string $source_url Page the registration was made from.
+	 * The flag says that the backend entered the member rather than the member
+	 * themselves. It only names the act; whether a mail went out is counted in
+	 * the registration itself, and the caller decides that.
+	 *
+	 * @param int    $event_id        Work service ID.
+	 * @param int    $member_id       Member ID.
+	 * @param string $source_url      Page the registration was made from.
+	 * @param bool   $added_by_admin  True when an editor entered the member.
 	 * @return array{id: int, public_ref: string, unregister_token: string}
 	 */
-	public function create_registration( $event_id, $member_id, $source_url = '' ) {
+	public function create_registration( $event_id, $member_id, $source_url = '', $added_by_admin = false ) {
 		$failed = array(
 			'id'               => 0,
 			'public_ref'       => '',
@@ -1374,17 +1395,26 @@ final class FG_Repository {
 
 		$id = $this->store->insert_event_member(
 			array(
-				'event_id'           => $event_id,
-				'member_id'          => $member_id,
-				'registered_at'      => current_time( 'mysql' ),
-				'unregister_hash'    => FG_Security::hash_token( $token ),
-				'unregister_expires' => $this->unregister_expiry( $event_id ),
-				'public_ref'         => $ref,
-				'source_url'         => FG_Security::safe_source_url( $source_url ),
+				'event_id'       => $event_id,
+				'member_id'      => $member_id,
+				'registered_at'  => current_time( 'mysql' ),
+				'public_ref'     => $ref,
+				'source_url'     => FG_Security::safe_source_url( $source_url ),
+				'added_by_admin' => $added_by_admin ? 1 : 0,
 			)
 		);
 
 		if ( ! $id ) {
+			return $failed;
+		}
+
+		// The token stands in its own table since schema 1.7.0, and a
+		// registration without a token is a registration nobody can get out of.
+		// A row that is refused therefore takes the registration with it, and the
+		// caller sees the same "nothing stored" as a refused insert.
+		if ( ! $this->store->insert_event_member_token( $id, FG_Security::hash_token( $token ), $this->unregister_expiry( $event_id ) ) ) {
+			$this->store->delete_event_member( $id );
+
 			return $failed;
 		}
 
@@ -1437,17 +1467,58 @@ final class FG_Repository {
 	/**
 	 * Check whether a token still entitles to undo a registration.
 	 *
+	 * The token is looked up by its hash in the token table, and it is the row
+	 * that carries the expiry. A registration has as many tokens as it has mails,
+	 * and all of them keep working until they expire: a member who reads an old
+	 * mail may still want out, and a link that stopped working because a second
+	 * mail went out would be a rule the club never wrote down.
+	 *
 	 * @param FG_Event_Member $registration Registration.
 	 * @param string          $token        Raw token from a request.
 	 * @return bool
 	 */
 	public function valid_unregister_token( FG_Event_Member $registration, $token ) {
-		return $registration->unregister_expires >= time()
-			&& FG_Security::token_valid( $registration->unregister_hash, $token );
+		if ( ! is_string( $token ) || '' === $token ) {
+			return false;
+		}
+
+		$expires = $this->store->find_event_member_token_expiry(
+			$registration->id,
+			FG_Security::hash_token( $token )
+		);
+
+		return $expires >= time();
 	}
 
 	/**
-	 * Remove a registration while the given token is still the stored one.
+	 * Issue a further unregistration token for a registration.
+	 *
+	 * Called before a notification goes out, because the token only exists in
+	 * clear text in the mail it belongs to. The tokens already stored are left
+	 * alone, which is the point: a second mail must not take the first one away.
+	 *
+	 * @param int $registration_id Registration ID.
+	 * @return string Raw token, or an empty string when the row was refused.
+	 */
+	public function unregister_token_for_registration( $registration_id ) {
+		$registration = $this->get_registration( $registration_id );
+		if ( ! $registration ) {
+			return '';
+		}
+
+		$token = FG_Security::create_token();
+
+		return $this->store->insert_event_member_token(
+			$registration->id,
+			FG_Security::hash_token( $token ),
+			$this->unregister_expiry( $registration->event_id )
+		)
+			? $token
+			: '';
+	}
+
+	/**
+	 * Remove a registration after its token has been proven.
 	 *
 	 * @param int    $registration_id Registration ID.
 	 * @param string $token          Raw token.
@@ -1455,14 +1526,63 @@ final class FG_Repository {
 	 */
 	public function delete_registration_with_token( $registration_id, $token ) {
 		$registration = $this->get_registration( $registration_id );
-		if ( ! $registration ) {
+		if ( ! $registration || ! $this->valid_unregister_token( $registration, $token ) ) {
 			return false;
 		}
 
-		return $this->store->delete_event_member_with_token(
-			$registration->id,
-			FG_Security::hash_token( $token )
-		);
+		return $this->store->delete_event_member_with_token( $registration->id );
+	}
+
+	/**
+	 * Remove one unregistration token that never reached a member.
+	 *
+	 * @param int    $registration_id Registration ID.
+	 * @param string $token          Raw token.
+	 * @return bool
+	 */
+	public function drop_unregister_token( $registration_id, $token ) {
+		if ( ! is_string( $token ) || '' === $token ) {
+			return false;
+		}
+
+		return $this->store->delete_event_member_token( $registration_id, FG_Security::hash_token( $token ) );
+	}
+
+	/**
+	 * Count how many mails a member received for one work service.
+	 *
+	 * @param int $registration_id Registration ID.
+	 * @return int
+	 */
+	public function count_registration_notifications( $registration_id ) {
+		$registration = $this->get_registration( $registration_id );
+
+		return $registration ? (int) $registration->notified_count : 0;
+	}
+
+	/**
+	 * Count one mail for a registration.
+	 *
+	 * The one place that does it, so that the public registration, the
+	 * registration from the backend and the repeated notification cannot be
+	 * counted twice or not at all. The caller passes the registration, not the
+	 * result of the send: counting is what happens after a send that worked.
+	 *
+	 * @param int $registration_id Registration ID.
+	 * @return bool
+	 */
+	public function note_duty_notification( $registration_id ) {
+		return $this->store->increment_event_member_notified( $registration_id );
+	}
+
+	/**
+	 * Count the unregistration tokens of a registration.
+	 *
+	 * @param int $registration_id Registration ID.
+	 * @return int
+	 */
+	public function count_registration_tokens( $registration_id ) {
+		return $this->store->count_event_member_tokens( $registration_id );
 	}
 
 	/**
@@ -1498,16 +1618,21 @@ final class FG_Repository {
 	}
 
 	/**
-	 * Find registrations whose unregistration link has expired.
+	 * Drop every unregistration token whose expiry has passed.
 	 *
-	 * @return int[]
+	 * One call instead of a list of registrations: the rows that have to go are
+	 * the tokens, and a registration whose first token has expired may still
+	 * carry a second one that has not. The daily cleanup asks the table what it
+	 * has to remove.
+	 *
+	 * @return int Number of removed rows.
 	 */
-	public function get_expired_unregister_registration_ids() {
-		return $this->store->expired_unregister_ids( time() );
+	public function purge_expired_unregister_tokens() {
+		return $this->store->delete_expired_event_member_tokens( time() );
 	}
 
 	/**
-	 * Drop the expired unregistration token of a registration.
+	 * Drop the unregistration tokens of a registration.
 	 *
 	 * @param int $registration_id Registration ID.
 	 * @return bool
@@ -1515,14 +1640,7 @@ final class FG_Repository {
 	public function clear_unregister_token( $registration_id ) {
 		$registration_id = absint( $registration_id );
 
-		return $registration_id
-			&& $this->store->update_event_member(
-				$registration_id,
-				array(
-					'unregister_hash'    => '',
-					'unregister_expires' => 0,
-				)
-			);
+		return $registration_id && $this->store->delete_event_member_tokens( array( $registration_id ) );
 	}
 
 	/**

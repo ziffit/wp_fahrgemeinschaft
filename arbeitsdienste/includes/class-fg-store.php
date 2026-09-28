@@ -95,14 +95,19 @@ final class FG_Store {
 	 *
 	 * @var string[]
 	 */
+	// The two columns unregister_hash and unregister_expires have no writer left
+	// since schema 1.7.0: the tokens stand in their own table. They stay in the
+	// table of the schema file for the same reason as alias in the rides table —
+	// a WordPress rolled back to an older version must not fail on a field it
+	// does not know — and here they are simply not written any more.
 	private static $event_member_columns = array(
 		'event_id',
 		'member_id',
 		'registered_at',
-		'unregister_hash',
-		'unregister_expires',
 		'public_ref',
 		'source_url',
+		'notified_count',
+		'added_by_admin',
 	);
 
 	/**
@@ -796,6 +801,48 @@ final class FG_Store {
 	}
 
 	/**
+	 * Build the WHERE clause of a member search.
+	 *
+	 * The search looks for number, first name, last name and address, and it
+	 * looks for them **word by word**. One term per field is what a search box
+	 * answers and not what a person types: somebody looking for "Kaputt Test"
+	 * or "Müller Anton" types two words, and no single field of the member holds
+	 * both of them. Every word has to appear somewhere in the row, and then the
+	 * row is a hit — which is also what makes "0042 Mül" work.
+	 *
+	 * The words are combined with AND inside the row and the row is the only
+	 * thing that has to match all of them. An OR between the words would find a
+	 * member whose first name is "Test" for the term "Kaputt Test", which is
+	 * nobody anybody is looking for.
+	 *
+	 * @param string $search Free text to look for, empty for all.
+	 * @return string WHERE clause with its values, or an empty string for all.
+	 */
+	private function member_search_where( $search ) {
+		$term = trim( (string) $search );
+
+		if ( '' === $term ) {
+			return '';
+		}
+
+		$words = preg_split( '/\s+/u', $term, -1, PREG_SPLIT_NO_EMPTY );
+		$parts = array();
+
+		foreach ( (array) $words as $wort ) {
+			$like     = '%' . $this->db->esc_like( $wort ) . '%';
+			$parts[]  = $this->db->prepare(
+				'( member_no LIKE %s OR first_name LIKE %s OR last_name LIKE %s OR email LIKE %s )',
+				$like,
+				$like,
+				$like,
+				$like
+			);
+		}
+
+		return $parts ? 'WHERE ' . implode( ' AND ', $parts ) : '';
+	}
+
+	/**
 	 * Read all members, ordered by member number.
 	 *
 	 * The order is the one a member list is read in, and it puts a purely numeric
@@ -811,16 +858,7 @@ final class FG_Store {
 		$where  = '';
 		$clause = '';
 
-		if ( '' !== trim( (string) $search ) ) {
-			$like  = '%' . $this->db->esc_like( trim( (string) $search ) ) . '%';
-			$where = $this->db->prepare(
-				'WHERE member_no LIKE %s OR first_name LIKE %s OR last_name LIKE %s OR email LIKE %s',
-				$like,
-				$like,
-				$like,
-				$like
-			);
-		}
+		$where = $this->member_search_where( $search );
 
 		if ( $limit > 0 ) {
 			$clause = $this->db->prepare( 'LIMIT %d OFFSET %d', (int) $limit, max( 0, (int) $offset ) );
@@ -849,18 +887,13 @@ final class FG_Store {
 			return (int) $this->db->get_var( $sql ); // phpcs:ignore WordPress.DB
 		}
 
-		$like = '%' . $this->db->esc_like( trim( (string) $search ) ) . '%';
+		$where = $this->member_search_where( $search );
 
-		return (int) $this->db->get_var(
-			$this->db->prepare(
-				"SELECT COUNT(*) FROM $table
-				WHERE member_no LIKE %s OR first_name LIKE %s OR last_name LIKE %s OR email LIKE %s",
-				$like,
-				$like,
-				$like,
-				$like
-			)
-		);
+		if ( '' === $where ) {
+			return (int) $this->db->get_var( "SELECT COUNT(*) FROM $table" ); // phpcs:ignore WordPress.DB
+		}
+
+		return (int) $this->db->get_var( "SELECT COUNT(*) FROM $table $where" ); // phpcs:ignore WordPress.DB
 	}
 
 	/**
@@ -1199,91 +1232,252 @@ final class FG_Store {
 	}
 
 	/**
-	 * Delete one registration.
+	 * Delete one registration together with its tokens.
 	 *
 	 * @param int $id Registration ID.
 	 * @return bool
 	 */
 	public function delete_event_member( $id ) {
+		$this->delete_event_member_tokens( array( (int) $id ) );
+
 		return (bool) $this->db->delete( FG_Schema::event_members_table(), array( 'id' => (int) $id ), array( '%d' ) );
 	}
 
 	/**
-	 * Delete a registration only while it still carries the expected token hash.
+	 * Delete a registration after its token has been proven.
 	 *
-	 * This is the compare-and-delete that replaces the claim-and-restore dance
-	 * the ride flow needs. A registration is undone by removing the row, so a
-	 * second attempt at the same link matches no row and changes nothing. The
-	 * check and the removal are one statement, so two parallel requests from the
-	 * same mail client cannot both succeed.
+	 * Until schema 1.7.0 this was a compare-and-delete: the statement carried the
+	 * hash that had to still be stored, so a second attempt at the same link
+	 * matched no row and changed nothing, and two parallel requests from the
+	 * same mail client could not both succeed. The compare now happens against
+	 * the token table before this call, and what protects the second attempt is
+	 * the registration itself: once it is gone there is nothing left to remove,
+	 * and the page answers with the same "link not valid" it always did.
 	 *
-	 * @param int    $id            Registration ID.
-	 * @param string $expected_hash Hash that must still be stored.
+	 * @param int $id Registration ID.
 	 * @return bool True when this call removed the row.
 	 */
-	public function delete_event_member_with_token( $id, $expected_hash ) {
-		$table = FG_Schema::event_members_table();
+	public function delete_event_member_with_token( $id ) {
+		return $this->delete_event_member( $id );
+	}
 
-		$result = $this->db->query(
+	/**
+	 * Delete all registrations of one member together with their tokens.
+	 *
+	 * @param int $member_id Member ID.
+	 * @return int Number of removed registration rows.
+	 */
+	public function delete_event_members_for_member( $member_id ) {
+		$table = FG_Schema::event_members_table();
+		$ids   = $this->db->get_col(
+			$this->db->prepare( "SELECT id FROM $table WHERE member_id = %d", (int) $member_id )
+		);
+
+		$this->delete_event_member_tokens( array_map( 'absint', (array) $ids ) );
+
+		return (int) $this->db->delete( $table, array( 'member_id' => (int) $member_id ), array( '%d' ) );
+	}
+
+	/**
+	 * Delete all registrations of one work service together with their tokens.
+	 *
+	 * @param int $event_id Work service ID.
+	 * @return int Number of removed registration rows.
+	 */
+	public function delete_event_members_for_event( $event_id ) {
+		$table = FG_Schema::event_members_table();
+		$ids   = $this->db->get_col(
+			$this->db->prepare( "SELECT id FROM $table WHERE event_id = %d", (int) $event_id )
+		);
+
+		$this->delete_event_member_tokens( array_map( 'absint', (array) $ids ) );
+
+		return (int) $this->db->delete( $table, array( 'event_id' => (int) $event_id ), array( '%d' ) );
+	}
+
+	/**
+	 * Remove the tokens of the given registrations.
+	 *
+	 * Every path that removes a registration comes through here, so the rule
+	 * "a registration without a row has no token" is written once instead of four
+	 * times. A token left behind is not a way back into the registration — the
+	 * link needs the registration as well — but it is a digest of a secret that
+	 * a member once held, and the erasure request of this plugin is answered by
+	 * removing what it stored, not by leaving it unreachable.
+	 *
+	 * @param int[] $registration_ids Registration IDs.
+	 * @return int Number of removed token rows.
+	 */
+	public function delete_event_member_tokens( array $registration_ids ) {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $registration_ids ) ) ) );
+
+		if ( ! $ids ) {
+			return 0;
+		}
+
+		// A list of IDs is written as an IN clause and not handed to
+		// $wpdb->delete() as an array: that method takes one value per column,
+		// and an array in there does not fail loudly — it turns the condition
+		// into `registration_id = 0` and reports nothing deleted. A delete that
+		// removes nothing and says so is the kind that survives a review.
+		$table     = FG_Schema::event_member_tokens_table();
+		$platzhalter = implode( ', ', array_fill( 0, count( $ids ), '%d' ) );
+
+		return (int) $this->db->query(
 			$this->db->prepare(
-				"DELETE FROM $table WHERE id = %d AND unregister_hash = %s",
-				(int) $id,
-				(string) $expected_hash
+				"DELETE FROM $table WHERE registration_id IN ( $platzhalter )",
+				$ids
+			)
+		);
+	}
+
+	/**
+	 * Store one unregistration token of a registration.
+	 *
+	 * @param int    $registration_id Registration ID.
+	 * @param string $token_hash      Hash of the token.
+	 * @param int    $expires         Expiry as unix timestamp.
+	 * @return int Inserted row ID, or 0.
+	 */
+	public function insert_event_member_token( $registration_id, $token_hash, $expires ) {
+		$result = $this->db->insert(
+			FG_Schema::event_member_tokens_table(),
+			array(
+				'registration_id' => (int) $registration_id,
+				'token_hash'      => (string) $token_hash,
+				'expires'         => (int) $expires,
+				'created_at'      => current_time( 'mysql' ),
+			),
+			array( '%d', '%s', '%d', '%s' )
+		);
+
+		return $result ? (int) $this->db->insert_id : 0;
+	}
+
+	/**
+	 * Look up the token of a registration by its hash.
+	 *
+	 * @param int    $registration_id Registration ID.
+	 * @param string $token_hash      Hash of the token.
+	 * @return int Expiry as unix timestamp, or 0 when the token is not stored.
+	 */
+	public function find_event_member_token_expiry( $registration_id, $token_hash ) {
+		$table = FG_Schema::event_member_tokens_table();
+
+		$expires = $this->db->get_var(
+			$this->db->prepare(
+				"SELECT expires FROM $table WHERE registration_id = %d AND token_hash = %s",
+				(int) $registration_id,
+				(string) $token_hash
 			)
 		);
 
-		return 1 === (int) $result;
+		return null === $expires ? 0 : (int) $expires;
 	}
 
 	/**
-	 * Delete all registrations of one member.
+	 * Raise the notification counter of a registration by one.
 	 *
-	 * @param int $member_id Member ID.
-	 * @return int Number of removed rows.
+	 * One statement and not a read followed by a write: two notifications in the
+	 * same moment would both read the same number, and the second write would
+	 * answer for the first one. The counter is the only place where the plugin
+	 * counts something per registration, and a count that can lose one is not a
+	 * count.
+	 *
+	 * @param int $id Registration ID.
+	 * @return bool
 	 */
-	public function delete_event_members_for_member( $member_id ) {
-		return (int) $this->db->delete(
-			FG_Schema::event_members_table(),
-			array( 'member_id' => (int) $member_id ),
-			array( '%d' )
+	public function increment_event_member_notified( $id ) {
+		$table = FG_Schema::event_members_table();
+
+		return false !== $this->db->query(
+			$this->db->prepare(
+				"UPDATE $table SET notified_count = notified_count + 1 WHERE id = %d",
+				(int) $id
+			)
 		);
 	}
 
 	/**
-	 * Delete all registrations of one work service.
+	 * Put another expiry on one token of a registration.
 	 *
-	 * @param int $event_id Work service ID.
-	 * @return int Number of removed rows.
+	 * @param int    $registration_id Registration ID.
+	 * @param string $token_hash      Hash of the token.
+	 * @param int    $expires         Expiry as unix timestamp.
+	 * @return bool
 	 */
-	public function delete_event_members_for_event( $event_id ) {
-		return (int) $this->db->delete(
-			FG_Schema::event_members_table(),
-			array( 'event_id' => (int) $event_id ),
-			array( '%d' )
+	public function update_event_member_token( $registration_id, $token_hash, $expires ) {
+		$table = FG_Schema::event_member_tokens_table();
+
+		return false !== $this->db->query(
+			$this->db->prepare(
+				"UPDATE $table SET expires = %d WHERE registration_id = %d AND token_hash = %s",
+				(int) $expires,
+				(int) $registration_id,
+				(string) $token_hash
+			)
 		);
 	}
 
 	/**
-	 * Find registrations whose unregistration link has expired.
+	 * Remove one token of a registration.
 	 *
-	 * The rows themselves stay: a registration belongs to a work service that is
-	 * over, and the count of who did the duty is a fact about the past. What the
-	 * expiry ends is the ability to undo it from a mail that sat in an inbox for
-	 * a year.
+	 * A mail that was not delivered carries a link nobody received, and a row
+	 * that says a link was sent out when it was not is worse than no row. This is
+	 * the way back for the one token of that one failed delivery — not for the
+	 * tokens of the mails that did go out, which stay.
+	 *
+	 * @param int    $registration_id Registration ID.
+	 * @param string $token_hash      Hash of the token.
+	 * @return bool
+	 */
+	public function delete_event_member_token( $registration_id, $token_hash ) {
+		$table = FG_Schema::event_member_tokens_table();
+
+		return false !== $this->db->query(
+			$this->db->prepare(
+				"DELETE FROM $table WHERE registration_id = %d AND token_hash = %s",
+				(int) $registration_id,
+				(string) $token_hash
+			)
+		);
+	}
+
+	/**
+	 * Count the tokens of a registration.
+	 *
+	 * @param int $registration_id Registration ID.
+	 * @return int
+	 */
+	public function count_event_member_tokens( $registration_id ) {
+		$table = FG_Schema::event_member_tokens_table();
+
+		return (int) $this->db->get_var(
+			$this->db->prepare(
+				"SELECT COUNT(*) FROM $table WHERE registration_id = %d",
+				(int) $registration_id
+			)
+		);
+	}
+
+	/**
+	 * Remove every token whose expiry has passed.
+	 *
+	 * The rows are worthless after that moment and nobody would notice them
+	 * again, but they carry a digest of a secret and the table would grow with
+	 * every notification for ever. The registrations themselves stay: a duty that
+	 * is over is a fact about the past, and who did it belongs to that fact.
 	 *
 	 * @param int $now Unix timestamp.
-	 * @return int[]
+	 * @return int Number of removed rows.
 	 */
-	public function expired_unregister_ids( $now ) {
-		$table = FG_Schema::event_members_table();
-		$ids   = $this->db->get_col(
+	public function delete_expired_event_member_tokens( $now ) {
+		return (int) $this->db->query(
 			$this->db->prepare(
-				"SELECT id FROM $table WHERE unregister_expires > 0 AND unregister_expires < %d",
+				'DELETE FROM ' . FG_Schema::event_member_tokens_table() . ' WHERE expires > 0 AND expires < %d',
 				(int) $now
 			)
 		);
-
-		return array_map( 'absint', (array) $ids );
 	}
 
 	/**
@@ -1350,7 +1544,8 @@ final class FG_Store {
 				case 'demand':
 				case 'duration_hours':
 				case 'delete_expires':
-				case 'unregister_expires':
+				case 'notified_count':
+				case 'added_by_admin':
 					$formats[] = '%d';
 					break;
 				default:
@@ -1459,10 +1654,10 @@ final class FG_Store {
 		$registration->event_id         = (int) $row['event_id'];
 		$registration->member_id        = (int) $row['member_id'];
 		$registration->registered_at    = (string) $row['registered_at'];
-		$registration->unregister_hash  = (string) $row['unregister_hash'];
-		$registration->unregister_expires = (int) $row['unregister_expires'];
 		$registration->public_ref       = (string) $row['public_ref'];
 		$registration->source_url       = (string) $row['source_url'];
+		$registration->notified_count   = isset( $row['notified_count'] ) ? (int) $row['notified_count'] : 0;
+		$registration->added_by_admin   = ! empty( $row['added_by_admin'] );
 
 		return $registration;
 	}

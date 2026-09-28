@@ -20,7 +20,7 @@ final class FG_Schema {
 	 *
 	 * @var string
 	 */
-	const VERSION = '1.6.0';
+	const VERSION = '1.7.0';
 
 	/**
 	 * Option name holding the installed schema version.
@@ -179,6 +179,24 @@ final class FG_Schema {
 	}
 
 	/**
+	 * Fully qualified unregistration token table name.
+	 *
+	 * One row per token, and a registration can have several of them: the token
+	 * only exists in clear text in the mail it was written for, so a second mail
+	 * to the same member needs a token of its own. Until schema 1.7.0 the hash
+	 * stood in the registration itself, which allowed exactly one link per
+	 * registration and made every link before the last one useless. This table
+	 * is the second place, and it is the only one that is read.
+	 *
+	 * @return string
+	 */
+	public static function event_member_tokens_table() {
+		global $wpdb;
+
+		return $wpdb->prefix . 'fg_event_member_tokens';
+	}
+
+	/**
 	 * Fully qualified mail templates table name.
 	 *
 	 * The texts of the five messages live here, one row per message. The
@@ -208,7 +226,7 @@ final class FG_Schema {
 	}
 
 	/**
-	 * Run dbDelta for all five tables.
+	 * Run dbDelta for all six tables.
 	 *
 	 * @return void
 	 */
@@ -224,6 +242,7 @@ final class FG_Schema {
 		$rides          = self::rides_table();
 		$members        = self::members_table();
 		$event_members  = self::event_members_table();
+		$tokens         = self::event_member_tokens_table();
 		$mail_templates = self::mail_templates_table();
 
 		// dbDelta parses this statement; keep one column or key per line and
@@ -327,10 +346,22 @@ final class FG_Schema {
 	unregister_expires bigint(20) unsigned NOT NULL DEFAULT 0,
 	public_ref char(32) NOT NULL DEFAULT '',
 	source_url varchar(255) NOT NULL DEFAULT '',
+	notified_count smallint(5) unsigned NOT NULL DEFAULT 0,
+	added_by_admin tinyint(1) NOT NULL DEFAULT 0,
 	PRIMARY KEY  (id),
 	UNIQUE KEY public_ref (public_ref),
 	UNIQUE KEY event_member (event_id,member_id),
 	KEY member (member_id)
+) $charset;",
+			"CREATE TABLE $tokens (
+	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+	registration_id bigint(20) unsigned NOT NULL DEFAULT 0,
+	token_hash char(64) NOT NULL DEFAULT '',
+	expires bigint(20) unsigned NOT NULL DEFAULT 0,
+	created_at datetime NOT NULL DEFAULT '1970-01-01 00:00:00',
+	PRIMARY KEY  (id),
+	UNIQUE KEY token_hash (token_hash),
+	KEY registration (registration_id)
 ) $charset;",
 		);
 
@@ -343,8 +374,50 @@ final class FG_Schema {
 		self::clear_legacy_ride_contacts();
 		self::clear_pending_rides();
 		self::relax_member_email_index();
+		self::copy_unregister_tokens();
 
 		update_option( self::OPTION, self::VERSION, false );
+	}
+
+	/**
+	 * Copy every unregistration token that still stands in its registration.
+	 *
+	 * Until schema 1.7.0 the hash of the unregistration token stood in
+	 * `event_members` together with its expiry, one per registration, and a
+	 * second mail to the same member could not be given a link of its own. The
+	 * tokens now stand in their own table, and a copy is the whole migration.
+	 *
+	 * It is not optional. Without it, every link that a club has already sent
+	 * out stops working the moment the update runs — and nothing on the site
+	 * would say so, because those mails have been sitting in inboxes for weeks
+	 * and nobody clicks them again. A member who wants out after the update gets
+	 * the page "Link nicht gültig" and has to ask the club by other means.
+	 *
+	 * The statement is idempotent and is written so that it can be repeated: the
+	 * first run may fail halfway, and the next one has to finish the job rather
+	 * than insert the same row twice. A registration without a token produces no
+	 * row, which is the state it was already in.
+	 *
+	 * @return void
+	 */
+	public static function copy_unregister_tokens() {
+		global $wpdb;
+
+		$event_members = self::event_members_table();
+		$tokens        = self::event_member_tokens_table();
+
+		// No prepare() on either name: both are table names this class built, and
+		// a statement without a placeholder would only earn a notice per request.
+		$wpdb->query(
+			"INSERT INTO $tokens (registration_id, token_hash, expires, created_at)
+			SELECT r.id, r.unregister_hash, r.unregister_expires, r.registered_at
+			FROM $event_members r
+			WHERE r.unregister_hash <> ''
+			AND NOT EXISTS (
+				SELECT 1 FROM $tokens t
+				WHERE t.registration_id = r.id AND t.token_hash = r.unregister_hash
+			)"
+		);
 	}
 
 	/**

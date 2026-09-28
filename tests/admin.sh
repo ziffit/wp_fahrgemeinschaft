@@ -216,6 +216,34 @@ else:
     fehlt=[a for a in $2 if not any(a in t for t in tags)]
     print('ok' if not fehlt else 'fehlt: ' + ','.join(fehlt))"; }
 
+# One claim about the structure of a page, decided by a program that reads it.
+# has() asks whether a string is in the page; this asks a question that only the
+# markup can answer, such as whether one tag stands in the page at all. The same
+# helper with the same name stands in the public suite, so that a claim reads the
+# same in both files.
+struct() { if python3 -c "$3" <<< "$1"; then ok "$2"; else bad "$2" "$4"; fi; }
+
+# The value of a hidden field, as a browser would send it back. feld() answers
+# whether a field is on the page; this answers what stands in it, and the nonce
+# of a form is nothing else than such a value.
+hidden() { python3 -c "
+import re,sys
+h=sys.stdin.read()
+m=re.search(r'name=\"$1\"[^>]*value=\"([^\"]*)\"',h) or re.search(r'value=\"([^\"]*)\"[^>]*name=\"$1\"',h)
+print(m.group(1) if m else '')"; }
+
+# The value of a hidden field in the row of one member. The list of participants
+# shows every member of the duty, and the search above it only fills the select —
+# so the first hidden field on the page belongs to whoever the list starts with,
+# and a check that read that one and sent it would notify a different member than
+# the one it measured. The number in the first cell is what says whose row this is.
+hidden_in_row() { python3 -c "
+import re,sys
+h=sys.stdin.read()
+zeile=re.search(r'<tr>\\s*<td>\\s*'+re.escape('$1')+r'\\s*</td>.*?</tr>', h, re.S)
+m=re.search(r'name=\"$2\"[^>]*value=\"([^\"]*)\"', zeile.group(0)) if zeile else None
+print(m.group(1) if m else '')"; }
+
 # The content of a textarea, as a browser would send it back: what stands
 # between the tags, with the entities resolved. val() reads an attribute, and a
 # textarea carries its value in the content — looking for it in the whole page
@@ -795,6 +823,351 @@ people=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-ev
 hasnt "the form offers no field for the registered members" "$people" 'name="fg_event_participants"'
 hasnt "and no field for a list of addresses under another name" "$people" 'name="fg_participants"'
 clean "$people" "work duty with its registration list"
+
+# --- a member is entered from the duty page, with a search and a counter
+echo "[5g] entering a member from the duty page"
+ZUWEISUNG=$(s make-event "Zuweisung" "$(date -d '+70 days' +%Y-%m-%d)" 2 "10:00")
+# Two members: one with an address that can be written to, one whose address
+# cannot be delivered to. Both are real rows of the member list, and the second
+# one is the case that decides whether the entry survives a mail that does not
+# arrive.
+neu 0950 zuweisung@example.org Zuweisung Test
+neu 0951 kaputt@example.org Kaputt Test
+ZUWEISUNG_MAIL="zuweisung@example.org"
+ZUWEISUNG_KAPUTT="kaputt@example.org"
+
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG")
+has "the page offers the assignment block" "$seite" "Mitglied zuweisen"
+has "with a search field" "$seite" 'name="fg_event_member_search"'
+has "and the checkbox that asks about the mail" "$seite" 'name="fg_notify_member"'
+has "and the button that enters the member" "$seite" 'name="fg_assign_submit"'
+# The checkbox is off. A form whose unchecked state is a checked box sends a mail
+# to every member an editor enters, and the whole point of the field is that
+# entering somebody and writing to them are two acts.
+struct "$seite" "and the checkbox is not ticked" "
+import re, sys
+h = sys.stdin.read()
+m = re.search(r'<input[^>]*name=\"fg_notify_member\"[^>]*>', h)
+sys.exit(0 if m and 'checked' not in m.group(0) else 1)
+" "the checkbox is ticked on a fresh form"
+hasnt "and the duty list is empty before anybody was entered" "$seite" "Benachrichtigung senden"
+
+# --- the search finds by number and by name, and finds nobody for nonsense
+suchen() {
+	curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_event_member_search=$1"
+}
+nach_nummer=$(suchen 0950)
+has "the search finds the member by number" "$nach_nummer" "0950"
+has "and the name with it" "$nach_nummer" "Zuweisung Test"
+has "and shows the address with it" "$nach_nummer" "zuweisung@example.org"
+# A space in a query string has to travel encoded. A raw one ends the
+# parameter at the space, and the search would silently run for
+# "Kaputt" — which still finds the member and would have let a broken
+# search pass.
+nach_name=$(suchen "Kaputt%20Test")
+has "and by name" "$nach_name" "0951"
+has "and the name with it" "$nach_name" "Kaputt Test"
+has "the search term comes back into the field" "$nach_name" 'value="Kaputt Test"'
+nichts=$(suchen "gibtesnicht")
+has "a search without a hit says so" "$nichts" "Dazu wurde niemand gefunden"
+hasnt "and offers nothing to choose" "$nichts" "<option value="
+
+# --- entering without the box: the entry stands, no mail goes out
+nonce=$(printf '%s' "$nach_nummer" | hidden fg_assign_nonce)
+mitglied_id=$(s member-by-no 0950 id)
+mailen_vorher=$(s mail-count)
+# The third argument switches the checkbox on. It is a separate branch and not
+# a ${3:+...} expansion, because a command with a nested pair of quotes inside it
+# is the kind of line that reads well and quotes badly.
+# $1 the search term, $2 the member, $3 the event, $4 "mail" or nothing.
+# The event travels with the call and is not read from a variable of the section:
+# the helper is used for a second duty later on, and a helper that always posts
+# the duty of the section would put both members into the wrong one.
+sende_zuweisung() {
+	if [ -n "${4:-}" ]; then
+		curl -sk -b "$JAR" -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
+			--data-urlencode "action=fg_assign_participant" \
+			--data-urlencode "fg_event_id=$3" \
+			--data-urlencode "fg_event_member_search=$1" \
+			--data-urlencode "fg_member_id=$2" \
+			--data-urlencode "fg_notify_member=1" \
+			--data-urlencode "fg_assign_nonce=$nonce"
+	else
+		curl -sk -b "$JAR" -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
+			--data-urlencode "action=fg_assign_participant" \
+			--data-urlencode "fg_event_id=$3" \
+			--data-urlencode "fg_event_member_search=$1" \
+			--data-urlencode "fg_member_id=$2" \
+			--data-urlencode "fg_assign_nonce=$nonce"
+	fi
+}
+sende_zuweisung 0950 "$mitglied_id" "$ZUWEISUNG"
+if [ "$(s mail-count)" = "$mailen_vorher" ]; then
+	ok "entering a member without the box sends no mail"
+else
+	bad "entering a member without the box sends no mail" "$(s mail-count) instead of $mailen_vorher"
+fi
+IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 0950)"
+if [ "$anzahl" = "0" ] && [ "$quelle" = "redaktion" ]; then
+	ok "and the counter stands at zero (row $gelesene_id)"
+else
+	bad "and the counter stands at zero" "counter=$anzahl source=$quelle row=$gelesene_id"
+fi
+if [ "$token" = "0" ]; then
+	ok "and no unregistration link was issued for a mail that was not sent"
+else
+	bad "and no unregistration link was issued for a mail that was not sent" "$token token rows"
+fi
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_event_member_search=0950")
+has "the list names the member as entered by the editor" "$seite" "Redaktion"
+has "and the search says who is already in" "$seite" "Bereits für diesen Arbeitsdienst eingetragen"
+hasnt "and does not offer that member again" "$seite" "0950 — Zuweisung Test"
+
+# --- entering with the box: one mail, counter one
+nonce=$(printf '%s' "$seite" | hidden fg_assign_nonce)
+kaputt_id=$(s member-by-no 0951 id)
+mailen_vorher=$(s mail-count)
+sende_zuweisung Kaputt "$kaputt_id" "$ZUWEISUNG" mail
+if [ "$(s mail-count)" = "$((mailen_vorher + 1))" ]; then
+	ok "entering a member with the box sends one mail"
+else
+	bad "entering a member with the box sends one mail" "$(s mail-count) instead of $((mailen_vorher + 1))"
+fi
+IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 0951)"
+if [ "$anzahl" = "1" ] && [ "$token" = "1" ]; then
+	ok "and the counter stands at one with one link (row $gelesene_id)"
+else
+	bad "and the counter stands at one with one link" "counter=$anzahl links=$token row=$gelesene_id"
+fi
+# The address stands in the recipient field. The text of the mail greets the
+# member by name and never names the address, so a check that looks for the
+# address in the body would be looking in a field that never carries it.
+if [ "$(s mail-recipients 1 | cut -f1)" = "$ZUWEISUNG_KAPUTT" ]; then
+	ok "and the mail went to the address of the member"
+else
+	bad "and the mail went to the address of the member" "$(s mail-recipients 1)"
+fi
+s mail-bodies 1 > "$DIR/mail1.html"
+erster_link=$(printf '%s' "$(cat "$DIR/mail1.html")" | grep -o "$BASE/?fg_duty_action=view[^\"]*" | head -1 | sed 's/&#038;/\&/g')
+if [ -n "$erster_link" ]; then
+	ok "and an unregistration link went with it"
+else
+	bad "and an unregistration link went with it" "no link in the mail"
+fi
+
+# --- the same mail again: counter two, and the first link still opens
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_event_member_search=0951")
+has "the list offers the notification for the member" "$seite" "Benachrichtigung senden"
+# Both values come out of the row of that member and not out of the page. The
+# list shows every member of the duty and the search above it only fills the
+# select, so the first nonce and the first registration on the page belong to
+# whoever the list starts with. Reading them there and sending them notifies one
+# member and measures another — which is what happened on the first run of this
+# section and cost two rounds of guessing.
+registration_id=$(printf '%s' "$seite" | hidden_in_row 0951 fg_registration_id)
+notify_nonce=$(printf '%s' "$seite" | hidden_in_row 0951 fg_notify_nonce)
+if [ -n "$registration_id" ]; then
+	ok "the row of the member carries its own registration ($registration_id)"
+else
+	bad "the row of the member carries its own registration" "no id found"
+fi
+mailen_vorher=$(s mail-count)
+curl -sk -b "$JAR" -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_notify_participant" \
+	--data-urlencode "fg_event_id=$ZUWEISUNG" \
+	--data-urlencode "fg_registration_id=$registration_id" \
+	--data-urlencode "fg_notify_nonce=$notify_nonce"
+if [ "$(s mail-count)" = "$((mailen_vorher + 1))" ]; then
+	ok "the button in the list sends the mail again"
+else
+	bad "the button in the list sends the mail again" "$(s mail-count) instead of $((mailen_vorher + 1))"
+fi
+IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 0951)"
+if [ "$anzahl" = "2" ] && [ "$token" = "2" ] && [ "$gelesene_id" = "$registration_id" ]; then
+	ok "and the counter and the links both went up ($anzahl, $token, row $gelesene_id)"
+else
+	bad "and the counter and the links both went up" "counter=$anzahl links=$token, posted row $registration_id, read row $gelesene_id"
+fi
+zweiter_link=$(s mail-bodies 1 | grep -o "$BASE/?fg_duty_action=view[^\"]*" | head -1 | sed 's/&#038;/\&/g')
+if [ -n "$zweiter_link" ] && [ "$zweiter_link" != "$erster_link" ]; then
+	ok "the second mail carries a link of its own"
+else
+	bad "the second mail carries a link of its own" "same link or none"
+fi
+# Both links, hours or minutes apart, are what a member may click. A token
+# table that only kept the newest would close the first one, and the member
+# would be told to write to the club instead.
+seite_link=$(curl -sk "$erster_link")
+has "the link of the first mail still opens the confirmation page" "$seite_link" "Anmeldung löschen"
+has "and carries the form to do it" "$seite_link" 'name="token_nonce"'
+seite_link=$(curl -sk "$zweiter_link")
+has "the link of the second mail opens too" "$seite_link" "Anmeldung löschen"
+
+# --- a delivery that fails changes nothing but the notice
+s mail-fail on > /dev/null
+mailen_vorher=$(s mail-count)
+curl -sk -b "$JAR" -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_notify_participant" \
+	--data-urlencode "fg_event_id=$ZUWEISUNG" \
+	--data-urlencode "fg_registration_id=$registration_id" \
+	--data-urlencode "fg_notify_nonce=$notify_nonce"
+s mail-fail off > /dev/null
+IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 0951)"
+if [ "$anzahl" = "2" ] && [ "$token" = "2" ]; then
+	ok "a mail that does not arrive does not raise the counter and leaves no link behind ($anzahl, $token)"
+else
+	bad "a mail that does not arrive does not raise the counter and leaves no link behind" "counter=$anzahl links=$token"
+fi
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG")
+has "and the screen says that it did not go out" "$seite" "Die E-Mail konnte nicht verschickt werden"
+has "and that the entry is still there" "$seite" "kann später erneut versendet werden"
+seite_link=$(curl -sk "$erster_link")
+has "and the link of the first mail still opens" "$seite_link" "Anmeldung löschen"
+
+# --- more members than announced places
+#
+# Its own duty with a demand of one, so that the number is not written into a
+# duty that the checks above have already read. The editor may enter more members
+# than the club announced; the screen has to say so, because the public page will
+# show that duty as full.
+UEBER=$(s make-event "Über dem Bedarf" "$(date -d '+71 days' +%Y-%m-%d)" 1 "11:00")
+for nr in 0950 0951; do
+	seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$UEBER&fg_event_member_search=$nr")
+	nonce=$(printf '%s' "$seite" | hidden fg_assign_nonce)
+	sende_zuweisung "$nr" "$(s member-by-no "$nr" id)" "$UEBER"
+done
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$UEBER")
+has "a duty over its announced places says so" "$seite" "angekündigte Plätze"
+has "and what the public page makes of it" "$seite" "vollständig belegt"
+hasnt "and it does not read as a normal count" "$seite" "von höchstens 1 Plätzen belegt"
+s delete-event "$UEBER" > /dev/null
+
+# --- nothing of this works without the nonce, and nothing by GET
+out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_assign_participant" \
+	--data-urlencode "fg_event_id=$ZUWEISUNG" \
+	--data-urlencode "fg_member_id=$mitglied_id" \
+	--data-urlencode "fg_notify_member=1" \
+	--data-urlencode "fg_assign_nonce=manipuliert")
+if [ "$out" = "403" ] || [ "$out" = "302" ]; then ok "an assignment without a valid nonce is refused ($out)"; else bad "an assignment without a valid nonce is refused" "$out"; fi
+IFS=$'\t' read -r anzahl2 token2 quelle2 gelesene2 <<< "$(s notified "$ZUWEISUNG" 0950)"
+if [ "$anzahl2" = "0" ] && [ "$token2" = "0" ]; then
+	ok "and it changed nothing (counter $anzahl2, links $token2)"
+else
+	bad "and it changed nothing" "counter $anzahl2 links $token2"
+fi
+out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_notified=1")
+if [ "$out" = "200" ]; then ok "a GET parameter cannot ask for a mail ($out)"; else bad "a GET parameter cannot ask for a mail" "$out"; fi
+# The same member the checks above read, and compared with its own value from
+# two lines up: $anzahl belongs to the member of the failure case.
+IFS=$'\t' read -r anzahl3 token3 quelle3 gelesene3 <<< "$(s notified "$ZUWEISUNG" 0950)"
+if [ "$anzahl3" = "$anzahl2" ] && [ "$token3" = "$token2" ]; then
+	ok "and the counter did not move for it ($anzahl3, $token3)"
+else
+	bad "and the counter did not move for it" "counter $anzahl2 -> $anzahl3, links $token2 -> $token3"
+fi
+
+# --- the database itself, not the code that claims something about it
+if [ "$(s schema tabelle fg_event_member_tokens)" = "da" ]; then
+	ok "the token table is there"
+else
+	bad "the token table is there" "$(s schema tabelle fg_event_member_tokens)"
+fi
+if [ "$(s schema spalte fg_event_members notified_count)" = "da" ] && [ "$(s schema spalte fg_event_members added_by_admin)" = "da" ]; then
+	ok "and the two columns of the registration are there"
+else
+	bad "and the two columns of the registration are there" "$(s schema spalte fg_event_members notified_count) / $(s schema spalte fg_event_members added_by_admin)"
+fi
+# The migration of schema 1.7.0. It is written so that it can be repeated, and
+# this is where that is proved rather than assumed: the probe writes a token in
+# the old place, runs the copy, and expects one row and not two.
+#
+# The member is one of its own for the probe. A member that is already in this
+# duty would be refused by the unique key of the table — the registration is
+# unique per duty and member — and the probe would then count the rows of
+# somebody else's registration instead of its own.
+neu 0952 migration@example.org Migration Probe
+IFS=$'\t' read -r vorher nachher nochmal <<< "$(s migrate-tokens "$ZUWEISUNG" 0952)"
+s delete-member "$(s member-by-no 0952 id)" > /dev/null
+if [ "$vorher" = "0" ] && [ "$nachher" = "1" ] && [ "$nochmal" = "1" ]; then
+	ok "a token in the old place is copied into the new one, and a second run copies nothing ($vorher -> $nachher -> $nochmal)"
+else
+	bad "a token in the old place is copied into the new one, and a second run copies nothing" "$vorher -> $nachher -> $nochmal"
+fi
+
+# --- a removed registration leaves no link behind
+#
+# A token row holds the digest of a secret that a member once held in their
+# mailbox, and a registration is removed in three places: the delete link on the
+# duty page, the member page and the erasure tool of the privacy page. All three
+# go through different statements in the store, and each of them has to take the
+# tokens with it. A row that outlives its registration is a stored secret of a
+# person who is no longer in the club, and the count of the table shows it.
+#
+# The first one is the link on the duty page, and it gets a duty of its own. The
+# list on that page holds every member of the duty, so with two members in it the
+# link that is found first belongs to the one whose number comes first — and a
+# check that clicked it would delete a different registration than the one it
+# measured. One member, one link, nothing to choose.
+LOESCHEN=$(s make-event "Löschen der Anmeldung" "$(date -d '+72 days' +%Y-%m-%d)" 2 "12:00")
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$LOESCHEN&fg_event_member_search=0950")
+nonce=$(printf '%s' "$seite" | hidden fg_assign_nonce)
+sende_zuweisung 0950 "$mitglied_id" "$LOESCHEN" mail
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$LOESCHEN")
+loesch_url=$(printf '%s' "$seite" | link registration)
+tokenen_vorher=$(s schema zeilen fg_event_member_tokens)
+curl -sk -b "$JAR" -L -o "$DIR/geloescht.html" "$loesch_url"
+has "the delete link on the duty page reports the deletion" "$(cat "$DIR/geloescht.html")" "endgültig gelöscht"
+tokenen_nachher=$(s schema zeilen fg_event_member_tokens)
+if [ "$tokenen_nachher" = "$((tokenen_vorher - 1))" ]; then
+	ok "and it takes the unregistration link of that registration with it ($tokenen_vorher -> $tokenen_nachher)"
+else
+	bad "and it takes the unregistration link of that registration with it" "$tokenen_vorher -> $tokenen_nachher, expected $((tokenen_vorher - 1))"
+fi
+if [ "$(s notified "$LOESCHEN" 0950 | cut -f1)" = "keine" ]; then
+	ok "and the registration itself is gone"
+else
+	bad "and the registration itself is gone" "$(s notified "$LOESCHEN" 0950)"
+fi
+s delete-event "$LOESCHEN" > /dev/null
+
+# The member page, which goes through the statement for all registrations of one
+# member. Member 0951 still has its two registrations' worth of links here.
+tokenen_vorher=$(s schema zeilen fg_event_member_tokens)
+s delete-member "$(s member-by-no 0951 id)" > /dev/null
+tokenen_nachher=$(s schema zeilen fg_event_member_tokens)
+if [ "$tokenen_nachher" = "$((tokenen_vorher - 2))" ]; then
+	ok "removing a member takes their two unregistration links out of the table ($tokenen_vorher -> $tokenen_nachher)"
+else
+	bad "removing a member takes their two unregistration links out of the table" "$tokenen_vorher -> $tokenen_nachher, expected $((tokenen_vorher - 2))"
+fi
+
+# The same for the duty itself, which goes through the third statement. The
+# member is notified once first, so that the
+# duty has a registration with a link in it; a duty whose registrations carry no
+# link would let a broken cascade pass.
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_event_member_search=0950")
+zeilen_id=$(printf '%s' "$seite" | hidden_in_row 0950 fg_registration_id)
+zeile_nonce=$(printf '%s' "$seite" | hidden_in_row 0950 fg_notify_nonce)
+curl -sk -b "$JAR" -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_notify_participant" \
+	--data-urlencode "fg_event_id=$ZUWEISUNG" \
+	--data-urlencode "fg_registration_id=$zeilen_id" \
+	--data-urlencode "fg_notify_nonce=$zeile_nonce"
+tokenen_vorher=$(s schema zeilen fg_event_member_tokens)
+s delete-event "$ZUWEISUNG" > /dev/null
+tokenen_nachher=$(s schema zeilen fg_event_member_tokens)
+if [ "$tokenen_nachher" = "$((tokenen_vorher - 1))" ]; then
+	ok "and deleting the duty takes the links of its registrations with it ($tokenen_vorher -> $tokenen_nachher)"
+else
+	bad "and deleting the duty takes the links of its registrations with it" "$tokenen_vorher -> $tokenen_nachher, expected $((tokenen_vorher - 1))"
+fi
+
+# The lines of the section are read by name, so a member that is entered for the
+# duty and belongs to nobody else's test is removed again here.
+s delete-member "$(s member-by-no 0951 id)" > /dev/null
+s delete-member "$(s member-by-no 0950 id)" > /dev/null
+clean "$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG")" "assignment screen"
 
 echo "[5f] a new record is not reachable without a nonce"
 out=$(curl -sk -b "$JAR" -o "$DIR/anon.html" -w '%{http_code}' -X POST "$BASE/wp-admin/admin-post.php" \

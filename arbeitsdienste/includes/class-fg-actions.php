@@ -616,11 +616,12 @@ final class FG_Actions {
 
 		// The registration itself stays; only the ability to undo it by mail ends.
 		// A duty that is over is a fact about the past, and who did it is part of
-		// that fact. What is removed is a token that could be replayed out of an
-		// inbox archive years later.
-		foreach ( $this->repository->get_expired_unregister_registration_ids() as $registration_id ) {
-			$this->repository->clear_unregister_token( $registration_id );
-		}
+		// that fact. What goes are the token rows that could be replayed out of an
+		// inbox archive years later. Since schema 1.7.0 they stand in their own
+		// table, and asking the table is one statement instead of a list of
+		// registrations: a registration whose first token has expired may still
+		// carry a second one that has not.
+		$this->repository->purge_expired_unregister_tokens();
 
 		$this->stats->cleanup();
 

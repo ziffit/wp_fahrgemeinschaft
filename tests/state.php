@@ -568,6 +568,192 @@ switch ( $command ) {
 		fg_state_out( '' === $zeile ? 'KEINE-MAIL' : fg_state_greeting( $zeile ) );
 		break;
 
+	// notified <event_id> <member_no>
+	//
+	// How many duty mails this member received for this duty, and how many
+	// unregistration tokens the registration carries. Both are numbers a check
+	// wants to read after a click in the admin area, and both live in tables that
+	// only the plugin reads.
+	case 'notified':
+		$event_id  = isset( $args[0] ) ? (int) $args[0] : 0;
+		$member_no = isset( $args[1] ) ? (string) $args[1] : '';
+		$mitglied  = $repo->get_member_by_number( $member_no );
+		$paar      = ( $event_id && $mitglied ) ? $repo->find_registration_pair( $event_id, $mitglied->id ) : null;
+
+		// The registration ID comes with it. A check that reads the wrong row
+		// cannot be told apart from a plugin that wrote to the wrong row, and
+		// the number is what tells the two apart.
+		fg_state_out(
+			$paar
+				? (int) $paar->notified_count . "\t" . $repo->count_registration_tokens( $paar->id ) . "\t" . ( $paar->added_by_admin ? 'redaktion' : 'mitglied' ) . "\t" . (int) $paar->id
+				: "keine\t0\tkeine\t0"
+		);
+		break;
+
+	// mail-count
+	//
+	// How many mails the recorder of the test environment holds. The counter of
+	// the list is a claim about mails that went out, and this is the number it
+	// has to be compared with.
+	case 'mail-count':
+		global $wpdb;
+
+		fg_state_out( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . 'fg_test_mail_log' ) );
+		break;
+
+	// mail-bodies <n>
+	//
+	// The bodies of the newest recorded mails, one after the other, separated by
+	// a marker line. The link of a duty mail stands in it as an address, and a
+	// check needs the link that really went out rather than one it builds
+	// itself.
+	case 'mail-bodies':
+		global $wpdb;
+
+		$anzahl = isset( $args[0] ) ? max( 1, (int) $args[0] ) : 1;
+		$zeilen = $wpdb->get_col(
+			$wpdb->prepare(
+				'SELECT mail_body FROM ' . $wpdb->prefix . 'fg_test_mail_log ORDER BY id DESC LIMIT %d',
+				$anzahl
+			)
+		);
+
+		foreach ( (array) $zeilen as $index => $zeile ) {
+			if ( $index > 0 ) {
+				echo "###MAIL###", PHP_EOL;
+			}
+
+			echo $zeile, PHP_EOL;
+		}
+		break;
+
+	// mail-recipients <n>
+	//
+	// Recipient and subject of the newest recorded mails, one per line. The
+	// address of a member stands in the recipient field and not in the text of
+	// the mail — the mail greets the member by name — so a check that looks for
+	// the address in the body is looking in the wrong field.
+	case 'mail-recipients':
+		global $wpdb;
+
+		$anzahl = isset( $args[0] ) ? max( 1, (int) $args[0] ) : 1;
+		$zeilen = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT mail_to, mail_subject FROM ' . $wpdb->prefix . 'fg_test_mail_log ORDER BY id DESC LIMIT %d',
+				$anzahl
+			),
+			ARRAY_A
+		);
+
+		foreach ( (array) $zeilen as $zeile ) {
+			// Double quotes, because printf reads \\t in a single-quoted string as
+			// two characters: the output was a line with a backslash in it, and a
+			// cut -f1 on that line returned the whole thing.
+			printf( "%s\t%s", (string) $zeile['mail_to'], (string) $zeile['mail_subject'] );
+			echo PHP_EOL;
+		}
+		break;
+
+	// mail-fail on|off
+	//
+	// Let the next delivery fail. A notification that does not go out has to
+	// change nothing except the notice, and there is no other way to make a
+	// delivery fail on purpose.
+	case 'mail-fail':
+		$schalter = isset( $args[0] ) ? (string) $args[0] : '';
+
+		if ( 'on' === $schalter ) {
+			update_option( 'fg_test_mail_fail', '1', false );
+		} elseif ( 'off' === $schalter ) {
+			delete_option( 'fg_test_mail_fail' );
+		}
+
+		fg_state_out( '1' === (string) get_option( 'fg_test_mail_fail', '' ) ? 'on, die Zustellung schlägt fehl' : 'off, die Zustellung klappt' );
+		break;
+
+	// schema <teil> <name>
+	//
+	// What the database actually holds: a table of this plugin, a column of one
+	// of its tables, or the number of rows in the token table. The schema of a
+	// release is a claim about the database and not about the code, and reading
+	// the code would prove nothing.
+	case 'schema':
+		global $wpdb;
+
+		$teil = isset( $args[0] ) ? (string) $args[0] : '';
+		$name = isset( $args[1] ) ? (string) $args[1] : '';
+
+		if ( 'tabelle' === $teil ) {
+			$vorhanden = $wpdb->get_col( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->prefix . $name ) );
+			fg_state_out( $vorhanden ? 'da' : 'fehlt' );
+		} elseif ( 'spalte' === $teil ) {
+			$gefunden = $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = %s',
+					$wpdb->prefix . $name,
+					isset( $args[2] ) ? (string) $args[2] : ''
+				)
+			);
+			fg_state_out( (int) $gefunden ? 'da' : 'fehlt' );
+		} elseif ( 'zeilen' === $teil ) {
+			fg_state_out( (int) $wpdb->get_var( 'SELECT COUNT(*) FROM ' . $wpdb->prefix . $name ) );
+		} else {
+			fg_state_out( 'unbekannt' );
+		}
+		break;
+
+	// migrate-tokens <event_id>
+	//
+	// The migration of schema 1.7.0, run on a row built for it. A check that can
+	// only be made once — on an instance that has not migrated yet — measures
+	// nothing the second time it runs, so this one writes a registration whose
+	// token still stands in the old column, runs the copy, and reports whether
+	// the token arrived in its own table. Afterwards the row is removed again.
+	case 'migrate-tokens':
+		global $wpdb;
+
+		$event_id  = isset( $args[0] ) ? (int) $args[0] : 0;
+		$tabelle   = $wpdb->prefix . 'fg_event_members';
+		$token     = $wpdb->prefix . 'fg_event_member_tokens';
+		$hash      = hash( 'sha256', 'migrationsprobe-' . $event_id );
+		$mitglied  = $repo->get_member_by_number( isset( $args[1] ) ? (string) $args[1] : '0000' );
+
+		if ( ! $event_id || ! $mitglied ) {
+			fg_state_out( 'kein-dienst' );
+			break;
+		}
+
+		$wpdb->query(
+			$wpdb->prepare(
+				"INSERT INTO $tabelle (event_id, member_id, registered_at, public_ref, source_url, unregister_hash, unregister_expires)
+				VALUES (%d, %d, %s, %s, '', %s, %d)",
+				$event_id,
+				$mitglied->id,
+				current_time( 'mysql' ),
+				'probe' . substr( md5( (string) $event_id ), 0, 20 ),
+				$hash,
+				time() + DAY_IN_SECONDS
+			)
+		);
+
+		$id    = (int) $wpdb->insert_id;
+		$vorher = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $token WHERE registration_id = %d", $id ) );
+
+		FG_Schema::copy_unregister_tokens();
+
+		$nachher = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $token WHERE registration_id = %d", $id ) );
+
+		// The second call must not add a second row: a migration that can be
+		// repeated has to be able to recognise its own work.
+		FG_Schema::copy_unregister_tokens();
+		$nochmal = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $token WHERE registration_id = %d", $id ) );
+
+		$wpdb->query( $wpdb->prepare( "DELETE FROM $token WHERE registration_id = %d", $id ) );
+		$wpdb->query( $wpdb->prepare( "DELETE FROM $tabelle WHERE id = %d", $id ) );
+
+		fg_state_out( "$vorher\t$nachher\t$nochmal" );
+		break;
+
 	// mail-handler <art> [<name>]
 	//
 	// What FG_Mail_Templates::foreign_mail_handler() answers when a mail handler

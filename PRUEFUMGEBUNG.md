@@ -4,9 +4,12 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **öffentliches HTTP 225, Mail-Ebene 124, Admin-Ebene 574,
-0 Fehler**, gegen den Stand **Plugin 1.21.0, Schema 1.6.0**, dazu **vier von vier
-Gegenproben mit dem gestellten Fehlerbild rot**. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
+Letzter Lauf: 28.09.2026 — **öffentliches HTTP 225, Mail-Ebene 124, Admin-Ebene 626,
+0 Fehler**, gegen den Stand **Plugin 1.22.0, Schema 1.7.0**, dazu **zehn von zehn
+Gegenproben mit dem gestellten Fehlerbild rot**. Die Admin-Ebene ist um 52 höher als
+bei 1.21.0: der neue Abschnitt `[5g]` trägt 47 davon, die restlichen fünf sind Prüfungen
+für den Such- und den Löschweg, die es vorher nicht gab und die beide Stellen desselben
+Codewegs betreffen. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
 Shell-Satz `mail.sh` und 58 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
 gibt 124 aus. Die HTTP-Zahl ist um eine Prüfung höher als bei 1.20.0, und die Mail-Ebene um
 acht: sechs davon sind der neue Abschnitt `[5b]` (die sechs Formen eines Mail-Händlers), zwei
@@ -1519,6 +1522,20 @@ und ließ sich keinem Werkzeug dieser Sitzung zuordnen — die Gegenprobenlisten
 keine CSS-Datei, und `git stash` wie `git checkout` waren nie im Spiel. Zurückgesetzt wurde
 sie mit `git checkout --`, und `http.sh` war danach wieder bei 224/0.
 
+**Nachtrag aus Fassung 1.22.0: Dieselbe Änderung lag ein zweites Mal im Arbeitsbaum,
+und sie ist gewollt.** Sie wurde wieder mit `git checkout --` zurückgesetzt, kam im
+selben Durchgang wieder und wurde daraufhin als beabsichtigt bestätigt: Die Karte hat
+keinen Rahmen mehr, und der seitliche Innenabstand ist mit ihm verschwunden. Zwei Lehren
+aus demselben Befund, und die zweite ist die wichtigere: Die Strukturprüfung des
+Stylesheets hat ihren Job beide Male gemacht — beim ersten Mal hat sie eine Änderung
+gefunden, die niemand zugeordnet werden konnte, beim zweiten Mal hat sie eine gefunden,
+die niemand **zugeordnet** hatte. Ein beabsichtigter Umbau braucht in diesem Projekt einen
+Ort, an dem er behauptet wird; sonst ist er im nächsten Arbeitsbaum eine Überraschung,
+und die richtige Reaktion auf eine Überraschung ist hier das Zurücksetzen. `README.md`
+und `wordpress-fahrgemeinschaften-plugin.md` tragen den Zustand jetzt, und die Prüfung
+hält ihn in **beide** Richtungen: ein `padding`, das nicht das vorhandene ist, macht sie
+rot, und ein `border`, der zurückkommt, auch.
+
 Der Befund ist die Prüfung `the stylesheet knows the card and its table`: Sie liest das
 Stylesheet, das die Seite **verlinkt**, und fragt sechs Regeln einzeln ab, darunter `.fg-event-card`
 mit einer `border`-Eigenschaft. Eine Karte ohne Rahmen ist eine sichtbare Änderung, und eine
@@ -1663,6 +1680,128 @@ des gesuchten Fehlers — **das ist die Erklärung der offenen Beobachtung aus F
 die dort als „der Auslöser ist nicht gefunden" stand: Dieselben Prüfungen, immer `KEINE-MAIL`,
 nur im Gegenprobelauf und nie im normalen Lauf. Zwei der vier Gegenproben dieser Fassung sind
 erst mit der Reparatur des Werkzeugs rot geworden, vorher waren sie grün.
+
+## Fassung 1.22.0: die Redaktion trägt Mitglieder in den Arbeitsdienst ein
+
+Der Wunsch aus dem Verein: Ein Mitglied selbst in einen Arbeitsdienst eintragen, mit einer
+Suche nach Namen oder Mitgliedsnummer, mit einem Kästchen, das fragt, ob es dabei
+benachrichtigt werden soll, mit einem Zähler, der sagt, wie oft es das geworden ist, und
+mit der Möglichkeit, dieselbe Nachricht später noch einmal rauszuschicken. Und das Ganze
+so, dass **eintragen** und **benachrichtigen** zwei verschiedene Dinge bleiben: Man kann
+einen Dienst im September planen und im Oktober ankündigen.
+
+### Die eine Entscheidung, die alles andere kostet
+
+„Alle Abmeldelinks bleiben gültig" ist keine Zusatzfunktion, sondern eine neue Tabelle. Bis
+hier stand die Prüfsumme des Tokens an der Anmeldung selbst, **eine** pro Anmeldung. Eine
+zweite Nachricht an dasselbe Mitglied brauchte ein zweites Token, und ein zweites Token
+passte an diese eine Stelle nicht: Es hätte das erste ersetzt, und der Link aus der ersten
+Mail wäre tot gewesen. Ein Club, der zweimal zuschreibt, hätte seinen Mitgliedern damit einen
+toten Link geschickt.
+
+Also steht seit Schema 1.7.0 in `fg_event_member_tokens` eine Zeile je Token. Die beiden
+Spalten an der Anmeldung bleiben im Schema stehen — aus demselben Grund wie `alias` in den
+Fahrgemeinschaften: Ein zurückgesetztes WordPress darf nicht an einem Feld scheitern, das es
+nicht kennt —, werden aber weder gelesen noch geschrieben.
+
+**Die Migration ist der Teil, der eine stille Regression verursachen würde.** Ohne sie wird
+auf jeder Vereinsseite mit dem Update jeder bereits verschickte Link ungültig, und nichts auf
+der Seite sagt das: Diese Mails liegen seit Wochen in Postfächern, und niemand klickt sie
+noch einmal. `FG_Schema::copy_unregister_tokens()` kopiert deshalb jedes Token aus der alten
+Spalte in die neue Tabelle, **idempotent** — der erste Lauf kann halb abbrechen, und der
+nächste muss die Arbeit fertig machen statt derselben Zeile ein zweites Mal einzufügen. Und
+sie lässt sich **jederzeit** prüfen, was bei einer Migration sonst nicht geht:
+`state.php migrate-tokens` schreibt eine Anmeldung mit Token an der alten Stelle, ruft die
+Kopie auf und zählt. Der Abschnitt wartet damit nicht darauf, dass eine Instanz noch nicht
+migriert ist.
+
+### Die Zählung steht dort, wo der Versand geklappt hat
+
+`FG_Mailer::send_duty_signup()` erhöht den Zähler **nach** einem erfolgreichen `send()`. Das
+ist die einzige Stelle, an der eine Anmelde-Mail entsteht — ob das Mitglied selbst klickt, ob
+die Redaktion es einträgt, oder ob dieselbe Mail zum zweiten Mal rausgeht —, und damit auch
+die einzige Stelle, an der gezählt werden muss. Eine Zustellung, die nicht klappt, zählt
+nicht mit, weil sie kein Mitglied erreicht hat.
+
+Zwei Folgen daraus sind beide geprüft: Der Zähler steht bei **0**, wenn die Redaktion ohne
+Häkchen einträgt — das ist der gewünschte Fall und er brauchte eine eigene Prüfung —, und er
+steht nach einem gescheiterten erneuten Versand weiter. Zwei Spalten in der Liste sagen beides
+neben dem Zähler: **Eingetragen von** (Mitglied selbst oder Redaktion) und **E-Mails** (die
+Zahl).
+
+### Was die Redaktion darf, was die öffentliche Seite darf
+
+Der Bedarf ist eine **Ansage** des Vereins an die Mitglieder, keine Grenze für den Redakteur.
+Über dem Bedarf wird eingetragen, und die Liste sagt dann, wie viele Mitglieder für wie viele
+angekündigte Plätze drinstehen und was die öffentliche Seite daraus macht. Der öffentliche Weg
+bleibt unverändert: Er weist über dem Bedarf ab. Beides steht in zwei Sätzen auf derselben
+Seite, weil ein Redakteur, der dreizehn Mitglieder für zwölf Plätze einträgt, wissen muss,
+dass die öffentliche Seite diesen Dienst als voll zeigt.
+
+### Drei Fehler, die erst das Messen zeigte
+
+1. **`$wpdb->delete()` mit einem Array.** `delete_event_member_tokens()` reichte eine Liste von
+   Anmeldungsnummern an diese Methode. Sie nimmt einen Wert je Spalte; ein Array darin
+   scheitert nicht laut, sondern wird zu `registration_id = 0`, und die Methode meldet
+   „nichts gelöscht". Damit haben **alle vier Löschwege** ihre Tokenzeilen stehen lassen — auch
+   der Weg, auf dem die Datenschutflöschung ein Mitglied entfernt. Sichtbar geworden ist es im
+   Handlauf, weil nach dem Löschen eines Mitglieds die Zeile noch da war.
+2. **Zwei Token für eine Mail.** `create_registration()` stellt ein Token aus, und der
+   Verwaltungsweg stellte ein zweites, bevor er die Mail schickte; die Tabelle enthielt damit
+   eine Zeile ohne Mail. Der Verwaltungsweg benutzt jetzt das Token aus der Anmeldung, und ein
+   Eintrag ohne Mail nimmt seines wieder mit sich. In der Tabelle steht damit **eine Zeile je
+   zugestellter Mail** — die einzige Aussage, die man über sie treffen kann.
+3. **Ein Formular je Zeile statt eines Links.** Zwei gleichartige Links auf einer Seite gehen
+   nicht: Der zweite hätte den ersten aufgehoben. Jede Zeile hat jetzt ein eigenes Formular,
+   mit dem Nonce **dieser** Anmeldung.
+
+### Ein Werkzeug, das die ganze Reihe in Frage stellt
+
+Die Prüfung liest Registrierungsnummer und Nonce **aus der Zeile des Mitglieds** und nicht von
+der Seite: Die Teilnehmerliste zeigt alle Mitglieder des Dienstes, und die Suche darüber füllt
+nur die Auswahlliste. Ein Test, der die erste Nonce der Seite nimmt, benachrichtigt ein
+Mitglied und misst ein anderes. Genau das ist zweimal passiert, und beide Male sah es nach
+einem Fehler im Plugin aus — „der Zähler bleibt stehen, obwohl eine Mail rausging". Der Leser
+`hidden_in_row` in `admin.sh` weiß, welche Zeile gemeint ist; er ist keine Probe auf das
+Plugin, sondern die Voraussetzung dafür, dass eine Probe das Plugin misst.
+
+### Die ersetzten und die neuen Prüfungen
+
+| Vorher | Jetzt |
+| --- | --- |
+| `http.sh`: `.fg-event-card` mit `border` | `.fg-event-card` mit `padding: 1.25rem 0` **und** **ohne** `border` — der Zustand wird in beide Richtungen gehalten |
+| `smoke.php`: *the cleanup finds the row*, über die Spalte der Anmeldung | *and the token is still there, only past its date* + *only the token is dropped*, beide über die Tokentabelle |
+| `smoke.php`: `update_event_member( … 'unregister_expires' … )` | `update_event_member_token( … )` — dieselbe Absicht an der Stelle, an der die Spalte jetzt steht |
+| — | **neu** `admin.sh [5g]`, 47 Prüfungen: Block, Suche, Kästchen, Zähler, beide Links, Fehlschlag, über dem Bedarf, ohne Nonce, per GET wirkungslos, Tabelle, Spalten, Migration, drei Löschwege |
+| — | **neu** `state.php`: `notified`, `mail-count`, `mail-bodies`, `mail-recipients`, `mail-fail`, `schema`, `migrate-tokens` |
+
+Die Suche der Mitgliederliste ist dabei mitverändert worden: Sie suchte feldweise, und
+„Kaputt Test" fand niemanden, weil kein einzelnes Feld beide Wörter enthält. Sie sucht jetzt
+**Wort für Wort**, und jedes Wort muss irgendwo in der Zeile stehen. An der Mitgliederseite ist
+das eine sichtbare Verbesserung, und an der neuen Seite die Voraussetzung dafür, dass „Suche
+nach Namen" das tut, was der Wunsch beschreibt.
+
+### Die Gegenproben
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| `note_duty_notification()` aus dem Mailer entfernt | Der Zähler steigt | 3 Prüfungen |
+| Das Token wandert nicht in die Tabelle | Ein Link je Mail, und er geht auf | 7 Prüfungen |
+| `valid_unregister_token()` immer `false` | Beide Links öffnen | 4 Prüfungen |
+| Das Kästchen wird ignoriert (`$notify = true`) | Ohne Häkchen keine Mail, Zähler 0 | 5 Prüfungen |
+| Der Zähler steigt auch im Fehlerfall | Ein Fehlschlag zählt nicht | 4 Prüfungen |
+| `drop_unregister_token()` abgeschaltet | Ein Fehlschlag lässt kein Token zurück | 2 Prüfungen |
+| Die Suche wieder feldweise | „Kaputt Test" findet das Mitglied | 1 Prüfung |
+| Die Tokenlöschung beim Löschen der Anmeldung entfällt | Der Löschlink nimmt den Link mit | 1 Prüfung |
+| … beim Löschen des Mitglieds entfällt | Dasselbe für die Mitgliederseite | 1 Prüfung |
+| … beim Löschen des Dienstes entfällt | Dasselbe für die Kaskade | 1 Prüfung |
+
+Die letzten drei Zeilen dieser Liste sind der Grund, warum diese Prüfungen erst spät kamen:
+Der Bruch war wirkungslos, solange keine Prüfung das behauptete. Eine Gegenprobe, die grün
+bleibt, ist kein beruhigendes Zeichen, sondern ein fehlender Test — und die Reihenfolge „erst
+die Prüfung, dann die Gegenprobe" ist in dieser Fassung zweimal gescheitert: einmal, weil
+`$wpdb->delete()` still nichts tat, und einmal, weil die Prüfung die falsche Zeile gelesen
+hat.
 
 ## Mail-Auswertung
 

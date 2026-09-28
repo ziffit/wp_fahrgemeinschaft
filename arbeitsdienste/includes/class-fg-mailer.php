@@ -214,7 +214,18 @@ final class FG_Mailer {
 			return false;
 		}
 
-		return $this->send( $to, $mail['subject'], $mail['body'], null, $mail['links'] );
+		if ( ! $this->send( $to, $mail['subject'], $mail['body'], null, $mail['links'] ) ) {
+			return false;
+		}
+
+		// The counter stands where the send is known to have worked, and nowhere
+		// else. It is the same place for the public registration, for the
+		// registration from the backend and for a repeated notification, and it
+		// only ever counts mails that were handed over: a refused delivery is not
+		// a member hearing about the duty.
+		$this->repository->note_duty_notification( $registration->id );
+
+		return true;
 	}
 
 	/**

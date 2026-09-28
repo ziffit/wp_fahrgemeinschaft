@@ -28,14 +28,25 @@ final class FG_Admin_Events {
 	private $repository;
 
 	/**
+	 * Statistics.
+	 *
+	 * @var FG_Stats
+	 */
+	private $stats;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param FG_Repository $repository Repository.
+	 * @param FG_Stats|null $stats      Optional statistics.
 	 */
-	public function __construct( FG_Repository $repository ) {
+	public function __construct( FG_Repository $repository, FG_Stats $stats = null ) {
 		$this->repository = $repository;
+		$this->stats      = $stats ? $stats : new FG_Stats();
 
 		add_action( 'admin_post_fg_save_event', array( $this, 'save' ) );
+		add_action( 'admin_post_fg_assign_participant', array( $this, 'assign_participant' ) );
+		add_action( 'admin_post_fg_notify_participant', array( $this, 'notify_participant' ) );
 	}
 
 	/**
@@ -250,6 +261,7 @@ final class FG_Admin_Events {
 
 			<?php if ( ! $is_new ) : ?>
 				<?php $this->render_registrations( $event, $registered ); ?>
+				<?php $this->render_assign_form( $event, $registered ); ?>
 
 				<h2><?php esc_html_e( 'Gefährliche Aktion', 'arbeitsdienste' ); ?></h2>
 				<p>
@@ -293,6 +305,148 @@ final class FG_Admin_Events {
 	}
 
 	/**
+	 * Render the form that enters a member into this work service.
+	 *
+	 * The search runs over number, first name, last name and address — the same
+	 * question the member list asks, with the same answer, so that a name which
+	 * finds somebody there finds them here. What it produces is one dropdown and
+	 * one button: a member is entered one at a time, because the decision is made
+	 * per member anyway. The checkbox below decides whether that member hears
+	 * about it right now, and it is off, because entering somebody and writing to
+	 * them are two different acts and a club that plans a duty in September and
+	 * announces it in August has both orders to run.
+	 *
+	 * Members who are already in the duty are named under the form instead of
+	 * standing in the list: a search that found somebody and then showed nothing
+	 * looks like a mistake, and the editor would type the same term again.
+	 *
+	 * @param FG_Event $event         Work service.
+	 * @param array    $registrations Rows already in the list.
+	 * @return void
+	 */
+	private function render_assign_form( FG_Event $event, array $registrations ) {
+		$search     = isset( $_GET['fg_event_member_search'] ) && ! is_array( $_GET['fg_event_member_search'] )
+			? sanitize_text_field( wp_unslash( $_GET['fg_event_member_search'] ) )
+			: '';
+		$drin       = array();
+		$wahlen     = array();
+		$treffer    = 0;
+
+		if ( '' !== trim( $search ) ) {
+			$suchergebnisse = $this->repository->get_members_page( $search, 0, 50 );
+
+			foreach ( $suchergebnisse as $gefunden ) {
+				++$treffer;
+
+				if ( $this->repository->is_event_participant( $event->id, $gefunden->id ) ) {
+					$drin[] = $gefunden;
+				} else {
+					$wahlen[] = $gefunden;
+				}
+			}
+		}
+
+		$such_url = add_query_arg( 'fg_event_member_search', $search, $this->edit_url( $event->id ) );
+		?>
+		<h2><?php esc_html_e( 'Mitglied zuweisen', 'arbeitsdienste' ); ?></h2>
+		<form method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
+			<input type="hidden" name="page" value="<?php echo esc_attr( FG_EVENTS_PAGE_SLUG ); ?>">
+			<input type="hidden" name="event" value="<?php echo esc_attr( (int) $event->id ); ?>">
+			<label class="screen-reader-text" for="fg-event-member-search"><?php esc_html_e( 'Mitglieder suchen', 'arbeitsdienste' ); ?></label>
+			<input type="search" name="fg_event_member_search" id="fg-event-member-search" value="<?php echo esc_attr( $search ); ?>" placeholder="<?php esc_attr_e( 'Name oder Mitgliedsnummer', 'arbeitsdienste' ); ?>">
+			<?php submit_button( __( 'Suchen', 'arbeitsdienste' ), 'secondary', '', false ); ?>
+		</form>
+
+		<?php if ( '' !== trim( $search ) ) : ?>
+			<p class="description">
+				<?php
+				printf(
+					/* translators: %s: the search term. */
+					esc_html__( 'Ergebnisse für „%s“:', 'arbeitsdienste' ),
+					esc_html( $search )
+				);
+				?>
+			</p>
+			<?php if ( ! $treffer ) : ?>
+				<p><?php esc_html_e( 'Dazu wurde niemand gefunden. Die Suche kennt Mitgliedsnummer, Vorname, Nachname und E-Mail-Adresse.', 'arbeitsdienste' ); ?></p>
+			<?php endif; ?>
+		<?php endif; ?>
+
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="fg_assign_participant">
+			<input type="hidden" name="fg_event_id" value="<?php echo esc_attr( (int) $event->id ); ?>">
+			<input type="hidden" name="fg_event_member_search" value="<?php echo esc_attr( $search ); ?>">
+			<?php wp_nonce_field( 'fg_assign_participant_' . (int) $event->id, 'fg_assign_nonce' ); ?>
+
+			<table class="form-table" role="presentation">
+				<tr>
+					<th scope="row"><label for="fg-assign-member"><?php esc_html_e( 'Mitglied', 'arbeitsdienste' ); ?></label></th>
+					<td>
+						<?php if ( ! $wahlen ) : ?>
+							<span class="description"><?php esc_html_e( 'Ohne Suchergebnis gibt es hier nichts auszuwählen.', 'arbeitsdienste' ); ?></span>
+						<?php else : ?>
+							<select id="fg-assign-member" name="fg_member_id" required>
+								<option value=""><?php esc_html_e( 'Bitte auswählen', 'arbeitsdienste' ); ?></option>
+								<?php foreach ( $wahlen as $gefunden ) : ?>
+									<option value="<?php echo esc_attr( (int) $gefunden->id ); ?>">
+										<?php
+										printf(
+											/* translators: 1: member number, 2: name, 3: e-mail address. */
+											esc_html__( '%1$s — %2$s (%3$s)', 'arbeitsdienste' ),
+											esc_html( $gefunden->member_no ),
+											esc_html( trim( $gefunden->first_name . ' ' . $gefunden->last_name ) ),
+											esc_html( $gefunden->email )
+										);
+										?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						<?php endif; ?>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><?php esc_html_e( 'E-Mail', 'arbeitsdienste' ); ?></th>
+					<td>
+						<label>
+							<input type="checkbox" id="fg-notify-member" name="fg_notify_member" value="1">
+							<?php esc_html_e( 'Dieses Mitglied jetzt benachrichtigen. Ohne dieses Häkchen geht keine E-Mail raus, und der Zähler in der Liste bleibt stehen.', 'arbeitsdienste' ); ?>
+						</label>
+					</td>
+				</tr>
+			</table>
+
+			<?php submit_button( __( 'Zuweisen', 'arbeitsdienste' ), 'primary', 'fg_assign_submit', false ); ?>
+		</form>
+
+		<?php if ( $drin ) : ?>
+			<p class="description">
+				<?php
+				printf(
+					/* translators: 1: number of members, 2: the list of them. */
+					esc_html__( 'Bereits für diesen Arbeitsdienst eingetragen (%1$d): %2$s', 'arbeitsdienste' ),
+					count( $drin ),
+					esc_html(
+						implode(
+							', ',
+							array_map(
+								static function ( FG_Member $mitglied ) {
+									return $mitglied->member_no . ' ' . trim( $mitglied->first_name . ' ' . $mitglied->last_name );
+								},
+								$drin
+							)
+						)
+					)
+				);
+				?>
+			</p>
+		<?php endif; ?>
+		<p class="description">
+			<?php esc_html_e( 'Der Arbeitsdienst kann dabei mehr Mitglieder bekommen, als der Bedarf ankündigt. Auf der öffentlichen Seite ist er dann als vollständig belegt zu sehen.', 'arbeitsdienste' ); ?>
+		</p>
+		<?php
+	}
+
+	/**
 	 * Render the members registered for one work service.
 	 *
 	 * This list is the answer to the question the duty asks: how many people it
@@ -307,25 +461,53 @@ final class FG_Admin_Events {
 	 * @return void
 	 */
 	private function render_registrations( FG_Event $event, array $registrations ) {
-		$count = count( $registrations );
+		$count        = count( $registrations );
+		$ueber_bedarf = (int) $event->demand > 0 && $count > (int) $event->demand;
 		?>
 		<h2><?php esc_html_e( 'Angemeldete Mitglieder', 'arbeitsdienste' ); ?></h2>
 		<?php if ( 0 === (int) $event->demand ) : ?>
 			<p class="description">
-				<?php esc_html_e( 'Für diesen Arbeitsdienst ist kein Bedarf eingetragen. Deshalb steht unter der öffentlichen Seite keine Anmeldung zur Verfügung, und diese Liste bleibt leer.', 'arbeitsdienste' ); ?>
+				<?php esc_html_e( 'Für diesen Arbeitsdienst ist kein Bedarf eingetragen. Deshalb steht unter der öffentlichen Seite keine Anmeldung zur Verfügung. Vom Redakteur eingetragene Mitglieder stehen trotzdem in dieser Liste.', 'arbeitsdienste' ); ?>
 			</p>
+		<?php endif; ?>
+		<?php if ( $ueber_bedarf ) : ?>
+			<div class="notice notice-warning inline">
+				<p>
+					<?php
+					// The demand is what the club announces to its members, not a
+					// limit for the editor: an editor who enters a thirteenth member
+					// into a duty for twelve knows something the number does not. The
+					// sentence says what the public page makes of it, because that is
+					// what the editor cannot see from here.
+					printf(
+						/* translators: 1: number of registered members, 2: number of announced places. */
+						esc_html__( '%1$d Mitglieder sind für %2$d angekündigte Plätze eingetragen. Auf der öffentlichen Seite ist dieser Arbeitsdienst damit als vollständig belegt zu sehen.', 'arbeitsdienste' ),
+						(int) $count,
+						(int) $event->demand
+					);
+					?>
+				</p>
+			</div>
 		<?php endif; ?>
 		<?php if ( 0 === $count ) : ?>
 			<p><?php esc_html_e( 'Für diesen Arbeitsdienst hat sich noch kein Mitglied eingetragen.', 'arbeitsdienste' ); ?></p>
 		<?php else : ?>
 			<p>
 				<?php
-				printf(
-					/* translators: 1: number of registered members, 2: number of free places. */
-					esc_html__( '%1$d von höchstens %2$d Plätzen belegt.', 'arbeitsdienste' ),
-					(int) $count,
-					(int) $event->demand
-				);
+				if ( $ueber_bedarf ) {
+					printf(
+						/* translators: %d: number of registered members. */
+						esc_html__( '%d Mitglieder eingetragen.', 'arbeitsdienste' ),
+						(int) $count
+					);
+				} else {
+					printf(
+						/* translators: 1: number of registered members, 2: number of free places. */
+						esc_html__( '%1$d von höchstens %2$d Plätzen belegt.', 'arbeitsdienste' ),
+						(int) $count,
+						(int) $event->demand
+					);
+				}
 				?>
 			</p>
 			<table class="widefat striped">
@@ -335,6 +517,8 @@ final class FG_Admin_Events {
 						<th><?php esc_html_e( 'Name', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Angemeldet am', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Eingetragen von', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'E-Mails', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Aktion', 'arbeitsdienste' ); ?></th>
 					</tr>
 				</thead>
@@ -346,6 +530,22 @@ final class FG_Admin_Events {
 							<td><?php echo esc_html( $row['member']->email ); ?></td>
 							<td><?php echo esc_html( $row['registration']->registered_at ); ?></td>
 							<td>
+								<?php
+								// Who put this member in this duty decides how the number
+								// beside it is to be read: a member who signed up has
+								// heard about it, a member an editor entered has not.
+								echo esc_html(
+									$row['registration']->added_by_admin
+										? __( 'Redaktion', 'arbeitsdienste' )
+										: __( 'Mitglied selbst', 'arbeitsdienste' )
+								);
+								?>
+							</td>
+							<td>
+								<?php echo esc_html( number_format_i18n( (int) $row['registration']->notified_count ) ); ?>
+							</td>
+							<td>
+								<?php $this->render_notify_button( $row ); ?>
 								<?php
 								FG_Admin::echo_delete_link(
 									'registration',
@@ -362,9 +562,223 @@ final class FG_Admin_Events {
 					<?php endforeach; ?>
 				</tbody>
 			</table>
+			<p class="description">
+				<?php
+				printf(
+					/* translators: %s: the wording of the counter column. */
+					esc_html__( 'Die Spalte E-Mails zählt, wie oft dieses Mitglied für diesen Arbeitsdienst eine E-Mail bekommen hat (%s). Ein Versand, der nicht geklappt hat, zählt nicht mit.', 'arbeitsdienste' ),
+					esc_html__( 'nur zugestellte', 'arbeitsdienste' )
+				);
+				?>
+			</p>
 			<p class="description"><?php esc_html_e( 'Das Löschen einer Anmeldung gibt nur den Platz in diesem Arbeitsdienst frei. Das Mitglied bleibt im Verein und für andere Arbeitsdienste angemeldet.', 'arbeitsdienste' ); ?></p>
 		<?php endif; ?>
 		<?php
+	}
+
+	/**
+	 * Render the form that sends the duty mail to one member again.
+	 *
+	 * A form and not a link: sending a mail is something one does, and a link
+	 * that sends as soon as it is fetched would also do it when something walks
+	 * the admin page. The nonce carries the registration, so a form that belongs
+	 * to one member cannot send a mail for another one.
+	 *
+	 * @param array{registration: FG_Event_Member, member: FG_Member} $row One row of the list.
+	 * @return void
+	 */
+	private function render_notify_button( array $row ) {
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="fg_notify_participant">
+			<input type="hidden" name="fg_event_id" value="<?php echo esc_attr( (int) $row['registration']->event_id ); ?>">
+			<input type="hidden" name="fg_registration_id" value="<?php echo esc_attr( (int) $row['registration']->id ); ?>">
+			<?php wp_nonce_field( 'fg_notify_participant_' . (int) $row['registration']->id, 'fg_notify_nonce' ); ?>
+			<button type="submit" class="button">
+				<?php esc_html_e( 'Benachrichtigung senden', 'arbeitsdienste' ); ?>
+			</button>
+		</form>
+		<?php
+	}
+
+	/**
+	 * Enter a member into this work service from the backend.
+	 *
+	 * Two things are different from the public form, and both of them are the
+	 * point of this screen. The mail is optional: an editor often knows the duty
+	 * before the club has said anything about it, and entering a member without
+	 * telling them is a normal way to fill a list. And a mail that does not go
+	 * out changes nothing here — on the public side a registration without its
+	 * mail is removed again, because there the member has no other way out. Here
+	 * the entry stays, the counter stays where it was, and the notice names the
+	 * failure, so the editor can try again.
+	 *
+	 * @return void
+	 */
+	public function assign_participant() {
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'arbeitsdienste' ) );
+		}
+
+		$event_id = $this->post_int( 'fg_event_id' );
+		check_admin_referer( 'fg_assign_participant_' . $event_id, 'fg_assign_nonce' );
+
+		$search   = $this->post_text( 'fg_event_member_search' );
+		$event    = $event_id ? $this->repository->get_event( $event_id ) : null;
+		$member   = $this->post_int( 'fg_member_id' ) ? $this->repository->get_member( $this->post_int( 'fg_member_id' ) ) : null;
+		$notify   = '1' === $this->post_text( 'fg_notify_member' );
+
+		if ( ! $event || ! $member ) {
+			FG_Admin::store_notice( __( 'Arbeitsdienst oder Mitglied nicht gefunden. Es wurde niemand eingetragen.', 'arbeitsdienste' ), 'error' );
+			$this->redirect_back( $event_id, $search );
+		}
+
+		if ( $this->repository->has_registration( $event->id, $member->id ) ) {
+			FG_Admin::store_notice(
+				sprintf(
+					/* translators: 1: member number, 2: name of the member. */
+					esc_html__( 'Mitglied %1$s (%2$s) ist für diesen Arbeitsdienst schon eingetragen.', 'arbeitsdienste' ),
+					esc_html( $member->member_no ),
+					esc_html( trim( $member->first_name . ' ' . $member->last_name ) )
+				),
+				'warning'
+			);
+			$this->redirect_back( $event_id, $search );
+		}
+
+		$registration = $this->repository->create_registration(
+			$event->id,
+			$member->id,
+			'',
+			true
+		);
+
+		if ( ! $registration['id'] ) {
+			FG_Admin::store_notice( __( 'Die Anmeldung konnte nicht gespeichert werden.', 'arbeitsdienste' ), 'error' );
+			$this->redirect_back( $event_id, $search );
+		}
+
+		$this->stats->increment( 'admin_participant_added' );
+
+		if ( ! $notify ) {
+			// The token that came out of the registration belongs to a mail that
+			// is not going out, and a token nobody ever received is a row that says
+			// nothing. It goes, and the notification that may come later gets one of
+			// its own. A row in that table then means a mail and nothing else.
+			$this->repository->clear_unregister_token( $registration['id'] );
+
+			FG_Admin::store_notice(
+				sprintf(
+					/* translators: 1: member number, 2: name of the member. */
+					esc_html__( 'Mitglied %1$s (%2$s) ist eingetragen. Es ist keine E-Mail verschickt worden.', 'arbeitsdienste' ),
+					esc_html( $member->member_no ),
+					esc_html( trim( $member->first_name . ' ' . $member->last_name ) )
+				)
+			);
+			$this->redirect_back( $event_id, $search );
+		}
+
+		$this->notify_one_participant( $event, $registration );
+		$this->redirect_back( $event_id, $search );
+	}
+
+	/**
+	 * Send the duty mail to one member of this duty again.
+	 *
+	 * The link in the new mail is one of its own: a token is only ever readable
+	 * in the mail it was written for, and every mail that goes out gets a token
+	 * of its own. The links already sent keep working until they expire.
+	 *
+	 * @return void
+	 */
+	public function notify_participant() {
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_die( esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'arbeitsdienste' ) );
+		}
+
+		$registration_id = $this->post_int( 'fg_registration_id' );
+		check_admin_referer( 'fg_notify_participant_' . $registration_id, 'fg_notify_nonce' );
+
+		$registration = $registration_id ? $this->repository->get_registration( $registration_id ) : null;
+		$event        = $registration ? $this->repository->get_event( $registration->event_id ) : null;
+		$event_id     = $event ? $event->id : 0;
+
+		// The posted event id is not trusted for anything: the registration names
+		// its own duty, and a nonce for one registration must not send a mail for
+		// another one.
+		$eingetragen = $this->post_int( 'fg_event_id' );
+		if ( $event && $eingetragen && (int) $eingetragen !== (int) $event->id ) {
+			$event = null;
+		}
+
+		if ( ! $registration || ! $event ) {
+			FG_Admin::store_notice( __( 'Diese Anmeldung wurde nicht gefunden. Es ist keine E-Mail verschickt worden.', 'arbeitsdienste' ), 'error' );
+			$this->redirect_back( $event_id );
+		}
+
+		$this->notify_one_participant(
+			$event,
+			array(
+				'id'               => (int) $registration->id,
+				'public_ref'       => (string) $registration->public_ref,
+				'unregister_token' => '',
+			)
+		);
+		$this->redirect_back( $event->id );
+	}
+
+	/**
+	 * Send the duty mail to one member and report what happened.
+	 *
+	 * The token in the mail is the one the registration handed out, if there was
+	 * one that has not been used yet; otherwise a new one is issued, because a
+	 * token is readable only in the mail it was written for. The tokens that went
+	 * out before are not touched, so their links keep working.
+	 *
+	 * @param FG_Event $event        Work service.
+	 * @param array{id: int, public_ref: string, unregister_token: string} $registration
+	 *                              What create_registration() returned, or the
+	 *                              same three values with an empty token.
+	 * @return void
+	 */
+	private function notify_one_participant( FG_Event $event, array $registration ) {
+		$token = (string) $registration['unregister_token'];
+
+		if ( '' === $token ) {
+			$token = $this->repository->unregister_token_for_registration( (int) $registration['id'] );
+		}
+
+		if ( '' === $token ) {
+			FG_Admin::store_notice( __( 'Der Abmeldelink für die Mail konnte nicht erzeugt werden. Es ist keine E-Mail verschickt worden.', 'arbeitsdienste' ), 'error' );
+			return;
+		}
+
+		$url = add_query_arg(
+			array(
+				'fg_duty_action' => 'view',
+				'signup_ref'     => (string) $registration['public_ref'],
+				'intent'         => 'unregister',
+				'token'          => $token,
+			),
+			home_url( '/' )
+		);
+
+		$mailer = new FG_Mailer( $this->repository );
+
+		if ( ! $mailer->send_duty_signup( (int) $registration['id'], $url ) ) {
+			// The token went into a mail that did not arrive, and a row that
+			// claims a link was sent out when it was not is a wrong statement in
+			// the table. Only this one token goes; the links of the mails that did
+			// arrive keep working, and that is the whole point of having more than
+			// one.
+			$this->repository->drop_unregister_token( (int) $registration['id'], $token );
+
+			FG_Admin::store_notice( __( 'Die E-Mail konnte nicht verschickt werden. Die Anmeldung steht weiter in der Liste und kann später erneut versendet werden.', 'arbeitsdienste' ), 'error' );
+			return;
+		}
+
+		$this->stats->increment( 'admin_participant_notified' );
+		FG_Admin::store_notice( __( 'Die E-Mail ist verschickt worden. Der Zähler in der Teilnehmerliste ist um eins gestiegen.', 'arbeitsdienste' ) );
 	}
 
 	/**
@@ -583,11 +997,50 @@ final class FG_Admin_Events {
 	 * @param int $event_id Event ID.
 	 * @return void
 	 */
-	private function redirect_back( $event_id ) {
-		$url = $event_id ? $this->edit_url( $event_id ) : $this->list_url( array( 'event' => 0 ) );
+	private function redirect_back( $event_id, $search = '' ) {
+		$args = array();
+
+		// The search term goes along on the way back. Without it the list of hits
+		// is gone after the one click that used it, and an editor who entered ten
+		// members would have to type the same term ten times.
+		if ( '' !== $search ) {
+			$args['fg_event_member_search'] = $search;
+		}
+
+		$url = $event_id
+			? add_query_arg( $args, $this->edit_url( $event_id ) )
+			: $this->list_url( array( 'event' => 0 ) );
 
 		wp_safe_redirect( $url, 303 );
 		exit;
+	}
+
+	/**
+	 * Read one integer field of the last POST.
+	 *
+	 * Three handlers read the same five fields, and each of them asks for the
+	 * same three things about them: that the value is there, that it is a scalar
+	 * and that it is an integer. That question is asked once here.
+	 *
+	 * @param string $key Field name.
+	 * @return int
+	 */
+	private function post_int( $key ) {
+		return isset( $_POST[ $key ] ) && ! is_array( $_POST[ $key ] )
+			? absint( wp_unslash( $_POST[ $key ] ) )
+			: 0;
+	}
+
+	/**
+	 * Read one text field of the last POST.
+	 *
+	 * @param string $key Field name.
+	 * @return string
+	 */
+	private function post_text( $key ) {
+		return isset( $_POST[ $key ] ) && ! is_array( $_POST[ $key ] )
+			? sanitize_text_field( wp_unslash( $_POST[ $key ] ) )
+			: '';
 	}
 
 	/**

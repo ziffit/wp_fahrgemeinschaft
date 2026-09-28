@@ -204,6 +204,27 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 
 - E-Mails mit festem Absender auf der Vereinsdomain. Was in `wp_mail()` hineingeht, ist seit 1.21.0 das **Layout** als HTML mit dem Header `Content-Type: text/html`; der reine Text wird über `phpmailer_init` als `AltBody` dazugestellt. Baut das eigene PHPMailer von WordPress die Nachricht, geht sie als `multipart/alternative` heraus: der Text als Plain-Text in der ersten Alternative, das Layout als HTML in der zweiten. Bis 1.21.0 stand das Gegenteil in `wp_mail()` — der Text — und das Layout kam über dieselbe Aktion dazu, die nur dieser eine Mailversand feuert.
 - Das Layout, das Logo und die Fußzeile stehen in jeder Mail des Plugins. Das Layout wird im Plugin mitgeliefert und ist nicht über den Adminbereich änderbar; konfigurierbar sind Logo, Fußzeile und der Wortlaut (Betreff und Text) der vier Nachrichten — der Rahmen um den Wortlaut nicht. Die Fußzeile steht in **beiten** Alternativen, im HTML und im reinen Text — sie nennt Absender, Kontakt und den rechtlichen Hinweis, und genau diese Angaben bleiben als Klartext am längsten hängen. Wo eine Mail-Erweiterung die Nachricht selbst baut, entfällt der Textteil, und die Fußzeile steht dann nur noch im Layout. Das Logo steht nur im HTML-Teil: ein Textteil hat keine Bilder, und der `From:`-Header nennt den Verein ohnehin. Seine Adresse ist die des **eigenen** Servers (`wp_get_attachment_image_url()` mit der Größe `full`, dieselbe wie in beiden Vorschauen) und keine Datei im Anhang; bis 1.21.0 stand es als `cid:logo` in der Nachricht, was über jeden Weg, der die Nachricht selbst baut, nie ankam.
+- **Die Redaktion trägt Mitglieder selbst in einen Arbeitsdienst ein, und die Benachrichtigung
+  ist eine zweite, getrennte Handlung.** Auf der Detailseite eines Arbeitsdienstes steht unter
+  der Teilnehmerliste ein Block mit Suchfeld, Auswahlliste, dem Kästchen „Mitglied
+  benachrichtigen" (Vorgabe aus) und der Schaltfläche „Zuweisen". Die Teilnehmerliste führt zwei
+  Spalten dazu: „Eingetragen von" (Mitglied selbst oder Redaktion) und „E-Mails" (die Zahl der
+  zugestellten Nachrichten), und je Zeile gibt es eine Schaltfläche „Benachrichtigung senden".
+  Der Zähler steht in `FG_Mailer::send_duty_signup()` nach einem erfolgreichen Versand und
+  zählt deshalb nur zugestellte Mails — auf dem öffentlichen Weg, beim Eintragen durch die
+  Redaktion und beim erneuten Versand über dieselbe Stelle. Anders als der öffentliche Weg
+  über dem angekündigten Bedarf: Der Bedarf ist eine Ansage an die Mitglieder, keine Grenze für
+  die Redaktion, und die Liste sagt, was die öffentliche Seite daraus macht. Eine abgelehnte
+  Zustellung lässt die Anmeldung stehen, weil die Redaktion es später erneut versuchen kann;
+  auf dem öffentlichen Weg wird sie entfernt, weil das Mitglied sonst keinen Weg heraus hätte.
+- **Jede Mail an ein Mitglied trägt einen eigenen Abmeldelink, und alle bleiben gültig.** Die
+  Token stehen je eine Zeile in `{prefix}fg_event_member_tokens` mit Prüfsumme und Ablauf; bis
+  Schema 1.7.0 stand eine Prüfsumme an der Anmeldung, und eine zweite Nachricht hätte den ersten
+  Link ungültig gemacht. `FG_Schema::copy_unregister_tokens()` kopiert die vorhandenen Token beim
+  Update idempotent in die neue Tabelle, weil ein fehlender Kopierschritt jeden bereits
+  verschickten Link stillschweigend ungültig machen würde. Ein Fehlschlag nimmt sein Token
+  wieder mit sich. Jeder der vier Löschwege für Anmeldungen — Löschlink auf der Dienstseite,
+  Mitgliederseite, Kaskade des Dienstes und die Datenschutflöschung — nimmt die Tokenzeilen mit.
 - Keine aus Benutzereingaben erzeugten HTML-Inhalte oder Mailheader: Benutzereingaben stehen im HTML-Teil ausschließlich escaped. Für die Links der Nachricht heißt das: Der Wortlaut des Ankers wird wie jeder andere Wert escaped, und er entsteht nicht aus dem Text, sondern aus einem der im Code hinterlegten Vorgabewortlaute oder einem Wortlaut, den `FG_Mail_Templates::mark_links()` gegen genau die Links dieser Nachricht geprüft hat. Die Adresse selbst geht durch `esc_url()`.
 - Jeder Link einer Nachricht ist ein `<a href>` im HTML-Teil, und sein Text nennt die Handlung. Bis 1.13.0 stand die Adresse als Klartext im Wortlaut, den `paragraphs()` Zeile für Zeile escaped; im HTML-Teil war sie damit weder klickbar noch kürzbar. Der Text, der an `wp_mail()` geht, ist trotzdem der fertige Textteil, nicht der Wortlaut mit den Marken: `FG_Mailer::send()` übergibt `FG_Mail_Templates::text_part()` an `wp_mail()` und den unaufgelösten Wortlaut an `phpmailer_init`. Filter auf `wp_mail()` — der Protokollierer dieses Plugins, ein Mail-Log, ein Plugin, das seine eigene Fußzeile anhängt — sehen also eine fertige Nachricht.
 - Ein Link-Platzhalter darf einen eigenen Wortlaut hinter einem Doppelpunkt mitbringen, `{{Loeschlink:Fahrgemeinschaft löschen}}`. Ohne den Doppelpunkt gilt der Vorgabewortlaut der Nachricht, damit ein vor 1.13.0 gespeicherter Text nicht bricht. Diese Form wird nur für die Links der jeweiligen Nachricht zugelassen.

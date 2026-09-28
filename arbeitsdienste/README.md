@@ -2,7 +2,7 @@
 
 Minimales WordPress-Plugin zur Planung von Vereinsarbeitsdiensten, zur Anmeldung von Mitgliedern zu einem Dienst und zur Koordination der Fahrgemeinschaften je Dienst.
 
-Fassung 1.21.0.
+Fassung 1.22.0.
 
 ## Installation
 
@@ -49,6 +49,9 @@ Fassung 1.21.0.
 
 - **Arbeitsdienste:** anlegen, ändern und dauerhaft löschen. Die UUID ist nur lesbar. Pflicht sind Titel und Datum; Gruppe, Bedarf, Dauer und Beschreibung sind freiwillig, und die Uhrzeit ist der **Beginn** des Dienstes. In der Übersicht stehen zusätzlich Gruppe, Bedarf, **Teilnehmer** und **Freie Plätze**; steht bei Gruppe oder Bedarf nichts, steht dort ein Gedankenstrich und keine Null. Die Teilnehmerzahl und die Zahl der freien Plätze beider Spalten kommen aus einer Abfrage für die ganze Seite.
 - Die Beschreibung ist das einzige Feld des Formulars, das mehr als eine Zeile trägt. Ihre Zeilenumbrüche bleiben stehen, auf der öffentlichen Seite und in der E-Mail; HTML ist dort nicht möglich. Bis Version 1.19.0 verdoppelte **jedes** Speichern die vorhandenen Leerzeilen: Der Browser schickt die Zeilen eines mehrzeiligen Feldes mit `CRLF`, und der Code ersetzte jedes einzelne `CR` durch `LF`, sodass aus einem Umbruch zwei wurden — aus drei Zeilen fünf, nach dem nächsten Speichern acht, nach dem nächsten sechzehn. Der Text stand auf der Dienstseite öffentlich, und die Länge zählte mit, sodass ein oft gespeicherter Text irgendwann an der Grenze von 500 Zeichen abgelehnt wurde. Seit 1.19.0 gilt `str_replace( array( "\r\n", "\r" ), "\n", … )`, wie es im Import schon lange steht: **Speichern ändert den Text nicht.** Bereits gespeicherte Beschreibungen tragen die Leerzeilen noch; sie werden nicht von Hand korrigiert, weil eine automatische Bereinigung genau die Absatzleerzeile zerstören würde, die jemand gewollt hat.
+  - Unter dieser Liste steht der Block **Mitglied zuweisen**: ein Suchfeld, eine Auswahlliste der Treffer, das Kästchen **Mitglied benachrichtigen** (aus) und die Schaltfläche **Zuweisen**. Ein Mitglied je Schritt. Wer schon im Dienst steht, wird darunter als „bereits eingetragen" genannt.
+  - Die Teilnehmerliste hat zwei Spalten bekommen: **Eingetragen von** (Mitglied selbst oder Redaktion) und **E-Mails** (die Zahl der zugestellten Nachrichten für diesen Dienst). In der Spalte **Aktion** steht je Teilnehmer eine Schaltfläche **Benachrichtigung senden**.
+  - Steht der Dienst über dem angekündigten Bedarf, sagt die Liste das und nennt auch, was die öffentliche Seite daraus macht. Der Bedarf ist eine Ansage an die Mitglieder, keine Grenze für die Redaktion; die öffentliche Anmeldung bleibt streng.
 - Statt eines Textfeldes mit E-Mail-Adressen steht unter dem Formular die Liste der für diesen Dienst angemeldeten Mitglieder, jede mit einer eigenen Löschschaltfläche. Eine Anmeldung zu löschen gibt nur den Platz in diesem einen Dienst frei; das Mitglied bleibt im Verein und für andere Dienste angemeldet.
 - **Mitglieder:** die Mitglieder des Vereins, mit den vier Feldern Mitgliedsnummer, E-Mail-Adresse, Vorname und Nachname. Die Nummer ist der Schlüssel: Sie wird als Text gespeichert, damit eine führende Null erhalten bleibt, und sie sucht das Mitglied beim Import wieder. Die E-Mail-Adresse gehört zu genau einem Mitglied und ist eindeutig. Die Liste zeigt je Mitglied, für wie viele Dienste es angemeldet ist. Wird ein Mitglied gelöscht, gehen seine Anmeldungen mit, seine angebotenen Fahrgemeinschaften bleiben in der Tabelle stehen, verschwinden aber aus der öffentlichen Liste und aus der Adminübersicht der Namen: Eine Zeile ohne Mitglied kann niemandem zugeordnet werden, und sie steht dort als „Fahrgemeinschaft ohne Mitglied“. Ein Mitglied zu löschen, während es Fahrgemeinschaften anbietet, ist deshalb keine Besonderheit, aber ein Grund, die Löschung zu prüfen.
 - Auf der Seite **Mitglieder** steht unten das Importformular. Es erwartet eine CSV-Datei mit Kopfzeile und den vier Spalten; die Spalten dürfen in beliebiger Reihenfolge stehen, und zusätzliche Spalten werden ignoriert. Der Import prüft die ganze Datei, bevor er irgendetwas schreibt, und schreibt erst, wenn jede Zeile in Ordnung ist: ein Fehler in Zeile 40 bedeutet, dass Zeile 1 bis 39 ebenfalls nicht geschrieben wurde. Danach steht ein Bericht: wie viele Zeilen gelesen wurden, wie viele Mitglieder neu angelegt, wie viele geändert und wie viele unverändert waren, und welche Mitglieder in der Datenbank stehen, aber nicht in der Datei. Diese letzten werden **nicht** gelöscht — ein Import entfernt nie jemanden aus dem Verein. Über dem Auswahlfeld steht aufklappbar eine Tabelle mit allen Namen, die die Kopfzeile haben darf, einem je Feld: `Mitgliedsnummer` (auch `mitglieds-nr`, `mitglieds-nummer`, `mitglied-nr`, `nummer`, `nr`, `member_no`, `member number`), `E-Mail-Adresse` (auch `email`, `e-mail-adresse`, `email-adresse`, `mail`, `member_email`), `Vorname` (auch `first name`, `first_name`) und `Nachname` (auch `familienname`, `last name`, `last_name`, `surname`, `name`). Groß- und Kleinschreibung spielt keine Rolle, Leerzeichen am Ende einer Zelle werden entfernt, und es muss **genau** einer dieser Namen sein — `E-Mail-Adresse Pflicht` ist ein unbekannter Name, kein bekannter mit Zusatz.
@@ -167,6 +170,42 @@ Vor einer Installation sollten in einer Staging-Installation mindestens diese F�
 
 ## Bewusste Abweichungen und Entscheidungen
 
+- **Eintragen und Benachrichtigen sind zwei Handlungen, und das Kästchen ist der Unterschied.**
+  Die Checkbox **Mitglied benachrichtigen** ist Vorgabe **aus**. Wer einen Arbeitsdienst
+  plant, trägt erst ein und schreibt später; genau dafür gibt es den Block. Ohne Häkchen geht
+  keine Mail raus, der Zähler bleibt auf 0, und die Anmeldung steht trotzdem in der Liste.
+  Eine abgelehnte Mail nimmt die Anmeldung hier **nicht** mit: auf dem öffentlichen Weg wird
+  eine Anmeldung ohne Mail wieder gelöscht, weil das Mitglied dort sonst keinen Weg aus dem
+  Dienst heraus hätte. Die Redaktion hat diesen Weg nicht — sie kann es später versuchen.
+- **Der Zähler zählt zugestellte Mails und steht dort, wo der Versand geklappt hat.**
+  `FG_Mailer::send_duty_signup()` erhöht ihn nach einem erfolgreichen Versand. Das ist die
+  einzige Stelle, an der eine Anmelde-Mail entsteht, ob das Mitglied selbst klickt, ob die
+  Redaktion einträgt oder ob dieselbe Mail zum zweiten Mal rausgeht. Eine Zustellung, die
+  nicht klappt, zählt nicht mit: Die Zahl soll sagen, wie oft das Mitglied davon **erfahren**
+  hat.
+- **Jede Mail an ein Mitglied trägt einen eigenen Abmeldelink, und keiner macht einen anderen
+  ungültig.** Bis Version 1.22.0 stand die Prüfsumme des Tokens an der Anmeldung, eine pro
+  Anmeldung — eine zweite Nachricht hätte den ersten Link ungültig gemacht. Die Token stehen
+  jetzt je eine Zeile in `fg_event_member_tokens`. Der Preis: eine Tabelle mehr und ein
+  Migrationsschritt, der die alten Links in die neue Tabelle kopiert. Ohne diesen Schritt wäre
+  bei jedem Update jeder bereits verschickte Link stillschweigend ungültig geworden, und weil
+  die Mails seit Wochen in Postfächern liegen, hätte niemand es gemerkt. Ein **Fehlschlag**
+  nimmt sein Token wieder mit sich, und ein Eintrag ohne Mail gar keins: In der Tabelle steht
+  eine Zeile je zugestellter Mail, und mehr lässt sich über sie nicht sagen.
+- **Über dem angekündigten Bedarf trägt die Redaktion trotzdem ein.** Der Bedarf ist eine
+  Ansage des Vereins an die Mitglieder, und die Redaktion weiß mehr als die Zahl. Die Liste
+  sagt dann, wie viele Mitglieder für wie viele angekündigte Plätze drinstehen, und dass die
+  öffentliche Seite diesen Dienst als vollständig belegt zeigt. Der öffentliche Weg bleibt
+  streng: Wer sich selbst eintragen will, wird über dem Bedarf abgewiesen.
+- **Die Suche der Mitgliederliste sucht Wort für Wort.** „Kaputt Test" oder „Müller Anton"
+  sind zwei Felder einer Zeile und kein Feld, das so heißt. Bis Version 1.22.0 verglich die
+  Suche das ganze Wort mit jedem Feld einzeln, und ein solcher Begriff fand niemanden. Jetzt
+  muss jedes Wort des Suchbegriffs irgendwo in der Zeile stehen — und „0042 Mül" findet die
+  Person mit der Nummer 0042.
+- **Die Karte hat keinen Rahmen.** Der Rahmen um Arbeitsdienstkarte und Fahrgemeinschaft und
+  der seitliche Innenabstand sind entfernt; oben und unten steht der Abstand weiter. Die Karte
+  liest sich damit als Zeile der Liste und nicht als Kasten. Eine Prüfung im öffentlichen Satz
+  hält diesen Zustand in beide Richtungen fest.
 - **Eigene Tabellen statt eigener Beitragstypen.** Arbeitsdienste, Fahrgemeinschaften, Mitglieder und Anmeldungen brauchen keine Beitragsfunktionen: keine Permalinks, keine Revisionen, keinen Entwurfszustand, keinen Papierkorb, keine REST-API, kein `post_status`, keine Meta-Key-Abfragen. Dafür bleiben fünf Tabellen — die fünfte trägt den Wortlaut der E-Mails und keine Fahrten, Mitglieder oder Anmeldungen —, und der Preis ist, dass die alten WordPress-Funktionen (`WP_Query`, `get_posts`, die Revisionen, die „Beiträge“-Ansichten) für diese Daten nicht greifen.
 - **Keine eigene Berechtigung.** Das Plugin nutzt `edit_posts` und `delete_posts`. Eine eigene Fähigkeit wäre nur nötig, wenn das Plugin Rechte feinabstimmen müsste; dafür ist der Aufwand zu groß. Folge: Autoren und Redakteure sehen im Ride-Verzeichnis alle Kontaktadressen aller Arbeitsdienste.
 - **Sprungziele statt Sprungskript.** Nach dem Absenden eines Formulars hängt die Weiterleitung das Sprungziel als Endung an (`…&fg_notice=pending#fg-hinweis`), und der Browser holt die Meldung damit von selbst in den Bildschirm. Ein Skript, das nach dem Laden auf die Meldung scrollt, wäre dafür nicht nötig; die Sprungweite ist nur eine Zahl im Stylesheet (`scroll-margin-top`), weil eine Kopfzeile, die stehen bleibt, das Sprungziel sonst verdeckt. Die Höhe einer Theme-Kopfzeile kennt das Plugin nicht, deshalb ist der Wert großzügig gewählt.

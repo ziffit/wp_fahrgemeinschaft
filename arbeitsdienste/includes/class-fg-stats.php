@@ -44,6 +44,12 @@ final class FG_Stats {
 			'signup_repeat'          => 'Anmeldungen ohne neuen Eintrag (bereits angemeldet)',
 			'signup_refused_full'    => 'Anmeldungen wegen voller Belegung abgelehnt',
 			'signup_unregistered'    => 'Gelöschte Anmeldungen',
+			// The two counters of the backend. They are counted apart because the
+			// two acts are apart: entering a member is a list, sending the mail is
+			// a message, and a club that enters its board in October and writes in
+			// November has two different things to look at afterwards.
+			'admin_participant_added'   => 'Vom Redakteur eingetragene Anmeldungen',
+			'admin_participant_notified' => 'Vom Redakteur verschickte Anmelde-E-Mails',
 		);
 	}
 

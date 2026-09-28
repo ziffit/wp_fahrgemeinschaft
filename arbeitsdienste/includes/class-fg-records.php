@@ -322,21 +322,34 @@ final class FG_Event_Member {
 	public $registered_at = '';
 
 	/**
-	 * Hash of the unregistration token.
+	 * How many mails this member received for this duty.
 	 *
-	 * Only the hash is stored. The raw token exists in the e-mail to the member
-	 * and nowhere else.
+	 * One for the mail of the public registration and one for every further
+	 * notification, and only for mails that were actually handed over. A refused
+	 * delivery does not count: the number is meant to answer the question "how
+	 * often did this member hear about it", and a mail nobody received is not an
+	 * answer to it.
 	 *
-	 * @var string
-	 */
-	public $unregister_hash = '';
-
-	/**
-	 * Unregistration token expiry as unix timestamp.
+	 * The tokens of the unregistration links are not part of this record. They
+	 * live in their own table since schema 1.7.0, because a registration has as
+	 * many of them as it has mails.
 	 *
 	 * @var int
 	 */
-	public $unregister_expires = 0;
+	public $notified_count = 0;
+
+	/**
+	 * Whether the backend entered this member into the duty.
+	 *
+	 * The public form and the backend are two different acts, and the list of
+	 * participants cannot be read without telling them apart: a member who signed
+	 * up has heard about the duty, a member who was entered by an editor has not
+	 * until somebody sends the mail. The number of notifications beside this flag
+	 * is the second half of the same sentence.
+	 *
+	 * @var bool
+	 */
+	public $added_by_admin = false;
 
 	/**
 	 * Random public reference of this registration, used in the unregistration

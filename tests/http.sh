@@ -1199,7 +1199,14 @@ css = re.sub(r'/\*.*?\*/', '', sys.stdin.read(), flags=re.S)
 regeln = re.findall(r'([^{}]+)\{([^}]*)\}', css)
 def hat(klassenname, eigenschaft):
     return any(klassenname in s and eigenschaft in b for s, b in regeln)
-if not hat('.fg-event-card', 'border'):
+# The card carries no frame any more: the border and the radius are gone and the
+# side padding went with them, so the card reads as a row of the list and not as a
+# box. The check holds that state in both directions — a padding that is not the
+# one that is there and a frame that comes back both turn it red, and the second
+# half is what would have caught the change while it was still unversioned.
+if not hat('.fg-event-card', 'padding: 1.25rem 0'):
+    sys.exit(1)
+if hat('.fg-event-card', 'border'):
     sys.exit(1)
 if not hat('.fg-event-data', 'width'):
     sys.exit(1)
