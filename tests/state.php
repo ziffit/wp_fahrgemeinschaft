@@ -478,6 +478,31 @@ switch ( $command ) {
 		break;
 
 
+	// recorder <on|off>
+	//
+	// The mail recorder of the test site short-circuits wp_mail() and writes the
+	// message into a table instead of handing it on. That is what the suites need
+	// and what stops SureMail from receiving anything. A suite run by hand leaves
+	// it switched on — only run-all.sh hands it back at the end — so the way to
+	// switch it is a command here and not a php -r that has to be remembered.
+	// "on" and "off" and nothing else: a name that is neither is answered with the
+	// current state, so a mistyped call reports instead of doing nothing.
+	case 'recorder':
+		$schalter = isset( $args[0] ) ? (string) $args[0] : '';
+		$an      = '1' === (string) get_option( 'fg_test_mail_enabled', '0' );
+
+		if ( 'on' === $schalter ) {
+			update_option( 'fg_test_mail_enabled', '1', false );
+			$an = true;
+		} elseif ( 'off' === $schalter ) {
+			delete_option( 'fg_test_mail_enabled' );
+			delete_option( 'fg_test_mail_fail' );
+			$an = false;
+		}
+
+		fg_state_out( $an ? 'on, wp_mail wird in die Tabelle geschrieben' : 'off, wp_mail erreicht SureMail' );
+		break;
+
 	// --- the wording of the five messages
 	//
 	// These read and write the mail texts from the shell. The admin screen is

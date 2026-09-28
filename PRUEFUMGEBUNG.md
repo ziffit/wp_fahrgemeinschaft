@@ -546,7 +546,19 @@ Die Wirkung des Stylesheets ist mit `curl` nicht prüfbar. Zweispaltigkeit, Zeil
 und Schriftgrade der Einwilligung sind von Hand im Browser anzusehen.
 `run-all.sh` endet mit Schritt `5/5 handover`, der den Mail-Recorder wieder abschaltet. Ohne
 diesen Schritt stünde die Instanz anschließend nicht für die Handprüfung mit SureMails zur
-Verfügung (siehe unten).
+Verfügung (siehe unten). **Wer eine Suite von Hand fährt, fährt diesen Schritt nicht mit** —
+`http.sh` und `mail.sh` schalten den Recorder am Anfang selbst ein, und niemand schaltet ihn
+wieder aus. Danach landet keine einzige Mail in SureMails, was sich nicht wie ein Fehler des
+Plugins liest, sondern wie ein Fehler am Netz: Der Recorder hängt sich an `pre_wp_mail` und
+beantwortet `wp_mail()`, ohne es weiterzureichen. Der Zustand lässt sich abfragen und
+umschalten:
+
+    docker exec wpdev-wordpress-1 php /tmp/fgtests/state.php recorder
+    docker exec wpdev-wordpress-1 php /tmp/fgtests/state.php recorder off
+
+Ein Name, der weder `on` noch `off` ist, schaltet nichts und antwortet mit dem Zustand
+— ein Tippfehler, der stillschweigend nichts tut, wäre hier genau die Sorte Fehler, die
+später als Fehler des Plugins gesucht wird.
 
 `tests/state.php` ist die Schnittstelle zwischen den Shell-Suiten und den Tabellen. Es liest
 und schreibt über `FG_Repository` (`statuses`, `count`, `count-published`, `count-alias`,
