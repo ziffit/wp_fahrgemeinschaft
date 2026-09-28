@@ -107,6 +107,10 @@ Anzeige:
 - Arbeitsdienst und Datum
 - Abfahrtsbereich als Ort oder Stadtteil, im Formular mit drei Beispielen
 - Schaltfläche „Kontaktieren“; das darunterliegende Kontaktformular erscheint erst auf Wunsch und wird über „Absenden“ gesendet
+- **Seit 1.20.0** darf eine E-Mail-Adresse bei mehreren Mitgliedern stehen; die
+  Mitgliedsnummer bleibt der Schlüssel. Der Import liest zwei Zeilen mit derselben Adresse
+  als zwei Mitglieder ein, und das Adminformular weist nach dem Speichern darauf hin, bei
+  welchem anderen Mitglied die Adresse schon steht
 - ~~nur die E-Mail-Adresse~~ **Seit 1.16.0** Mitgliedsnummer **und** E-Mail-Adresse nebeneinander
   in einer Zeile, mit einem Hinweis darunter, dass beide zu einem Mitglied passen müssen
   und dass keine der beiden Angaben öffentlich steht
@@ -813,3 +817,51 @@ mit einer gewollten Absatzleerzeile ist von einem ohne nicht unterscheidbar, und
 automatische Bereinigung — ob beim Speichern oder einmalig — würde genau die Leerzeilen
 zerstören, die jemand gewollt hat. Der Verein löscht die überzähligen Leerzeilen von Hand.
 Ab 1.19.0 wächst der Text nicht mehr.
+
+## Umsetzungsstand: Eine Adresse darf bei zwei Mitgliedern stehen (1.20.0, Schema 1.6.0)
+
+Ergänzt um den Fehlerbefund vom 28.09.2026: Bei Ehepaaren kommt dieselbe E-Mail-Adresse
+doppelt vor, obwohl die Mitgliedsnummer eindeutig ist. Bis hierher wäre das im Plugin
+nicht möglich gewesen — der Import hätte die ganze Datei abgelehnt.
+
+### Der Schlüssel
+
+| Vorher (bis 1.19.0) | Jetzt (ab 1.20.0, Schema 1.6.0) |
+| --- | --- |
+| `UNIQUE KEY email (email)` | `KEY email (email)` — ein gewöhnlicher Index |
+| neben der Nummer durfte nur eine Adresse existieren | beliebig viele Mitglieder pro Adresse |
+| nebenbei: ohne Adresse durfte nur **ein** Mitglied existieren (`NOT NULL DEFAULT ''` mit eindeutigem Schlüssel) | beliebig viele; über die Formulare nicht erreichbar, dort ist eine gültige Adresse Pflicht |
+
+Der Schlüssel auf `member_no` bleibt eindeutig, und er ist der einzige. `dbDelta` baut
+einen eindeutigen Schlüssel nicht in einen gewöhnlichen um und wirft ihn nicht weg, deshalb
+gibt es ein ausdrückliches `ALTER TABLE … DROP INDEX email, ADD INDEX email (email)`, das
+sich über `SHOW INDEX` selbst prüft und auf einer frischen Installation sowie beim zweiten
+Durchlauf nichts tut.
+
+### Alles, was ein Mitglied erkennt, fragt das Paar
+
+| | Vorher | Jetzt |
+| --- | --- | --- |
+| Anmeldung zu einem Arbeitsdienst | Nummer **und** Adresse | unverändert |
+| Angebotformular | Nummer **und** Adresse | unverändert |
+| Kontaktformular | Nummer **und** Adresse | unverändert |
+| Import | Nummer findet, Adresse darf nirgends doppelt sein | Nummer findet; dieselbe Adresse auf zwei Zeilen sind zwei Mitglieder |
+| Adminformular | Ablehnung, wenn die Adresse vergeben ist | Speichern, mit einem Hinweis auf das andere Mitglied |
+| Datenauskunft und Löschung (WordPress) | das erste Mitglied mit dieser Adresse | alle Mitglieder mit dieser Adresse, mit Nennung der Anzahl im Bericht |
+
+Die vier `ERROR_*`-Fälle des Imports `duplicate_email` und `email_taken` sind mit ihrer
+Meldung entfallen; `duplicate_number` bleibt und ist jetzt die einzige Eindeutigkeitsregel
+der Datei.
+
+### Der Datenschutzweg, und warum er keine Wahl lässt
+
+WordPress reicht dem Export und der Löschung **nur die Adresse**; die Signatur dieser
+Rückrufe gibt WordPress vor, die Mitgliedsnummer kann dort nicht abgefragt werden. Ein
+geteiltes Postfach ist für WordPress eine Adresse und für das Plugin zwei Personen, und die
+Frage „alles zu dieser Adresse" lässt sich nur beantworten, indem man beides nennt. Der
+Bericht sagt deshalb, wie viele Mitglieder er umfasst, und die Meldung zum Löschen geht in
+die Mehrzahl. Die Stammdatensätze der Mitglieder bleiben wie bisher unangetastet.
+
+Die Absage, die derselbe Weg früher gab, wäre hier die gewesen: nichts exportieren, nichts
+löschen, auf die Nummer verweisen. Sie ist am WortPress-Werkzeug nicht umsetzbar und hätte
+einem Anfragenden mit gemeinsamem Postfach eine Sackgasse gelassen.

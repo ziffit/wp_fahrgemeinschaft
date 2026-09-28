@@ -4,9 +4,9 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **öffentliches HTTP 224, Mail-Ebene 116, Admin-Ebene 564,
-0 Fehler**, gegen den Stand **Plugin 1.19.0, Schema 1.5.0**, dazu **sechs Gegenproben, alle
-mit dem gestellten Fehlerbild rot**. Die Mail-Ebene 116 ist die Summe aus 57 Prüfungen im
+Letzter Lauf: 28.09.2026 — **öffentliches HTTP 224, Mail-Ebene 116, Admin-Ebene 574,
+0 Fehler**, gegen den Stand **Plugin 1.20.0, Schema 1.6.0**, dazu **drei von vier
+Gegenproben mit dem gestellten Fehlerbild rot**. Die Mail-Ebene 116 ist die Summe aus 57 Prüfungen im
 Shell-Satz `mail.sh` und 59 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
 gibt 116 aus.
 
@@ -14,7 +14,10 @@ gibt 116 aus.
 gegen den Stand **Plugin 1.16.0** (Commit `9883f85`) und ist damit die einzige der vier
 Zahlen, die nicht zu diesem Stand gehört; sie zu wiederholen wäre ein Lauf, der am Anfang
 alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht, und dafür lag an diesem
-Nachmittag keine Zustimmung vor. Wer nachrechnen will, findet die Zahl also nicht zu 1.17.0,
+Nachmittag keine Zustimmung vor. Das ist bei der Fassung 1.20.0 mehr als eine Lücke in der
+Tabelle: **Diese Fassung ändert einen Datenbankschlüssel**, und die Prüfung, die ihn
+ansieht, liegt in der CLI-Suite. Sie ist geschrieben, aber **nicht gelaufen** — siehe den
+Abschnitt zu 1.20.0. Wer nachrechnen will, findet die Zahl also nicht zu 1.17.0,
 sondern zu 1.16.0 — und diese Lücke ist eine bewusste und keine vergessene. Die drei
 HTTP-Suiten brauchen diese Zustimmung nicht, weil sie ihre Fixture selbst aufbauen und
 sonst nichts löschen; `http.sh` und `mail.sh` leeren dabei nur die Daten, die ihre eigene
@@ -1428,6 +1431,90 @@ nicht gefunden. Was die Prüfungen gemeinsam haben: Sie bauen ihre Mitglieder vo
 Mitglieds scheitert, entfällt die Nachricht und der Befehl meldet `KEINE-MAIL`. Für den nächsten
 Fall dieser Art ist der vollständige Lauf zu sichern, nicht nur die Zeilen mit `FAIL` — das
 Werkzeug der Gegenproben wirft genau den Teil weg, in dem die Antwort stünde.
+
+## Fassung 1.20.0: eine Adresse darf bei zwei Mitgliedern stehen
+
+Der Befund aus dem Verein: Bei Ehepaaren kommt dieselbe E-Mail-Adresse doppelt vor, obwohl
+die Mitgliedsnummer eindeutig ist. Das war im Plugin nicht nur unerwünscht, sondern bis hier
+unmöglich — `UNIQUE KEY email (email)` hätte die zweite Zeile abgewiesen, und der Import
+hätte die Datei vorher abgelehnt.
+
+### Die Migration, und warum sie ein eigener Schritt ist
+
+`dbDelta` baut einen eindeutigen Schlüssel nicht in einen gewöhnlichen um. Ohne
+`FG_Schema::relax_member_email_index()` wäre die DDL-Zeile geändert, der Schlüssel aber
+eindeutig geblieben — und **jede** Prüfung dieses Abschnitts, die über das Plugin läuft,
+würde trotzdem grün sein, nur der Datenbankschlüssel wäre es nicht. Deshalb liest eine
+Prüfung in der CLI-Suite `SHOW INDEX` und fragt `Non_unique`, und nicht den Quelltext.
+
+Die Messung dieser Aussage ist hier ausdrücklich **nicht** über die CLI-Suite gelaufen. Sie
+wurde mit einem Wegwerf-Skript im Container gemacht, das genau die Abfrage der neuen
+Prüfung ausführt:
+
+| | |
+| --- | --- |
+| `SHOW INDEX … email` | 1 Index, `Non_unique = 1` |
+| `SHOW INDEX … member_no` | 1 Index, `Non_unique = 0` |
+| zwei Mitglieder auf einer Adresse | 3711 / 3712, beide geschrieben |
+| dieselbe Nummer ein zweites Mal | abgelehnt |
+
+Das ist eine Messung und kein Laufnachweis: Sie sagt, dass die Aussage am lebenden System
+zutrifft, und **nicht**, dass die neue Prüfung in `smoke.php` sie auch fände. Die ist
+geschrieben, `php -l` ist sauber, sie ist aber nie gelaufen. Die vierte Gegenprobe dieses
+Abschnitts — die Migration abzuschalten und zu sehen, ob die Prüfung rot wird — ist aus
+demselben Grund nicht gefahren. Beides steht hier, damit der nächste Lauf, der die
+CLI-Suite fährt, weiß, was er noch nachzuholen hat.
+
+### Drei Gegenproben, die gelaufen sind
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| die doppelte Nummer in der Datei wird nicht mehr abgelehnt | eine Nummer bleibt ein Schlüssel | `a number that stands twice in the file is named` |
+| der Hinweis auf eine geteilte Adresse entfällt | das Adminformular nennt das andere Mitglied | 2 Prüfungen: `and the note names the member that already holds it` und `and it says that the address is shared` |
+| die Migration tut nichts | — | **nichts**, und das ist der Befund dieser Zeile |
+
+Die dritte Gegenprobe hat nichts bewegt, weil die Testinstanz zu dem Zeitpunkt **schon** auf
+Schema 1.6.0 stand: `FG_Schema::install()` läuft bei gleicher Fassung gar nicht, ein
+abgeschalteter Migrationsschritt also erst gar nicht. Eine Gegenprobe, die eine Stelle
+abschaltet, die der Lauf nicht erreicht, misst nichts — und sieht dabei aus, als hätte sie
+etwas geprüft. Genau für diesen Fall war in der zehnten Reihe notiert, dass eine
+Bruchstelle **zielen** muss; hier war das Ziel eine Codestelle, und die Voraussetzung war
+eine andere als gedacht.
+
+### Die ersetzten Prüfungen
+
+| Vorher | Jetzt |
+| --- | --- |
+| `smoke.php`: *an address belongs to one member only* | *two members may share one address*, *and the address reads back as two members*, *in the order the rows were written*, *and the pair of number and address finds the first of them*, *and the same address with the other number finds the second*, *while a number of nobody is still refused on that address* |
+| `admin.sh`: *a taken address names the member that holds it* + *and it says why* | *a shared address is saved*, *and the note names the member that already holds it*, *and it says that the address is shared*, *and the old refusal is gone*, *the second member is written*, *and both rows carry the same address* |
+| Import: **keine** Prüfung für `ERROR_DUPLICATE_NUMBER` | *a number that stands twice in the file is named*, *and both of its lines are named*, *and it says nothing was imported* |
+
+Der dritte Strich ist eine Lücke, die dieser Abschnitt schließt und nicht eine, die er
+erfindet: Die doppelte Nummer in der Datei war seit dem Import **nie** geprüft, weil vorher
+beide Schlüssel gleich behandelt wurden und nur die Adresse durchgespielt wurde. Jetzt ist
+sie der einzige Schlüssel, und der einzige Schlüssel ohne Prüfung ist der schlechteste Fall.
+
+Zwei eigene Fehler sind beim Einbau dieser Prüfungen aufgelaufen und stehen hier, weil beide
+zu grünen Zeilen geführt hätten: Ein `report` statt der Bildschirmseite für die Ablehnung
+(bei einem abgelehnten Import gibt es **keinen** Bericht, die Meldung steht als Hinweis auf
+dem Bildschirm), und ein Hinweistext mit Klammern in Klammern.
+
+### Ein ungewollter Umbau, den die Strukturprüfung des Stylesheets fand
+
+Während dieser Fassung lag im Arbeitsbaum eine Änderung am Stylesheet, die niemand
+bestellt hatte: `.fg-event-card, .fg-ride` verloren `border` und `border-radius`, und das
+seitliche Padding wurde von `1.25rem` auf `1.25rem 0` gesetzt. Sie stand in keinem Commit
+und ließ sich keinem Werkzeug dieser Sitzung zuordnen — die Gegenprobenlisten enthalten
+keine CSS-Datei, und `git stash` wie `git checkout` waren nie im Spiel. Zurückgesetzt wurde
+sie mit `git checkout --`, und `http.sh` war danach wieder bei 224/0.
+
+Der Befund ist die Prüfung `the stylesheet knows the card and its table`: Sie liest das
+Stylesheet, das die Seite **verlinkt**, und fragt sechs Regeln einzeln ab, darunter `.fg-event-card`
+mit einer `border`-Eigenschaft. Eine Karte ohne Rahmen ist eine sichtbare Änderung, und eine
+sichtbare Änderung, die niemand bestellt hat, gehört nicht in ein Paket. Zwei Lehren: Eine
+Strukturprüfung für das Stylesheet ist keine Formalie, sondern fängt genau das ab, was keine
+PHP-Prüfung fände; und ein Diff, den man nicht erklären kann, wird zurückgesetzt und
+protokolliert, nicht mitgenommen.
 
 ## Mail-Auswertung
 

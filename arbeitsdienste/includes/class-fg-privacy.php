@@ -103,12 +103,19 @@ final class FG_Privacy {
 			);
 		}
 
-		$rides = $this->repository->get_rides_by_email( $email, self::BATCH_SIZE, ( $page - 1 ) * self::BATCH_SIZE );
+		// Everything the plugin holds for this address, and the number of members
+		// behind it. Since schema 1.6.0 that can be two: a married pair with one
+		// mailbox, which WordPress cannot tell apart either, because it only ever
+		// asks for the address. The report therefore says how many members it
+		// covers, so a reader who sees the data of two people also sees why.
+		$zaehler = count( $this->repository->get_members_by_email( $email ) );
+		$rides   = $this->repository->get_rides_by_email( $email, self::BATCH_SIZE, ( $page - 1 ) * self::BATCH_SIZE );
 
 		// The members and work services of the whole batch in one query each.
-		// The export runs over a member's own rides, so they all point at one
-		// member — but the work services differ per ride, and one query per row
-		// here would be one query per exported line.
+		// The export runs over the rides of the members behind the address, so
+		// they can point at more than one member — but the work services differ
+		// per ride, and one query per row here would be one query per exported
+		// line.
 		$members = $this->repository->get_members_for_rides( $rides );
 		$events  = $this->repository->get_events_by_ids(
 			array_map(
@@ -120,6 +127,29 @@ final class FG_Privacy {
 		);
 
 		$data = array();
+		if ( $zaehler > 1 ) {
+			$data[] = array(
+				'group_id'    => 'fahrgemeinschaften-rides',
+				'group_label' => __( 'Fahrgemeinschaften', 'arbeitsdienste' ),
+				'item_id'     => 'fg-geteilte-adresse',
+				'data'        => array(
+					array(
+						'name'  => __( 'Umfang', 'arbeitsdienste' ),
+						'value' => sprintf(
+							/* translators: %d: number of members sharing one e-mail address. */
+							_n(
+								'Diese E-Mail-Adresse gehört %d Mitglied des Vereins; dieser Bericht umfasst dessen Daten.',
+								'Diese E-Mail-Adresse gehört %d Mitgliedern des Vereins; dieser Bericht umfasst deren Daten.',
+								$zaehler,
+								'arbeitsdienste'
+							),
+							(int) $zaehler
+						),
+					),
+				),
+			);
+		}
+
 		foreach ( $rides as $ride ) {
 			$member     = isset( $members[ $ride->member_id ] ) ? $members[ $ride->member_id ] : null;
 			$event      = isset( $events[ $ride->event_id ] ) ? $events[ $ride->event_id ] : null;
@@ -163,15 +193,26 @@ final class FG_Privacy {
 	 * @return array
 	 */
 	private function export_event_memberships( $email, $page ) {
-		$member = $this->repository->get_member_by_email( $email );
-		if ( ! $member ) {
+		// Every member behind the address, not the first of them: the question
+		// WordPress asks is what the plugin holds for this address, and the
+		// registrations of the other half of a shared mailbox belong to the same
+		// answer.
+		$members = $this->repository->get_members_by_email( $email );
+		if ( empty( $members ) ) {
 			return array();
 		}
 
+		// The duties are read once and the registrations are asked per pair, which
+		// is the same shape the loop had before: one member gave one pass over the
+		// list, two members would have given two, and the number of duties is not
+		// something that should be walked twice for every member.
 		$matches = array();
 		foreach ( $this->repository->get_all_events() as $event ) {
-			if ( $this->repository->has_registration( $event->id, $member->id ) ) {
-				$matches[] = $event;
+			foreach ( $members as $member ) {
+				if ( $this->repository->has_registration( $event->id, $member->id ) ) {
+					$matches[] = $event;
+					break;
+				}
 			}
 		}
 
@@ -246,13 +287,19 @@ final class FG_Privacy {
 			++$loops;
 		}
 
+		// The registrations of every member behind the address, not of the first
+		// one. The rides above were drained the same way, and a report that names
+		// only one of the two while the other keeps its registrations would be
+		// worse than either all or nothing.
 		$signups = 0;
-		$member  = $this->repository->get_member_by_email( $email );
-		if ( $member ) {
+		$members = $this->repository->get_members_by_email( $email );
+		if ( ! empty( $members ) ) {
 			foreach ( $this->repository->get_all_events() as $event ) {
-				if ( $this->repository->has_registration( $event->id, $member->id )
-					&& $this->repository->delete_registration_by_pair( $event->id, $member->id ) ) {
-					++$signups;
+				foreach ( $members as $member ) {
+					if ( $this->repository->has_registration( $event->id, $member->id )
+						&& $this->repository->delete_registration_by_pair( $event->id, $member->id ) ) {
+						++$signups;
+					}
 				}
 			}
 		}
@@ -268,13 +315,24 @@ final class FG_Privacy {
 				$signups
 			);
 		}
-		if ( $member && ( $removed > 0 || $signups > 0 ) ) {
-			$messages[] = __( 'Der Stammdatensatz des Mitglieds in der Mitgliederverwaltung des Vereins wurde nicht angetastet.', 'arbeitsdienste' );
+		if ( ! empty( $members ) && ( $removed > 0 || $signups > 0 ) ) {
+			$messages[] = 1 === count( $members )
+				? __( 'Der Stammdatensatz des Mitglieds in der Mitgliederverwaltung des Vereins wurde nicht angetastet.', 'arbeitsdienste' )
+				: sprintf(
+					/* translators: %d: number of members sharing one e-mail address. */
+					_n(
+						'Diese Adresse gehört %d Mitglied des Vereins. Sein Stammdatensatz in der Mitgliederverwaltung wurde nicht angetastet.',
+						'Diese Adresse gehört %d Mitgliedern des Vereins. Ihre Stammdatensätze in der Mitgliederverwaltung wurden nicht angetastet.',
+						count( $members ),
+						'arbeitsdienste'
+					),
+					count( $members )
+				);
 		}
 
 		return array(
 			'items_removed'  => $removed > 0 || $signups > 0,
-			'items_retained' => (bool) $member,
+			'items_retained' => ! empty( $members ),
 			'messages'       => $messages,
 			'done'           => $done,
 		);

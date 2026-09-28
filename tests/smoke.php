@@ -787,6 +787,17 @@ $gemeldet_wartend = FG_Schema::take_dropped_rides_notice();
 fg_ok( 1 === $gemeldet_wartend, 'the club is told about it in the same notice', (string) $gemeldet_wartend );
 fg_ok( 0 === $fg_repo->count_rides( array( 'status' => 'pending' ) ), 'no row is left in the state that is gone', (string) $fg_repo->count_rides( array( 'status' => 'pending' ) ) );
 
+// The index on the address, which is the whole point of schema 1.6.0. It is
+// asked of the database and not of the code: the claim is about the key the
+// table carries, and a check that only read the DDL statement would be green
+// with a table that still refused the second member. The table name comes from
+// the schema class, the index name is a literal of this test.
+$index_email = $wpdb->get_results( $wpdb->prepare( 'SHOW INDEX FROM ' . FG_Schema::members_table() . ' WHERE Key_name = %s', 'email' ), ARRAY_A );
+fg_ok( 1 === count( $index_email ), 'the address still has an index', (string) count( $index_email ) );
+fg_ok( ! empty( $index_email ) && 1 === (int) $index_email[0]['Non_unique'], 'and it is an ordinary one since schema 1.6.0', ! empty( $index_email ) ? (string) $index_email[0]['Non_unique'] : 'kein Index' );
+$index_nummer = $wpdb->get_results( $wpdb->prepare( 'SHOW INDEX FROM ' . FG_Schema::members_table() . ' WHERE Key_name = %s', 'member_no' ), ARRAY_A );
+fg_ok( ! empty( $index_nummer ) && 0 === (int) $index_nummer[0]['Non_unique'], 'while the member number stays the unique key', ! empty( $index_nummer ) ? (string) $index_nummer[0]['Non_unique'] : 'kein Index' );
+
 $fg_repo->delete_ride( $verwaist );
 $fg_repo->delete_ride( $mit_glied );
 
@@ -1955,6 +1966,53 @@ fg_ok( $fg_repo->has_registration( $bulk_event, $ander->id ), 'other registratio
 fg_ok( null !== $fg_repo->get_member_by_number( '900' ), 'the member record of the club itself is left alone' );
 fg_ok( ! $fg_repo->is_event_participant( $bulk_event, 'opfer@example.org' ), 'an erased member can no longer offer a ride' );
 
+// One address, two members. WordPress hands the exporter and the eraser an
+// address and nothing else — the callback signature is fixed by WordPress, and
+// the member number cannot be asked for there — so the plugin has to say what it
+// does when two people stand behind one mailbox: both of them, and the report
+// names the number. Each of these checks would still pass if only the first of
+// the two were covered, which is why the count is read out of the report and the
+// two first names out of the data, instead of counting rows.
+$geteilt_ma  = 'ehepaar@example.org';
+$erst_ehe    = fg_make_member( '910', $geteilt_ma, 'Erst', 'Ehe' );
+$zweit_ehe   = fg_make_member( '911', $geteilt_ma, 'Zweit', 'Ehe' );
+$ehe_dienst  = fg_make_event( 'Ehepaar aus dem CLI-Test', $soon, '', true, array( 'demand' => 10 ) );
+fg_register( $ehe_dienst, $erst_ehe->id );
+fg_register( $ehe_dienst, $zweit_ehe->id );
+foreach ( array( $erst_ehe, $zweit_ehe ) as $wer ) {
+	$fg_repo->create_ride(
+		array(
+			'event_id'  => $ehe_dienst,
+			'mode'      => FG_RIDE_MODE_OFFER,
+			'origin'    => 'Innenstadt',
+			'member_id' => $wer->id,
+		)
+	);
+}
+
+$paar_export = $privacy->export( $geteilt_ma, 1 );
+$umfang      = '';
+$vornamen    = array();
+foreach ( $paar_export['data'] as $zeile ) {
+	if ( isset( $zeile['item_id'] ) && 'fg-geteilte-adresse' === $zeile['item_id'] ) {
+		$umfang = $zeile['data'][0]['value'];
+	}
+	foreach ( $zeile['data'] as $feld ) {
+		if ( __( 'Vorname', 'arbeitsdienste' ) === $feld['name'] ) {
+			$vornamen[] = $feld['value'];
+		}
+	}
+}
+fg_ok( in_array( 'Erst', $vornamen, true ) && in_array( 'Zweit', $vornamen, true ), 'the export of a shared address holds the rides of both members', implode( ',', $vornamen ) );
+fg_ok( false !== strpos( $umfang, '2 Mitgliedern' ), 'and it says how many members the report covers', $umfang );
+
+$paar_erase = $privacy->erase( $geteilt_ma, 1 );
+fg_ok( (bool) $paar_erase['items_removed'], 'the erasure of a shared address removes something', wp_json_encode( $paar_erase['messages'] ) );
+fg_ok( 0 === count( $fg_repo->get_event_ride_ids( $ehe_dienst ) ), 'and it takes the rides of both members', (string) count( $fg_repo->get_event_ride_ids( $ehe_dienst ) ) );
+fg_ok( ! $fg_repo->has_registration( $ehe_dienst, $erst_ehe->id ) && ! $fg_repo->has_registration( $ehe_dienst, $zweit_ehe->id ), 'and the registrations of both', '' );
+fg_ok( null !== $fg_repo->get_member_by_number( '910' ) && null !== $fg_repo->get_member_by_number( '911' ), 'while the member records of the club are left alone', '' );
+fg_ok( false !== strpos( implode( ' ', $paar_erase['messages'] ), '2 Mitgliedern' ), 'and the report names the number of members as well', implode( ' / ', $paar_erase['messages'] ) );
+
 /* ------------------------------------------------------------------ 15 */
 echo "[15] HTTPS enforcement\n";
 $_SERVER['HTTPS'] = '';
@@ -2097,7 +2155,7 @@ fg_ok( '0042' === $neu_row->member_no, 'spaces around the number are not part of
 fg_ok( 'neu.probe@example.org' === $neu_row->email, 'the address is stored lower-cased', $neu_row->email );
 fg_ok( null !== $fg_repo->get_member_by_number( '0042' ), 'the member is found by the number it is given with' );
 fg_ok( null !== $fg_repo->get_member_by_number( ' 0042 ' ), 'the number is found whatever spaces are typed around it' );
-fg_ok( null !== $fg_repo->get_member_by_email( 'Neu.Probe@Example.ORG' ), 'the address is found whatever case it is typed with' );
+fg_ok( array() !== $fg_repo->get_members_by_email( 'Neu.Probe@Example.ORG' ), 'the address is found whatever case it is typed with' );
 
 // A leading zero is a part of the number and not a digit that was lost. This is
 // the reason the column is text and not a number.
@@ -2105,10 +2163,26 @@ $nullprobe = fg_make_member( '007', 'nullprobe@example.org', 'Null', 'Probe' );
 fg_ok( '007' === $nullprobe->member_no, 'a leading zero survives the round trip', var_export( $nullprobe->member_no, true ) );
 fg_ok( null === $fg_repo->get_member_by_number( '7' ), 'and the number without it is a different member' );
 
-// The two keys are unique. Both refusals are the database speaking, not PHP
-// counting rows, so they hold under two requests at the same moment too.
+// The number is the key and it is the database that says so, not PHP counting
+// rows: this refusal holds under two requests at the same moment too.
 fg_ok( ! $fg_repo->insert_member( array( 'member_no' => '0042', 'email' => 'anders@example.org', 'first_name' => 'A', 'last_name' => 'B' ) ), 'a number belongs to one member only' );
-fg_ok( ! $fg_repo->insert_member( array( 'member_no' => '0055', 'email' => 'neu.probe@example.org', 'first_name' => 'A', 'last_name' => 'B' ) ), 'an address belongs to one member only' );
+
+// The address is not a key since schema 1.6.0, because a married pair with one
+// mailbox is a normal case in a club and the number tells the two apart. Four
+// checks, and the order matters: the pair has to find each of them on its own,
+// or "two members with one address" would be one member found twice.
+$geteilt = 'geteilt@example.org';
+$erst    = $fg_repo->insert_member( array( 'member_no' => '0060', 'email' => $geteilt, 'first_name' => 'Erst', 'last_name' => 'Paar' ) );
+$zweit   = $fg_repo->insert_member( array( 'member_no' => '0061', 'email' => $geteilt, 'first_name' => 'Zweit', 'last_name' => 'Paar' ) );
+fg_ok( $erst > 0 && $zweit > 0, 'two members may share one address', $erst . ' / ' . $zweit );
+$hinter  = $fg_repo->get_members_by_email( $geteilt );
+fg_ok( 2 === count( $hinter ), 'and the address reads back as two members', (string) count( $hinter ) );
+fg_ok( $erst === $hinter[0]->id && $zweit === $hinter[1]->id, 'in the order the rows were written', $hinter[0]->member_no . ' / ' . $hinter[1]->member_no );
+$paar_e = $fg_repo->find_member_for_registration( '0060', $geteilt );
+$paar_z = $fg_repo->find_member_for_registration( '0061', $geteilt );
+fg_ok( $paar_e && 'Erst' === $paar_e->first_name, 'and the pair of number and address finds the first of them', $paar_e ? $paar_e->first_name : 'null' );
+fg_ok( $paar_z && 'Zweit' === $paar_z->first_name, 'and the same address with the other number finds the second', $paar_z ? $paar_z->first_name : 'null' );
+fg_ok( null === $fg_repo->find_member_for_registration( '0062', $geteilt ), 'while a number of nobody is still refused on that address' );
 
 // All four fields are required on an update too. A partial set would have to be
 // completed from the stored row, and then a mistyped field name in the form
@@ -2123,7 +2197,7 @@ $neu_felder = array(
 	'last_name'  => 'Probe',
 );
 fg_ok( $fg_repo->update_member( $neu, $neu_felder ), 'a member may hand its address on' );
-fg_ok( null !== $fg_repo->get_member_by_email( 'anders@example.org' ), 'and the new address finds the same member' );
+fg_ok( array() !== $fg_repo->get_members_by_email( 'anders@example.org' ), 'and the new address finds the same member' );
 fg_ok( $fg_repo->update_member( $neu, array_merge( $neu_felder, array( 'email' => 'neu.probe@example.org' ) ) ), 'and take it back' );
 
 // The member number may be changed too, but not onto one that is spoken for.

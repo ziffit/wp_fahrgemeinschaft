@@ -1188,9 +1188,10 @@ if [ "$(s member "$NEU_ID" member_no)" = "0700" ]; then ok "the leading zero of 
 has "the new member is in the list" "$(curl -sk -b "$JAR" "$MEMBERS")" "0700"
 clean "$neu" "member create"
 
-# The two keys are unique, and a refusal says which of the two it was. A
+# The member number is the key, and a refusal says which number it was. A
 # message that only says "not saved" leaves the club guessing which field to
-# change.
+# change. The address is no longer a key; the case below it is the one that used
+# to be refused.
 newform=$(curl -sk -b "$JAR" "$MEMBERS&member=0")
 MNONCE=$(val /dev/stdin fg_member_nonce <<< "$newform")
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-dup.html" -X POST "$BASE/wp-admin/admin-post.php" \
@@ -1216,13 +1217,19 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-mail.html" -X POST "$BASE/
 	--data-urlencode "fg_first_name=Doppelt" \
 	--data-urlencode "fg_last_name=Probe")
 mail=$(cat "$DIR/member-mail.html")
-# The address is the key of the registration, so it has to belong to exactly one
-# member. The message names the member that holds it, because the person at the
-# keyboard usually knows that and does not know the numbers.
-has "a taken address names the member that holds it" "$mail" "gehört bereits zu Mitglied 0700"
-has "and it says why" "$mail" "Jede E-Mail-Adresse gehört zu genau einem Mitglied"
-if [ "$(s member-by-no "0701" id)" = "missing" ]; then ok "no second member was written"; else bad "no second member was written" "$(s member-by-no "0701" id)"; fi
-clean "$mail" "member with a taken address"
+# An address may stand at two members since schema 1.6.0 — a married pair with
+# one mailbox is what the club's own export holds — so this save goes through.
+# The four checks are one claim in four pieces: the member is written, both rows
+# carry the address, and the screen says which of the members already had it. A
+# check for the message alone would also pass if the save had been refused and
+# the message were a leftover from an earlier run.
+has "a shared address is saved" "$mail" "Das Mitglied wurde angelegt"
+has "and the note names the member that already holds it" "$mail" "Mitglied 0700"
+has "and it says that the address is shared" "$mail" "steht auch bei 1 weiterem Mitglied: Mitglied 0700"
+hasnt "and the old refusal is gone" "$mail" "Jede E-Mail-Adresse gehört zu genau einem Mitglied"
+if [ "$(s member-by-no "0701" id)" = "missing" ]; then bad "the second member is written" "0701 fehlt"; else ok "the second member is written"; fi
+if [ "$(s member-by-no "0701" email)" = "$(s member-by-no "0700" email)" ]; then ok "and both rows carry the same address"; else bad "and both rows carry the same address" "$(s member-by-no "0701" email) / $(s member-by-no "0700" email)"; fi
+clean "$mail" "member with a shared address"
 
 # The four fields are required, and the form marks them as such; a request that
 # leaves one out anyway has to be refused on the server, not only in the
@@ -1361,6 +1368,46 @@ has "and says they are all unchanged" "$ersterbericht" "$MITGLIEDER_VORHER unver
 has "and that nobody is missing from the file" "$ersterbericht" "Alle in der Datenbank vorhandenen Mitglieder standen auch in der Datei"
 if [ "$(s count-members)" = "$MITGLIEDER_VORHER" ]; then ok "the member count is the same after it"; else bad "the member count is the same after it" "$(s count-members) was $MITGLIEDER_VORHER"; fi
 clean "$erster" "import report of the whole list read back"
+
+# Two lines, one address: a married pair with one mailbox. Since schema 1.6.0
+# that is two members and not a file to be refused, and the number is what tells
+# them apart. The file below is the case that ERROR_DUPLICATE_EMAIL and
+# ERROR_EMAIL_TAKEN used to turn away — both are gone, and this is what replaced
+# them: not a message about the address, but two rows in the report.
+printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n0811;ehepaar@example.org;Ehe;Eins\n0812;ehepaar@example.org;Ehe;Zwei\n' > "$IMPORT_CSV"
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import-paar.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+paarbericht=$(printf '%s' "$(cat "$DIR/import-paar.html")" | report)
+has "a file with one address on two lines is imported" "$paarbericht" "2 neue Mitglieder angelegt"
+has "and the report names neither of them as wrong" "$paarbericht" "0 Mitglieder geändert"
+if [ "$(s member-by-no "0811" email)" = "ehepaar@example.org" ] && [ "$(s member-by-no "0812" email)" = "ehepaar@example.org" ]; then
+	ok "and both rows are stored with that address"
+else
+	bad "and both rows are stored with that address" "$(s member-by-no "0811" email) / $(s member-by-no "0812" email)"
+fi
+
+# The number is still a key, and that is the refusal that remains. Until this
+# change there was no case for it anywhere in this section: both keys were
+# unique, but only the address was exercised. Two lines with one number are one
+# member twice, and the second would quietly undo the first.
+printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n0813;doppelt@example.org;Doppelt;Eins\n0813;anders@example.org;Doppelt;Zwei\n' > "$IMPORT_CSV"
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import-nummer.html" -w '%{url_effective}' \
+	-X POST "$BASE/wp-admin/admin-post.php" \
+	-F "action=fg_import_members" \
+	-F "fg_import_nonce=$INONCE" \
+	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
+# A file that is refused has no report: the report is what a processed import
+# answers with, and the refusal is a notice on the screen. Reading the report
+# here would have found nothing at all and the two checks below would have been
+# red for the wrong reason.
+nummerfehler=$(cat "$DIR/import-nummer.html")
+has "a number that stands twice in the file is named" "$nummerfehler" "Die Mitgliedsnummer 0813 steht zweimal in der Datei"
+has "and both of its lines are named" "$nummerfehler" "in Zeile 3 und in Zeile 2"
+has "and it says nothing was imported" "$nummerfehler" "Es wurde nichts importiert"
+if [ "$(s member-by-no "0813" id)" = "missing" ]; then ok "and nothing was imported from that file"; else bad "and nothing was imported from that file" "$(s member-by-no "0813" id)"; fi
 
 # A file with two members the database does not have.
 printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n0801;import1@example.org;Import;Eins\n0802;import2@example.org;Import;Zwei\n' > "$IMPORT_CSV"

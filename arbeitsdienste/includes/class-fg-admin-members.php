@@ -195,7 +195,7 @@ final class FG_Admin_Members {
 						<th scope="row"><label for="fg-member-email"><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<input type="email" id="fg-member-email" name="fg_member_email" class="regular-text" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_EMAIL_MAX ); ?>" value="<?php echo esc_attr( $email ); ?>" required>
-							<span class="description"><?php esc_html_e( 'Jede E-Mail-Adresse gehört zu genau einem Mitglied. Die Adresse wird nicht öffentlich angezeigt.', 'arbeitsdienste' ); ?></span>
+							<span class="description"><?php esc_html_e( 'Schlüssel ist die Mitgliedsnummer; eine E-Mail-Adresse darf bei mehreren Mitgliedern stehen, etwa bei einem Ehepaar mit einem gemeinsamen Postfach. Die Adresse wird nicht öffentlich angezeigt.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 					<tr>
@@ -737,6 +737,7 @@ final class FG_Admin_Members {
 			}
 
 			FG_Admin::store_notice( __( 'Das Mitglied wurde gespeichert.', 'arbeitsdienste' ) );
+			$this->shared_address_notice( $fields['email'], $member_id );
 			$this->redirect_back( $member_id );
 		}
 
@@ -751,11 +752,12 @@ final class FG_Admin_Members {
 		}
 
 		FG_Admin::store_notice( __( 'Das Mitglied wurde angelegt.', 'arbeitsdienste' ) );
+		$this->shared_address_notice( $fields['email'], $new_id );
 		$this->redirect_back( $new_id );
 	}
 
 	/**
-	 * Find out whether a submitted member would take a number or an address that
+	 * Find out whether a submitted member would take a number that
 	 * another member already holds.
 	 *
 	 * @param array $fields   Submitted fields.
@@ -772,16 +774,68 @@ final class FG_Admin_Members {
 			);
 		}
 
-		$mail = $this->repository->get_member_by_email( $fields['email'] );
-		if ( $mail && $mail->id !== (int) $member_id ) {
-			return sprintf(
-				/* translators: %s: member number that already owns the address. */
-				__( 'Diese E-Mail-Adresse gehört bereits zu Mitglied %s. Jede E-Mail-Adresse gehört zu genau einem Mitglied.', 'arbeitsdienste' ),
-				$mail->member_no
+		// The address is deliberately not checked here. Since schema 1.6.0 it may
+		// stand at two members — a married pair with one mailbox — and the member
+		// number is the key of this plugin. A shared address is reported after the
+		// save, in shared_address_notice(); refusing it here would keep the club
+		// from entering what its own member administration holds.
+		return '';
+	}
+
+	/**
+	 * Say that an address belongs to more than one member.
+	 *
+	 * A pair of members on one mailbox is ordinary and usually intended, but it
+	 * is also the state in which both of them receive every message of the other
+	 * — the mails of an entry and of a signup are the one mail that goes out.
+	 * That is worth one line after the save, and it is not a refusal.
+	 *
+	 * @param string $email    Address of the member just written.
+	 * @param int    $member_id ID of that member, so it does not count itself.
+	 * @return void
+	 */
+	private function shared_address_notice( $email, $member_id ) {
+		$email = $this->repository->normalize_email( $email );
+
+		if ( false === $email ) {
+			return;
+		}
+
+		$andere = array();
+		foreach ( $this->repository->get_members_by_email( $email ) as $member ) {
+			if ( $member->id !== (int) $member_id ) {
+				$andere[] = $member;
+			}
+		}
+
+		if ( empty( $andere ) ) {
+			return;
+		}
+
+		$namen = array();
+		foreach ( $andere as $member ) {
+			$namen[] = sprintf(
+				/* translators: 1: member number, 2: first and last name. */
+				__( 'Mitglied %1$s (%2$s)', 'arbeitsdienste' ),
+				$member->member_no,
+				trim( $member->first_name . ' ' . $member->last_name )
 			);
 		}
 
-		return '';
+		FG_Admin::store_notice(
+			sprintf(
+				/* translators: 1: number of members, 2: the members with their numbers and names. */
+				_n(
+					'Hinweis: Diese E-Mail-Adresse steht auch bei %1$d weiterem Mitglied: %2$s. Beide bekommen dieselben Nachrichten.',
+					'Hinweis: Diese E-Mail-Adresse steht auch bei %1$d weiteren Mitgliedern: %2$s. Sie alle bekommen dieselben Nachrichten.',
+					count( $andere ),
+					'arbeitsdienste'
+				),
+				count( $andere ),
+				implode( ', ', $namen )
+			),
+			'warning'
+		);
 	}
 
 	/**

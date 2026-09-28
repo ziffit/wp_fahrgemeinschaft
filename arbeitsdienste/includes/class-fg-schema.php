@@ -20,7 +20,7 @@ final class FG_Schema {
 	 *
 	 * @var string
 	 */
-	const VERSION = '1.5.0';
+	const VERSION = '1.6.0';
 
 	/**
 	 * Option name holding the installed schema version.
@@ -307,7 +307,7 @@ final class FG_Schema {
 	updated_at datetime NOT NULL DEFAULT '1970-01-01 00:00:00',
 	PRIMARY KEY  (id),
 	UNIQUE KEY member_no (member_no),
-	UNIQUE KEY email (email)
+	KEY email (email)
 ) $charset;",
 			"CREATE TABLE $mail_templates (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -342,8 +342,51 @@ final class FG_Schema {
 		self::adopt_ride_members();
 		self::clear_legacy_ride_contacts();
 		self::clear_pending_rides();
+		self::relax_member_email_index();
 
 		update_option( self::OPTION, self::VERSION, false );
+	}
+
+	/**
+	 * Turn the unique index on the member address into an ordinary one.
+	 *
+	 * Until schema 1.6.0 the address was a key beside the member number, and a
+	 * second member could not be given an address that was already in use. The
+	 * usual case for that is a married pair with one mailbox, and it is a real
+	 * case rather than an exotic one: the member number is the key of everything
+	 * in this plugin, and every public form asks for the number and the address
+	 * together. Two members with one address are therefore two people in the
+	 * member list and not one person counted twice, and a club that has such a
+	 * pair in its own administration could not enter it at all — the import
+	 * refused the whole file.
+	 *
+	 * The index is not simply dropped. It is replaced by an ordinary index,
+	 * because the queries behind the privacy export and the erasure look the
+	 * members up by address, and those would walk the table without it.
+	 *
+	 * dbDelta neither converts a unique key into an ordinary one nor drops one,
+	 * so the statement below is the only thing that can do it. It is guarded by
+	 * the index itself: on a fresh installation the key is already an ordinary
+	 * one, and on a second run there is nothing left to change. No value from
+	 * outside reaches the statement, only the table name this class built, so
+	 * prepare() has no placeholder to bind and would be a notice on every call.
+	 *
+	 * @return void
+	 */
+	public static function relax_member_email_index() {
+		global $wpdb;
+
+		$table  = self::members_table();
+		$indexe = $wpdb->get_results(
+			$wpdb->prepare( "SHOW INDEX FROM $table WHERE Key_name = %s", 'email' ),
+			ARRAY_A
+		);
+
+		if ( empty( $indexe ) || 0 !== (int) $indexe[0]['Non_unique'] ) {
+			return;
+		}
+
+		$wpdb->query( "ALTER TABLE $table DROP INDEX email, ADD INDEX email (email)" ); // phpcs:ignore WordPress.DB
 	}
 
 	/**

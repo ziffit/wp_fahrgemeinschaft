@@ -63,19 +63,9 @@ final class FG_Member_Import {
 	const ERROR_DUPLICATE_NUMBER = 'duplicate_number';
 
 	/**
-	 * The same e-mail address stands in the file twice.
-	 */
-	const ERROR_DUPLICATE_EMAIL = 'duplicate_email';
-
-	/**
 	 * A value does not fit the column it belongs in.
 	 */
 	const ERROR_TOO_LONG = 'too_long';
-
-	/**
-	 * A member number in the file belongs to a different member than its address.
-	 */
-	const ERROR_EMAIL_TAKEN = 'email_taken';
 
 	/**
 	 * A row that passed every check could not be written.
@@ -227,7 +217,6 @@ final class FG_Member_Import {
 
 		$rows           = array();
 		$seen_numbers   = array();
-		$seen_emails    = array();
 		$expected_cells = count( $header_cells );
 
 		// The line number is the line in the file as a person reading it in a
@@ -296,17 +285,12 @@ final class FG_Member_Import {
 			}
 			$seen_numbers[ $key_number ] = $zeile;
 
-			if ( isset( $seen_emails[ $row['email'] ] ) ) {
-				return $this->failure(
-					self::ERROR_DUPLICATE_EMAIL,
-					array(
-						'zeile'       => $zeile,
-						'email'       => $row['email'],
-						'erste_zeile' => $seen_emails[ $row['email'] ],
-					)
-				);
-			}
-			$seen_emails[ $row['email'] ] = $zeile;
+			// The address is not checked for duplicates, neither here nor against
+			// the stored members: since schema 1.6.0 two members may stand behind
+			// one address, and a married pair with one mailbox is a line of the
+			// club's own export rather than a mistake in it. The number is what
+			// says whether two lines are the same member, and that is checked
+			// above.
 
 			foreach ( array( 'member_no' => FG_Schema::MEMBER_NO_MAX, 'first_name' => FG_Schema::MEMBER_NAME_MAX, 'last_name' => FG_Schema::MEMBER_NAME_MAX ) as $field => $limit ) {
 				if ( $this->string_length( $row[ $field ] ) > $limit ) {
@@ -352,11 +336,8 @@ final class FG_Member_Import {
 	 */
 	public function apply( array $rows ) {
 		$stored_by_number = array();
-		$stored_by_email  = array();
-
 		foreach ( $this->repository->get_members_page() as $member ) {
 			$stored_by_number[ $this->fold( $member->member_no ) ] = $member;
-			$stored_by_email[ $member->email ]                   = $member;
 		}
 
 		$file_numbers = array();
@@ -370,22 +351,6 @@ final class FG_Member_Import {
 			$file_numbers[ $key ] = true;
 
 			$existing = isset( $stored_by_number[ $key ] ) ? $stored_by_number[ $key ] : null;
-
-			// The address must be free, or it must be the one this member already
-			// has. Anything else would leave two members with one address, and the
-			// registration form identifies a member by that pair.
-			$owner = isset( $stored_by_email[ $email ] ) ? $stored_by_email[ $email ] : null;
-			if ( $owner && ( ! $existing || $owner->id !== $existing->id ) ) {
-				return $this->failure(
-					self::ERROR_EMAIL_TAKEN,
-					array(
-						'zeile'      => isset( $row['zeile'] ) ? (int) $row['zeile'] : 0,
-						'nummer'     => $row['member_no'],
-						'email'      => $email,
-						'gehoert_zu' => $owner->member_no,
-					)
-				);
-			}
 
 			if ( ! $existing ) {
 				$create[] = $row;
@@ -526,15 +491,6 @@ final class FG_Member_Import {
 					(int) $get( 'erste_zeile' )
 				);
 
-			case self::ERROR_DUPLICATE_EMAIL:
-				return sprintf(
-					/* translators: 1: e-mail address, 2: second line number, 3: first line number. */
-					__( 'Die E-Mail-Adresse %1$s steht zweimal in der Datei, in Zeile %2$d und in Zeile %3$d. Jede E-Mail-Adresse gehört zu genau einem Mitglied. Es wurde nichts importiert.', 'arbeitsdienste' ),
-					(string) $get( 'email' ),
-					(int) $get( 'zeile' ),
-					(int) $get( 'erste_zeile' )
-				);
-
 			case self::ERROR_TOO_LONG:
 				return sprintf(
 					/* translators: 1: field label, 2: line number, 3: largest accepted length. */
@@ -542,16 +498,6 @@ final class FG_Member_Import {
 					(string) $get( 'feld' ),
 					(int) $get( 'zeile' ),
 					(int) $get( 'limit' )
-				);
-
-			case self::ERROR_EMAIL_TAKEN:
-				return sprintf(
-					/* translators: 1: line number, 2: member number from the file, 3: e-mail address, 4: member number that already owns the address. */
-					__( 'In Zeile %1$d gehört die E-Mail-Adresse %3$s zu einem anderen Mitglied, nämlich zu Nummer %4$s. Mitgliedsnummer %2$s kann sie nicht übernehmen. Es wurde nichts importiert.', 'arbeitsdienste' ),
-					(int) $get( 'zeile' ),
-					(string) $get( 'nummer' ),
-					(string) $get( 'email' ),
-					(string) $get( 'gehoert_zu' )
 				);
 
 			case self::ERROR_WRITE_FAILED:

@@ -671,19 +671,91 @@ final class FG_Store {
 	}
 
 	/**
-	 * Read one member by e-mail address.
+	 * Read every member with an e-mail address.
+	 *
+	 * The address is not a key: it may stand at two members, and the usual case
+	 * is a married pair with one mailbox. A single-row reader would return
+	 * whichever row the database happened to give first, and every caller of it
+	 * would quietly work on one of the two. The order is fixed so that a list of
+	 * them is the same list on the next call.
 	 *
 	 * @param string $email E-mail address.
-	 * @return FG_Member|null
+	 * @return FG_Member[] Zero or more members, oldest row first.
 	 */
-	public function find_member_by_email( $email ) {
+	public function find_members_by_email( $email ) {
 		$table = FG_Schema::members_table();
-		$row   = $this->db->get_row(
-			$this->db->prepare( "SELECT * FROM $table WHERE email = %s", (string) $email ),
+		$rows  = $this->db->get_results(
+			$this->db->prepare( "SELECT * FROM $table WHERE email = %s ORDER BY id ASC", (string) $email ),
 			ARRAY_A
 		);
 
-		return $row ? $this->to_member( $row ) : null;
+		return array_map( array( $this, 'to_member' ), (array) $rows );
+	}
+
+	/**
+	 * Read the rides of several members at once, oldest first.
+	 *
+	 * The list of members behind one e-mail address is read in one query and not
+	 * one per member: the privacy export and the erasure both walk these rides in
+	 * pages, and a query per member would multiply itself by the number of
+	 * members that share the address. The pagination happens over the combined
+	 * list, so a page is a page and not a page per member.
+	 *
+	 * @param int[] $member_ids Member row IDs.
+	 * @param int   $limit      Batch size.
+	 * @param int   $offset     Offset.
+	 * @return FG_Ride[]
+	 */
+	public function rides_by_members( array $member_ids, $limit, $offset ) {
+		$table = FG_Schema::rides_table();
+		$ids   = array_values( array_unique( array_map( 'intval', $member_ids ) ) );
+
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$spalten = implode( ', ', array_fill( 0, count( $ids ), '%d' ) );
+		$clause  = $this->db->prepare(
+			'LIMIT %d OFFSET %d',
+			max( 1, (int) $limit ),
+			max( 0, (int) $offset )
+		);
+
+		$rows = $this->db->get_results(
+			$this->db->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- the placeholder list is built from a count, not from input.
+				"SELECT * FROM $table WHERE member_id IN ($spalten) ORDER BY id ASC $clause",
+				$ids
+			),
+			ARRAY_A
+		);
+
+		return array_map( array( $this, 'to_ride' ), (array) $rows );
+	}
+
+	/**
+	 * Count the rides of several members at once.
+	 *
+	 * @param int[] $member_ids Member row IDs.
+	 * @return int
+	 */
+	public function count_rides_by_members( array $member_ids ) {
+		$table = FG_Schema::rides_table();
+		$ids   = array_values( array_unique( array_map( 'intval', $member_ids ) ) );
+
+		if ( empty( $ids ) ) {
+			return 0;
+		}
+
+		$spalten = implode( ', ', array_fill( 0, count( $ids ), '%d' ) );
+
+		return (int) $this->db->get_var(
+			$this->db->prepare(
+				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- the placeholder list is built from a count, not from input.
+				"SELECT COUNT(*) FROM $table WHERE member_id IN ($spalten)",
+				$ids
+			)
+		);
 	}
 
 	/**

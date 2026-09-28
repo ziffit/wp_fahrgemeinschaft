@@ -847,34 +847,55 @@ final class FG_Repository {
 	}
 
 	/**
-	 * Get the rides offered by one member.
+	 * Get the rides of the members behind one e-mail address.
 	 *
 	 * The privacy tools hand in an e-mail address, because that is what WordPress
-	 * passes them, and the member behind it is looked up here. Until schema 1.4.0
-	 * the rides table held the address itself, so this was a direct comparison;
-	 * the lookup is the same question one step further along.
+	 * passes them, and the members behind it are looked up here. Until schema
+	 * 1.4.0 the rides table held the address itself, so this was a direct
+	 * comparison; the lookup is the same question one step further along. Since
+	 * schema 1.6.0 there can be more than one member behind the address, and the
+	 * question is asked of all of them: a person who writes from a shared mailbox
+	 * is answered about what the plugin holds for that mailbox, not about
+	 * whichever of the two the database happened to return first.
 	 *
-	 * @param string $email  Contact address of the member.
+	 * @param string $email  Contact address of the members.
 	 * @param int    $limit  Batch size.
 	 * @param int    $offset Offset.
 	 * @return FG_Ride[]
 	 */
 	public function get_rides_by_email( $email, $limit = 10, $offset = 0 ) {
-		$member = $this->get_member_by_email( $email );
+		$email  = $this->normalize_email( $email );
+		$members = false === $email ? array() : $this->get_members_by_email( $email );
 
-		return $member ? $this->store->rides_by_member( $member->id, (int) $limit, (int) $offset ) : array();
+		return $this->store->rides_by_members( $this->member_ids( $members ), (int) $limit, (int) $offset );
 	}
 
 	/**
-	 * Count the rides offered by one member.
+	 * Count the rides of the members behind one e-mail address.
 	 *
-	 * @param string $email Contact address of the member.
+	 * @param string $email Contact address of the members.
 	 * @return int
 	 */
 	public function count_rides_by_email( $email ) {
-		$member = $this->get_member_by_email( $email );
+		$email   = $this->normalize_email( $email );
+		$members = false === $email ? array() : $this->get_members_by_email( $email );
 
-		return $member ? $this->store->count_rides_by_member( $member->id ) : 0;
+		return $this->store->count_rides_by_members( $this->member_ids( $members ) );
+	}
+
+	/**
+	 * The row IDs of a list of members.
+	 *
+	 * @param FG_Member[] $members Members.
+	 * @return int[]
+	 */
+	private function member_ids( array $members ) {
+		return array_map(
+			static function ( FG_Member $member ) {
+				return $member->id;
+			},
+			$members
+		);
 	}
 
 	/**
@@ -921,15 +942,21 @@ final class FG_Repository {
 	}
 
 	/**
-	 * Get a member by e-mail address.
+	 * The members behind one e-mail address.
+	 *
+	 * The address is not a key since schema 1.6.0: two members may stand behind
+	 * one address, and a reader that returned a single row would decide which of
+	 * the two that is without being asked. The list is therefore what this
+	 * method returns, and every caller has to say what it does with more than
+	 * one member.
 	 *
 	 * @param string $email E-mail address.
-	 * @return FG_Member|null
+	 * @return FG_Member[] Zero or more members, oldest row first.
 	 */
-	public function get_member_by_email( $email ) {
+	public function get_members_by_email( $email ) {
 		$email = $this->normalize_email( $email );
 
-		return false === $email ? null : $this->store->find_member_by_email( $email );
+		return false === $email ? array() : $this->store->find_members_by_email( $email );
 	}
 
 	/**
@@ -1024,8 +1051,10 @@ final class FG_Repository {
 			return 0;
 		}
 
-		if ( $this->member_number_taken( $prepared['member_no'] )
-			|| $this->member_email_taken( $prepared['email'] ) ) {
+		// Only the number is checked here. The address may stand at two members,
+		// and the database says so as much since schema 1.6.0; a second check in
+		// this layer would be a rule the table does not share.
+		if ( $this->member_number_taken( $prepared['member_no'] ) ) {
 			return 0;
 		}
 
@@ -1069,11 +1098,12 @@ final class FG_Repository {
 			return false;
 		}
 
+		// As on insert: the number is the key and the address is not. A member may
+		// be given the address of somebody else, and that is a state the club
+		// decides about, not a mistake this layer may refuse.
 		$by_number = $this->store->find_member_by_no( $prepared['member_no'] );
-		$by_email  = $this->store->find_member_by_email( $prepared['email'] );
 
-		if ( ( $by_number && $by_number->id !== $member->id )
-			|| ( $by_email && $by_email->id !== $member->id ) ) {
+		if ( $by_number && $by_number->id !== $member->id ) {
 			return false;
 		}
 
@@ -1221,16 +1251,6 @@ final class FG_Repository {
 	 */
 	private function member_number_taken( $member_no ) {
 		return null !== $this->store->find_member_by_no( $member_no );
-	}
-
-	/**
-	 * Check whether an e-mail address is already in use.
-	 *
-	 * @param string $email E-mail address.
-	 * @return bool
-	 */
-	private function member_email_taken( $email ) {
-		return null !== $this->store->find_member_by_email( $email );
 	}
 
 	/**
