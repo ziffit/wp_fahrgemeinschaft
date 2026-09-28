@@ -127,8 +127,33 @@ final class FG_Mail_Templates {
 	 * @return void
 	 */
 	public static function apply_alternative( $phpmailer, $subject, $text ) {
-		$phpmailer->AltBody = (string) $text;
+		$phpmailer->AltBody = static::plain_text( (string) $text );
 		$phpmailer->Body    = static::render( $subject, $text );
+	}
+
+	/**
+	 * The message as the text part goes out.
+	 *
+	 * A client that shows the text part instead of the layout would otherwise
+	 * show a message without sender, without contact data and without a legal
+	 * notice, and a forwarded message stays plain text for a long time. The
+	 * footer therefore belongs in both alternatives, the logo does not: a text
+	 * part has no images, and the From: header already names the site.
+	 *
+	 * The footer is taken from the same place the layout takes it, so there is
+	 * one place where a club's contact data stands and not two.
+	 *
+	 * @param string $text Message text as plain text.
+	 * @return string
+	 */
+	public static function plain_text( $text ) {
+		$footer = static::get_settings()['footer'];
+
+		if ( '' === $footer ) {
+			return $text;
+		}
+
+		return rtrim( $text ) . "\n\n" . $footer;
 	}
 
 	/**

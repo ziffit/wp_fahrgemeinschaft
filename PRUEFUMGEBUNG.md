@@ -4,7 +4,7 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **Admin-Ebene 443, öffentliches HTTP 179, Mail-Ebene 96,
+Letzter Lauf: 28.09.2026 — **Admin-Ebene 443, öffentliches HTTP 179, Mail-Ebene 78,
 0 Fehler**. Die CLI-Suite ist nicht gelaufen, weil `smoke.php` am Anfang
 alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht und dafür eine
 ausdrückliche Zustimmung braucht; ihre 482 Prüfungen stammen aus dem freigegebenen Lauf
@@ -144,7 +144,12 @@ Zwei Eigenheiten der Suiten, die man kennen muss, bevor man einem Fehlschlag tra
   `tests/fixture.json`; `http.sh` verbraucht es. Wird zwischen zwei Läufen keine neue
   Fixture gebaut, laufen `[1]` bis `[6]` gegen Einmalwerte und schlagen mit
   `invalid_token` fehl — nicht, weil das Plugin etwas kaputt gemacht hätte, sondern
-  weil die Werte schon verbraucht waren.
+  weil die Werte schon verbraucht waren. Das gilt auch, wenn eine Suite von Hand
+  gefahren wird statt über `run-all.sh`: `admin.sh` braucht für den Importbericht den
+  Mitglied `0042` aus derselben Fixture und verbraucht sie dabei. Ein danach gefahrenes
+  `http.sh` läuft dann gegen leere Werte und meldet 24 rote Zeilen, von denen keine
+  einen Fehler des Plugins bezeichnet. Vor jeder von Hand gefahrenen Suite also
+  `http_setup.php` laufen lassen.
 - **Der Bericht eines Imports wird aus einem Rahmen gelesen, nicht aus der Seite.**
   Auf dem Bildschirm der Mitglieder steht der Bericht *und* die Liste aller Mitglieder.
   Eine Prüfung, die eine Mitgliedsnummer auf der ganzen Seite sucht, findet sie in
@@ -752,6 +757,29 @@ Sie liest die Namen vom Bildschirm; für die andere Richtung bräuchte sie eine
 zweite Liste, und eine zweite Liste in einem Test ist genau das, was altert. Die
 Lücke ist damit die Umkehrung der, die die Reihe schließt, und sie ist unter
 „Was die Umgebung nicht prüft“ vermerkt.
+
+### Die achte Reihe (1 Fehlerbild am Textteil der Mail)
+
+Sie ging die Fußzeile in der Nachricht an. Die Behauptung war: **jeder Teil der
+Nachricht trägt sie**. Bis 1.11.2 stand sie nur im HTML-Teil, und die Prüfung
+`mail-mime.php` suchte sie im **ganzen MIME-String** — sie fand sie im HTML-Teil
+und meldete Erfolg. Eine Prüfung, die alle Teile auf einmal liest, ist bei
+`multipart/alternative` genauso blind wie eine, die die ganze Adminseite liest.
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| `AltBody` bekommt wieder den rohen Text | der Textteil trägt die Fußzeile | 3 Prüfungen: `the plain text part carries the footer too`, die Leerzeile zwischen den Abschnitten, und die Fußzeile hinter dem Text |
+
+Die HTML-Prüfung blieb dabei grün — zu Recht, sie behauptet etwas anderes. Genau
+das ist der Punkt: dieselbe Zeichenkette ist in einem Teil vorhanden und im
+anderen nicht, und eine Suche über beide unterscheidet das nicht. `fg_mime_part()`
+liest jetzt einen Teil einzeln, und beide Teile werden einzeln geprüft.
+
+Zwei Prüfungen kamen beim Schreiben hinzu, weil das Nachrüsten des Textteils zwei
+neue Fehlerquellen mitbringt, die es vorher nicht gab: Der Textteil enthält jetzt
+Umlaute, und ohne `charset=UTF-8` kämen sie als zwei Fragezeichen an, während die
+Prüfung nach den ASCII-Zeilen der Fußzeile weiterhin grün bliebe. Und die Fußzeile
+darf kein HTML des Layouts in den Textteil tragen.
 
 ## Umstieg von den eigenen Beitragstypen
 

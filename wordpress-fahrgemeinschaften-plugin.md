@@ -146,7 +146,7 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 ### 6. E-Mails
 
 - E-Mails als `multipart/alternative` mit festem Absender auf der Vereinsdomain: der Text als Plain-Text in der ersten Alternative, das Layout als HTML in der zweiten.
-- Das Layout, das Logo und die Fußzeile stehen in jeder Mail des Plugins. Das Layout wird im Plugin mitgeliefert und ist nicht über den Adminbereich änderbar; konfigurierbar sind nur Logo und Fußzeile.
+- Das Layout, das Logo und die Fußzeile stehen in jeder Mail des Plugins. Das Layout wird im Plugin mitgeliefert und ist nicht über den Adminbereich änderbar; konfigurierbar sind nur Logo und Fußzeile. Die Fußzeile steht in **beiden** Alternativen, im HTML und im reinen Text — sie nennt Absender, Kontakt und den rechtlichen Hinweis, und genau diese Angaben bleiben als Klartext am längsten hängen. Das Logo steht nur im HTML-Teil: ein Textteil hat keine Bilder, und der `From:`-Header nennt den Verein ohnehin.
 - Keine aus Benutzereingaben erzeugten HTML-Inhalte oder Mailheader: Benutzereingaben stehen im HTML-Teil ausschließlich escaped.
 - `Reply-To` für die Kontakt-E-Mail verwenden.
 - SMTP-Zustellung einrichten und SPF/DKIM/DMARC prüfen.

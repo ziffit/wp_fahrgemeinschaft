@@ -76,6 +76,40 @@ function fg_mime_build( $subject, $text ) {
 }
 
 /**
+ * The body of one part of the message.
+ *
+ * A check that looks for a value in the whole MIME string is a check that cannot
+ * fail: the message carries the text and the layout, and whichever part holds
+ * the value answers for it. That is how the footer was checked for a long time —
+ * the check said "the html part carries the footer" while it searched everything,
+ * so a footer that was missing from the text part went unnoticed. This reads one
+ * part and only one.
+ *
+ * @param string $mime The MIME message.
+ * @param string $type Content type to read, e.g. "text/plain".
+ * @return string Part body, or an empty string when the part is not there.
+ */
+function fg_mime_part( $mime, $type ) {
+	// The boundary stands on a continuation line of the content type, with a
+	// leading blank in front of it.
+	if ( ! preg_match( '/^[ \t]*boundary="?([^";\r\n]+)"?/m', $mime, $treffer ) ) {
+		return '';
+	}
+
+	foreach ( explode( '--' . $treffer[1], $mime ) as $stueck ) {
+		if ( false === strpos( $stueck, 'Content-Type: ' . $type ) ) {
+			continue;
+		}
+
+		$teile = preg_split( "/\r?\n\r?\n/", $stueck, 2 );
+
+		return isset( $teile[1] ) ? $teile[1] : '';
+	}
+
+	return '';
+}
+
+/**
  * Create a small image in the media library and return its attachment ID.
  *
  * @return int
@@ -137,10 +171,26 @@ fg_mime_check( 'content type is multipart/alternative', (bool) preg_match( '/^Co
 fg_mime_check( 'a text/plain part is present', false !== strpos( $mime, 'Content-Type: text/plain' ) );
 fg_mime_check( 'a text/html part is present', false !== strpos( $mime, 'Content-Type: text/html' ) );
 fg_mime_check( 'the plain text part comes first', strpos( $mime, 'Content-Type: text/plain' ) < strpos( $mime, 'Content-Type: text/html' ) );
-fg_mime_check( 'the plain text is unchanged', false !== strpos( $mime, 'ride_ref=abc123&token=deadbeef' ) );
-fg_mime_check( 'the html part escapes a visitor value', false !== strpos( $mime, 'Amsel &amp; Söhne &lt;b&gt;' ) );
-fg_mime_check( 'the html part carries the subject as headline', false !== strpos( $mime, 'Fahrgemeinschaft bestätigen – Arbeitsdienst Laber</h1>' ) );
-fg_mime_check( 'the html part carries the footer', false !== strpos( $mime, 'Musterverein e.V.' ) && false !== strpos( $mime, 'info@angeln.example.org' ) && false !== strpos( $mime, '§ 5 TMG' ) );
+$textteil = fg_mime_part( $mime, 'text/plain' );
+$htmlteil = fg_mime_part( $mime, 'text/html' );
+fg_mime_check( 'the plain text part was read on its own', '' !== $textteil );
+fg_mime_check( 'the html part was read on its own', false !== strpos( $htmlteil, '</html>' ) );
+fg_mime_check( 'the plain text is unchanged', false !== strpos( $textteil, 'ride_ref=abc123&token=deadbeef' ) );
+fg_mime_check( 'the html part escapes a visitor value', false !== strpos( $htmlteil, 'Amsel &amp; Söhne &lt;b&gt;' ) );
+fg_mime_check( 'the html part carries the subject as headline', false !== strpos( $htmlteil, 'Fahrgemeinschaft bestätigen – Arbeitsdienst Laber</h1>' ) );
+fg_mime_check( 'the html part carries the footer', false !== strpos( $htmlteil, 'Musterverein e.V.' ) && false !== strpos( $htmlteil, 'info@angeln.example.org' ) && false !== strpos( $htmlteil, '§ 5 TMG' ) );
+// The footer is the sender, the contact data and the legal notice. A client that
+// shows the text part, and every forwarded message for a long time, must carry
+// it as well — a mail without it names nobody.
+fg_mime_check( 'the plain text part carries the footer too', false !== strpos( $textteil, 'Musterverein e.V.' ) && false !== strpos( $textteil, 'info@angeln.example.org' ) && false !== strpos( $textteil, '§ 5 TMG' ) );
+$textteil_lf = str_replace( "\r\n", "\n", $textteil );
+fg_mime_check( 'the footer in the text part keeps the blank line between its sections', false !== strpos( $textteil_lf, "Musterstraße 1\n\n0911 / 000 000" ) );
+fg_mime_check( 'the footer stands behind the text and not in the middle of it', strpos( $textteil_lf, 'Musterverein e.V.' ) > strpos( $textteil_lf, 'deadbeef' ) );
+// A footer with an umlaut makes the text part non-ASCII. Without a charset that
+// says UTF-8 the umlaut arrives as two question marks, and the check above would
+// still be green because it looks for the ASCII lines of the footer.
+fg_mime_check( 'the text part is announced as UTF-8 when it carries an umlaut', false !== strpos( $mime, 'Content-Type: text/plain; charset=UTF-8' ) );
+fg_mime_check( 'the footer in the text part is not the html of the layout', false === strpos( $textteil, '<p' ) && false === strpos( $textteil, '<br' ) );
 fg_mime_check( 'no image is referenced', false === strpos( $mime, '<img' ) );
 fg_mime_check( 'no address of another host is loaded', ! preg_match( '/<(img|table|div|td)[^>]+(src|background)="https?:/i', $mime ) );
 

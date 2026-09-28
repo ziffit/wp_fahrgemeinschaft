@@ -202,7 +202,8 @@ final class FG_Mailer {
 	 * Confirm a duty registration to the member and hand out the way back out.
 	 *
 	 * The message goes through the same path as every other one, so it carries
-	 * the same layout, the same logo and the same footer. There is no separate
+	 * the same layout, the same logo and the same footer. The logo and the layout
+	 * are the HTML part, the footer is in both parts. There is no separate
 	 * template for a duty: what changes is only the text, and a second template
 	 * would be a second place where a club's logo or its contact data has to be
 	 * kept correct.
