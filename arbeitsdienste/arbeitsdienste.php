@@ -24,7 +24,7 @@ defined( 'ABSPATH' ) || exit;
  * Mails oder Datenschutzerklärung: sie kennzeichnet die ausgelieferte Fassung,
  * und wer ein Archiv entpackt, soll an der Zahl erkennen, was darin ist.
  */
-define( 'FG_VERSION', '1.11.2' );
+define( 'FG_VERSION', '1.12.0' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
 /**
  * Name of the element that carries a message after a form was sent.
@@ -39,6 +39,7 @@ define( 'FG_EVENTS_PAGE_SLUG', 'fahrgemeinschaften-events' );
 define( 'FG_MEMBERS_PAGE_SLUG', 'fahrgemeinschaften-members' );
 define( 'FG_RIDES_PAGE_SLUG', 'fahrgemeinschaften-rides' );
 define( 'FG_SETTINGS_PAGE_SLUG', 'fahrgemeinschaften-settings' );
+define( 'FG_MAILS_PAGE_SLUG', 'fahrgemeinschaften-mails' );
 define( 'FG_SETTINGS_OPTION', 'fg_settings' );
 define( 'FG_STATS_OPTION', 'fg_daily_statistics' );
 define( 'FG_CLEANUP_OPTION', 'fg_last_cleanup' );
@@ -66,6 +67,7 @@ require_once __DIR__ . '/includes/class-fg-repository.php';
 require_once __DIR__ . '/includes/class-fg-member-import.php';
 require_once __DIR__ . '/includes/class-fg-stats.php';
 require_once __DIR__ . '/includes/class-fg-mail-templates.php';
+require_once __DIR__ . '/includes/class-fg-mail-texts.php';
 require_once __DIR__ . '/includes/class-fg-mailer.php';
 require_once __DIR__ . '/includes/class-fg-public.php';
 require_once __DIR__ . '/includes/class-fg-public-events.php';
@@ -75,6 +77,7 @@ require_once __DIR__ . '/includes/class-fg-admin-events.php';
 require_once __DIR__ . '/includes/class-fg-admin-members.php';
 require_once __DIR__ . '/includes/class-fg-admin-rides.php';
 require_once __DIR__ . '/includes/class-fg-admin-settings.php';
+require_once __DIR__ . '/includes/class-fg-admin-mails.php';
 require_once __DIR__ . '/includes/class-fg-privacy.php';
 
 /**

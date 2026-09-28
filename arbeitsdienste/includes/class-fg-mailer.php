@@ -51,38 +51,27 @@ final class FG_Mailer {
 			return false;
 		}
 
-		$mode_label = $this->mode_label( $data['mode'] );
-		$body       = array(
-			sprintf( 'Hallo %s,', $data['ride']->alias ),
-			'',
-			'Deine Eintragung wurde vorgemerkt, aber noch nicht veröffentlicht.',
-			'',
-			'Diese Angaben würden öffentlich erscheinen:',
-			'',
-			'Art: ' . $mode_label,
-			'Vorname oder Spitzname: ' . $data['ride']->alias,
-			'Arbeitsdienst: ' . $data['event_label'] . ( $data['event_date'] ? ' (' . $data['event_date'] . ')' : '' ),
-			'Abfahrtsbereich: ' . $data['origin'],
-			'',
-			'Bitte prüfe die Angaben sorgfältig. Vorname oder Spitzname stehen öffentlich. Veröffentliche keine privaten Angaben wie vollständige Namen, genaue Adressen, Telefonnummern oder Kennzeichen.',
-			'',
-			'VERÖFFENTLICHUNG BESTÄTIGEN:',
-			$confirm_url,
-			'',
-			'Du hast einen Fehler gemacht oder möchtest die Eintragung nicht veröffentlichen?',
-			'Eintrag löschen und nicht veröffentlichen:',
-			$discard_url,
-			'',
-			'Bitte leite diese E-Mail mit den enthaltenen Links nicht weiter.',
-			'',
-			'Bei Fragen nutze das Kontaktformular auf der Webseite.',
+		$mail = FG_Mail_Texts::compose(
+			FG_Mail_Texts::RIDE_PENDING,
+			array_merge(
+				$this->person( $to, $data['ride']->alias ),
+				array(
+					'Fahrgemeinschaft'    => (string) $data['ride']->alias,
+					'Art'                 => $this->mode_label( $data['mode'] ),
+					'Arbeitsdienst'       => (string) $data['event_label'],
+					'Arbeitsdienstdetails' => $data['event_label'] . ( $data['event_date'] ? ' (' . $data['event_date'] . ')' : '' ),
+					'Abfahrtsbereich'     => (string) $data['origin'],
+					'Bestaetigungslink'   => (string) $confirm_url,
+					'Verwerfungslink'     => (string) $discard_url,
+				)
+			)
 		);
 
-		return $this->send(
-			$to,
-			'Fahrgemeinschaft bestätigen – ' . $data['event_label'],
-			implode( "\n", $body )
-		);
+		if ( ! $mail ) {
+			return false;
+		}
+
+		return $this->send( $to, $mail['subject'], $mail['body'] );
 	}
 
 	/**
@@ -104,29 +93,23 @@ final class FG_Mailer {
 			return false;
 		}
 
-		$body = array(
-			sprintf( 'Hallo %s,', $ride->alias ),
-			'',
-			'danke für die Veröffentlichung deiner Fahrgemeinschaft.',
-			'',
-			'Du kannst deine Eintragung löschen, wenn du diesen Link aufrufst:',
-			$delete_url,
-			'',
-			'Achtung: Beim endgültigen Löschen erfolgt keine weitere Rückfrage.',
-			'',
-			'Wenn sich jemand zu deiner Eintragung meldet, erhältst du eine E-Mail.',
-			'Jetzt könnt ihr euch direkt austauschen, zum Beispiel auch über Telefonnummern.',
-			'',
-			'Ist der Arbeitsdienst vorbei, wird dein Eintrag automatisch aus der öffentlichen Anzeige entfernt.',
-			'',
-			'Bei Fragen nutze das Kontaktformular auf der Webseite.',
+		$mail = FG_Mail_Texts::compose(
+			FG_Mail_Texts::RIDE_PUBLISHED,
+			array_merge(
+				$this->person( $to, $ride->alias ),
+				array(
+					'Fahrgemeinschaft' => (string) $ride->alias,
+					'Arbeitsdienst'    => (string) $data['event_label'],
+					'Loeschlink'       => (string) $delete_url,
+				)
+			)
 		);
 
-		return $this->send(
-			$to,
-			'Fahrgemeinschaft veröffentlicht – ' . $data['event_label'],
-			implode( "\n", $body )
-		);
+		if ( ! $mail ) {
+			return false;
+		}
+
+		return $this->send( $to, $mail['subject'], $mail['body'] );
 	}
 
 	/**
@@ -155,40 +138,48 @@ final class FG_Mailer {
 			);
 		}
 
-		$creator_body  = array(
-			sprintf( 'Hallo %s,', $ride->alias ),
-			'',
-			'du hast einen Interessenten für deine Fahrgemeinschaft.',
-			'',
-			'E-Mail-Adresse: ' . $requester_email,
-			'',
-			'Schreib der Person direkt eine E-Mail, damit ihr euch abstimmen könnt.',
-			'Wenn du möchtest, kannst du deine Telefonnummer direkt in deiner Antwort nennen.',
-			'',
-			'Bitte melde dich auch bei dem Interessenten, wenn es nicht klappt. Die Person wartet auf eine Antwort.',
-		);
-		$requester_body = array(
-			'Hallo,',
-			'',
-			'Wir haben den Ersteller der Fahrgemeinschaft benachrichtigt.',
-			'Hoffentlich meldet sich bald jemand bei dir.',
-			'',
-			'Bitte prüfe auch deinen Spam-Ordner.',
+		$creator = FG_Mail_Texts::compose(
+			FG_Mail_Texts::CONTACT_CREATOR,
+			array_merge(
+				$this->person( $creator_email, $ride->alias ),
+				array(
+					'Fahrgemeinschaft' => (string) $ride->alias,
+					'Arbeitsdienst'    => (string) $data['event_label'],
+					'Interessent'      => (string) $requester_email,
+				)
+			)
 		);
 
-		$creator_sent = $this->send(
-			$creator_email,
-			'Interesse an deiner Fahrgemeinschaft – ' . $data['event_label'],
-			implode( "\n", $creator_body ),
-			array( 'Reply-To: ' . $requester_email )
+		$requester = FG_Mail_Texts::compose(
+			FG_Mail_Texts::CONTACT_REQUESTER,
+			array_merge(
+				// No name to fall back to: the contact form asks for an address and
+				// nothing else, so an address that belongs to no member is greeted
+				// with a plain "Hallo" instead of the designation of a ride.
+				$this->person( $requester_email, '' ),
+				array(
+					'Fahrgemeinschaft' => (string) $ride->alias,
+					'Arbeitsdienst'    => (string) $data['event_label'],
+				)
+			)
 		);
+
+		$creator_sent = false;
+		if ( $creator ) {
+			$creator_sent = $this->send(
+				$creator_email,
+				$creator['subject'],
+				$creator['body'],
+				array( 'Reply-To: ' . $requester_email )
+			);
+		}
 
 		$requester_sent = false;
-		if ( $creator_sent ) {
+		if ( $creator_sent && $requester ) {
 			$requester_sent = $this->send(
 				$requester_email,
-				'Deine Kontaktanfrage wurde angenommen',
-				implode( "\n", $requester_body )
+				$requester['subject'],
+				$requester['body']
 			);
 		}
 
@@ -208,9 +199,12 @@ final class FG_Mailer {
 	 * would be a second place where a club's logo or its contact data has to be
 	 * kept correct.
 	 *
-	 * The names are not in the message. The member knows who they are, and a name
-	 * in a forwarded message is a piece of personal data that has left the club.
-	 * The duty is named, because that is what the member has to recognise.
+	 * Up to version 1.13.0 the name of the member was not in the message, because
+	 * a name in a forwarded message is a piece of personal data that has left the
+	 * club. Since the club can read the wording of this mail, it can put the name
+	 * in there or leave it out, and the member is greeted by name either way. The
+	 * decision is therefore one the club makes per message, not one this code
+	 * makes for it.
 	 *
 	 * @param int    $registration_id Registration ID.
 	 * @param string $unregister_url  Unregistration link.
@@ -231,32 +225,68 @@ final class FG_Mailer {
 		}
 
 		$date = $this->repository->format_event_date_long( $event );
-		$body = array(
-			'Hallo,',
-			'',
-			'du bist für folgenden Arbeitsdienst angemeldet:',
-			'',
-			'Arbeitsdienst: ' . $event->title,
-			'Datum: ' . $date,
+		$time = $this->repository->format_event_time( $event );
+
+		// A duty without a time used to lose the whole line, because the line was
+		// only added when a time was there. A template cannot lose a line, so the
+		// line stands and says that there is no time. "Beginn:" on its own would
+		// read as a form that was not filled in.
+		$uhrzeit = '' === $time ? __( 'unbekannt', 'arbeitsdienste' ) : $time;
+
+		$mail = FG_Mail_Texts::compose(
+			FG_Mail_Texts::DUTY_SIGNUP,
+			array_merge(
+				$this->person( $to, '' ),
+				array(
+					'Arbeitsdienst'        => (string) $event->title,
+					'Arbeitsdienstdetails' => trim( $event->title . ', ' . $date . ( '' === $time ? '' : ', ' . $time ), ', ' ),
+					'Datum'                => $date,
+					'Uhrzeit'              => $uhrzeit,
+					'Abmeldelink'          => (string) $unregister_url,
+				)
+			)
 		);
 
-		$time = $this->repository->format_event_time( $event );
-		if ( '' !== $time ) {
-			$body[] = 'Beginn: ' . $time;
+		if ( ! $mail ) {
+			return false;
 		}
 
-		$body[] = '';
-		$body[] = 'Bitte prüfe, ob der Termin passt. Wenn nicht, meldest du dich mit diesem Link wieder ab:';
-		$body[] = $unregister_url;
-		$body[] = '';
-		$body[] = 'Der Link führt zu einer Seite, auf der du das Löschen noch einmal bestätigen musst.';
-		$body[] = '';
-		$body[] = 'Wenn du dich für weitere Arbeitsdienste eintragen möchtest, findest du die Termine auf der Webseite.';
+		return $this->send( $to, $mail['subject'], $mail['body'] );
+	}
 
-		return $this->send(
-			$to,
-			'Angemeldet: ' . $event->title,
-			implode( "\n", $body )
+	/**
+	 * The name fields of a recipient, looked up by their address.
+	 *
+	 * The three values belong together: {{Anrede}} is not "Hallo" plus a name
+	 * written in the template, it is the greeting as a whole. Otherwise an
+	 * address that belongs to no member leaves "Hallo ," standing in the mail,
+	 * and that is the one case where a missing name is not a missing name but a
+	 * broken sentence.
+	 *
+	 * Without a member the greeting falls back to the designation the visitor
+	 * chose themselves, and to nothing at all when there is none. A name is
+	 * therefore never invented and never left half-written.
+	 *
+	 * @param string $email        Recipient address.
+	 * @param string $ersatz_name  Name to use when the address belongs to nobody.
+	 * @return array<string, string>
+	 */
+	private function person( $email, $ersatz_name ) {
+		$member   = $this->repository->get_member_by_email( $email );
+		$vorname = $member ? trim( (string) $member->first_name ) : '';
+		$name    = $member ? trim( (string) $member->last_name ) : '';
+
+		// The first name alone, and not "first name, else last name": a member
+		// row without a first name cannot be written, FG_Repository refuses it,
+		// so the second name is never the only one there is. The fallback for an
+		// address that belongs to nobody is the designation the visitor chose,
+		// and where there is none the greeting stays a bare "Hallo".
+		$ansprache = '' !== $vorname ? $vorname : trim( (string) $ersatz_name );
+
+		return array(
+			'Vorname' => $vorname,
+			'Name'    => $name,
+			'Anrede'  => '' === $ansprache ? 'Hallo' : 'Hallo ' . $ansprache,
 		);
 	}
 

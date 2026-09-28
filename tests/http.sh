@@ -1054,7 +1054,14 @@ has "the body names the duty" "$MAIL_BODY" "$DIENST_TITEL"
 has "the body carries the unregister link" "$MAIL_BODY" "fg_duty_action=view"
 has "and the link is for removing the registration" "$MAIL_BODY" "intent=unregister"
 has "the body says that the deletion has to be confirmed" "$MAIL_BODY" "auf der du das Löschen noch einmal bestätigen musst"
-hasnt "the body carries no member name" "$MAIL_BODY" "Cem"
+# The name in a mail is a decision, not an accident: the address belongs to a
+# member, the member has a first name in the member list, and a club mail that
+# greets a member with a bare "Hallo" is one of the things a club complains
+# about. The full name does not go out — the first name says who is meant, and
+# the surname is a second piece of personal data that the sentence does not need.
+has "the body greets the member by the first name" "$MAIL_BODY" "Hallo Cem,"
+hasnt "the body does not carry the full name" "$MAIL_BODY" "Cem Cemu"
+hasnt "the body does not carry the surname" "$MAIL_BODY" "Cemu"
 hasnt "and no last name" "$MAIL_BODY" "Cemu"
 hasnt "and no record number of the member" "$MAIL_BODY" "member_id"
 ABMELDE_URL=$(printf '%s' "$MAIL_BODY" | grep -o "$BASE/?fg_duty_action=view[^ ]*" | head -1)

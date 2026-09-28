@@ -20,7 +20,7 @@ final class FG_Schema {
 	 *
 	 * @var string
 	 */
-	const VERSION = '1.2.0';
+	const VERSION = '1.3.0';
 
 	/**
 	 * Option name holding the installed schema version.
@@ -162,6 +162,22 @@ final class FG_Schema {
 	}
 
 	/**
+	 * Fully qualified mail templates table name.
+	 *
+	 * The texts of the five messages live here, one row per message. The
+	 * defaults stay in the code, FG_Mail_Texts::defaults(), so a row is only
+	 * there when a club has changed something and the "back to the default"
+	 * button has something to delete.
+	 *
+	 * @return string
+	 */
+	public static function mail_templates_table() {
+		global $wpdb;
+
+		return $wpdb->prefix . 'fg_mail_templates';
+	}
+
+	/**
 	 * Create or update all tables when the stored version differs.
 	 *
 	 * @return void
@@ -175,7 +191,7 @@ final class FG_Schema {
 	}
 
 	/**
-	 * Run dbDelta for all four tables.
+	 * Run dbDelta for all five tables.
 	 *
 	 * @return void
 	 */
@@ -186,11 +202,12 @@ final class FG_Schema {
 			require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		}
 
-		$charset       = $wpdb->get_charset_collate();
-		$events        = self::events_table();
-		$rides         = self::rides_table();
-		$members       = self::members_table();
-		$event_members = self::event_members_table();
+		$charset        = $wpdb->get_charset_collate();
+		$events         = self::events_table();
+		$rides          = self::rides_table();
+		$members        = self::members_table();
+		$event_members  = self::event_members_table();
+		$mail_templates = self::mail_templates_table();
 
 		// dbDelta parses this statement; keep one column or key per line and
 		// two spaces after the primary key definition. The four columns behind
@@ -253,6 +270,15 @@ final class FG_Schema {
 	UNIQUE KEY member_no (member_no),
 	UNIQUE KEY email (email)
 ) $charset;",
+			"CREATE TABLE $mail_templates (
+	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+	mail_key varchar(40) NOT NULL DEFAULT '',
+	subject text NULL,
+	body longtext NOT NULL,
+	updated_at datetime NOT NULL DEFAULT '1970-01-01 00:00:00',
+	PRIMARY KEY  (id),
+	UNIQUE KEY mail_key (mail_key)
+) $charset;",
 			"CREATE TABLE $event_members (
 	id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 	event_id bigint(20) unsigned NOT NULL DEFAULT 0,
@@ -305,7 +331,7 @@ final class FG_Schema {
 	}
 
 	/**
-	 * Check whether all four tables are present.
+	 * Check whether all five tables are present.
 	 *
 	 * @return bool
 	 */
@@ -317,6 +343,7 @@ final class FG_Schema {
 			self::rides_table(),
 			self::members_table(),
 			self::event_members_table(),
+			self::mail_templates_table(),
 		);
 
 		foreach ( $tables as $table ) {
@@ -331,7 +358,7 @@ final class FG_Schema {
 	}
 
 	/**
-	 * Remove all four tables. Only called from the uninstall routine.
+	 * Remove all five tables. Only called from the uninstall routine.
 	 *
 	 * @return void
 	 */
@@ -340,8 +367,10 @@ final class FG_Schema {
 
 		// The rows that point at another row go first, so the order stays safe even
 		// without foreign keys: registrations before members and rides, rides
-		// before events. The table names are configuration, not input, but they
+		// before events. The mail texts point at nothing, so they go wherever is
+		// readable. The table names are configuration, not input, but they
 		// are still bound through prepare instead of concatenated.
+		$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS `%s`', self::mail_templates_table() ) );
 		$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS `%s`', self::event_members_table() ) );
 		$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS `%s`', self::members_table() ) );
 		$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS `%s`', self::rides_table() ) );

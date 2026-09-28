@@ -183,9 +183,12 @@ creator=$(printf '%s' "$newest" | tail -1)
 has "requester receives the dictated answer" "$requester" "Wir haben den Ersteller der Fahrgemeinschaft benachrichtigt."
 hasnt "requester mail has no link" "$requester" "http"
 hasnt "requester mail has no html" "$requester" "<a href"
-has "creator mail mentions the sender" "$creator" "du hast einen Interessenten für deine Fahrgemeinschaft."
 has "creator mail carries the requester address" "$creator" "cem@angeln.example.org"
-has "creator mail names the entry" "$creator" "Amsel-Gruppe"
+# The name of the entry stands in the sentence, not beside it: the sentence
+# alone would be sent to every creator of every entry, and one check for each
+# half would stay green if the name had moved into a line of its own where
+# nobody reads it.
+has "creator mail names the entry in the sentence about the interest" "$creator" "du hast einen Interessenten für deine Fahrgemeinschaft Amsel-Gruppe."
 
 echo "[4c] contact request to own entry"
 before=$(count_mails)

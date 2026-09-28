@@ -35,6 +35,38 @@ function fg_state_out( $value ) {
 	echo (string) $value, "\n";
 }
 
+/**
+ * Write one row of the mail texts, without the check of the screen.
+ *
+ * The check belongs to the screen, not to the table: the screen refuses a text
+ * that names a placeholder the message does not have, and a test needs the
+ * state that a club can reach by going back to an older version. The statement
+ * therefore repeats the one in FG_Mail_Texts::save() and skips the refusal on
+ * purpose. Both are one ON DUPLICATE KEY UPDATE, so both produce the same row.
+ *
+ * @param string $table   Table name.
+ * @param string $key     Message key.
+ * @param string $subject Subject with placeholders.
+ * @param string $body    Body with placeholders.
+ * @return string
+ */
+function fg_mail_text_write( $table, $key, $subject, $body ) {
+	global $wpdb;
+
+	$wpdb->query(
+		$wpdb->prepare(
+			"INSERT INTO $table (mail_key, subject, body, updated_at) VALUES (%s, %s, %s, %s)
+			ON DUPLICATE KEY UPDATE subject = VALUES(subject), body = VALUES(body), updated_at = VALUES(updated_at)",
+			(string) $key,
+			(string) $subject,
+			(string) $body,
+			current_time( 'mysql' )
+		)
+	);
+
+	return 'set';
+}
+
 $command = isset( $argv[1] ) ? (string) $argv[1] : '';
 $args    = array_slice( $argv, 2 );
 
@@ -443,6 +475,274 @@ switch ( $command ) {
 			update_option( FG_SETTINGS_OPTION, $stored, false );
 		}
 		fg_state_out( 'restored' );
+		break;
+
+
+	// --- the wording of the five messages
+	//
+	// These read and write the mail texts from the shell. The admin screen is
+	// the way a club reaches them; the shell needs them because a check has to
+	// count rows and read what is really in the table, not what a form sent.
+
+	// mail-text-rows <key>: how many rows stand for this message. The design
+	// says one or none, so a count above one is the finding and not a detail.
+	case 'mail-text-rows':
+		global $wpdb;
+		$mail_table = FG_Schema::mail_templates_table();
+		fg_state_out(
+			(int) $wpdb->get_var(
+				$wpdb->prepare( "SELECT COUNT(*) FROM $mail_table WHERE mail_key = %s", isset( $args[0] ) ? (string) $args[0] : '' )
+			)
+		);
+		break;
+
+	// mail-text-body <key> / mail-text-subject <key>: what is stored, untouched.
+	case 'mail-text-body':
+		fg_state_out( FG_Mail_Texts::stored( isset( $args[0] ) ? (string) $args[0] : '', 'body' ) );
+		break;
+
+	case 'mail-text-subject':
+		fg_state_out( FG_Mail_Texts::stored( isset( $args[0] ) ? (string) $args[0] : '', 'subject' ) );
+		break;
+
+	// mail-text-set <key> <subject> <body>: write without the check of the
+	// screen, which is the point. A club that edits with a newer version and
+	// then goes back to an older one leaves a text behind that this version
+	// refuses; no form can build that state, so no form can be used to test it.
+	case 'mail-text-set':
+		$mail_table = FG_Schema::mail_templates_table();
+		fg_state_out( fg_mail_text_write( $mail_table, $args[0], $args[1], $args[2] ) );
+		break;
+
+	case 'mail-text-reset':
+		FG_Mail_Texts::reset( isset( $args[0] ) ? (string) $args[0] : '' );
+		fg_state_out( 'reset' );
+		break;
+
+	case 'mail-text-notices':
+		fg_state_out( count( FG_Mail_Texts::notices() ) );
+		break;
+
+	case 'mail-text-clear':
+		FG_Mail_Texts::clear_notices();
+		fg_state_out( 'cleared' );
+		break;
+
+	// mail-holdback <event_id>: put a text with a placeholder this version does
+	// not know into the table, then let a real message go out to a real ride and
+	// report what happened. Four numbers, because four different things can fail
+	// on their own: the send can report success, the log can grow anyway, the
+	// club can hear nothing about it, and the log can grow for another reason.
+	case 'mail-holdback':
+		global $wpdb;
+
+		$log          = $wpdb->prefix . 'fg_test_mail_log';
+		$option_vor   = (string) get_option( 'fg_test_mail_enabled', '0' );
+		$mail_table   = FG_Schema::mail_templates_table();
+
+		update_option( 'fg_test_mail_enabled', '1', false );
+		FG_Mail_Texts::clear_notices();
+
+		fg_mail_text_write(
+			$mail_table,
+			FG_Mail_Texts::RIDE_PENDING,
+			'Ein Platzhalter aus der Zukunft',
+			'Hallo {{Anrede}}, dein Eintrag ist da: {{Erfunden}}.'
+		);
+
+		$ride = $repo->create_pending_ride(
+			array(
+				'event_id'      => isset( $args[0] ) ? (int) $args[0] : 0,
+				'mode'          => FG_RIDE_MODE_OFFER,
+				'alias'         => 'Haltepruefung',
+				'origin'        => 'Innenstadt',
+				// An address that belongs to nobody, so the greeting has to fall
+				// back to the designation the visitor chose.
+				'contact_email' => 'niemand@wohnen.example.org',
+			)
+		);
+
+		$vorher = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $log" );
+
+		$mailer = new FG_Mailer( $repo );
+		$weg    = $mailer->send_pending_confirmation(
+			$ride['id'],
+			'https://example.invalid/bestaetigen',
+			'https://example.invalid/verwerfen'
+		);
+
+		$nachher = (int) $wpdb->get_var( "SELECT COUNT(*) FROM $log" );
+		$notizen = count( FG_Mail_Texts::notices() );
+
+		// The wording goes back, because a row that names a placeholder of
+		// another version would stop every message of this one from going out
+		// for as long as it stands there. The notice stays: it is what the club
+		// has to see on the screen, and a command that cleaned it up would
+		// leave the caller nothing to read. FG_Mail_Texts::clear_notices() is
+		// the way out, and the suite checks that it is.
+		FG_Mail_Texts::reset( FG_Mail_Texts::RIDE_PENDING );
+		$repo->delete_ride( $ride['id'] );
+
+		if ( '1' === $option_vor ) {
+			update_option( 'fg_test_mail_enabled', '1', false );
+		} else {
+			delete_option( 'fg_test_mail_enabled' );
+		}
+
+		// Tab, for the same reason as in mail-anrede(): a list is joined with a
+		// comma there, and the caller has to be able to read the parts back.
+		fg_state_out( implode( "\t", array( $weg ? 'sent' : 'held-back', $vorher, $nachher, $notizen ) ) );
+		break;
+
+	// mail-anrede <event_id> <alias> <contact_email> <requester_email>
+	//
+	// The two greetings of a contact request, from the messages that really
+	// went out. This is where the fallback lives: the creator is addressed by
+	// the designation they chose themselves when their address belongs to
+	// nobody, and the interested person, whose address belongs to nobody
+	// either, is greeted with a plain "Hallo" — which is the whole reason the
+	// greeting is a placeholder of its own instead of a "Hallo" written in front
+	// of a name.
+	case 'mail-anrede':
+		global $wpdb;
+
+		$log        = $wpdb->prefix . 'fg_test_mail_log';
+		$option_vor = (string) get_option( 'fg_test_mail_enabled', '0' );
+
+		update_option( 'fg_test_mail_enabled', '1', false );
+
+		$alias         = isset( $args[1] ) ? (string) $args[1] : 'Anredegruppe';
+		$kontakt       = isset( $args[2] ) ? (string) $args[2] : 'niemand@wohnen.example.org';
+		$fragende      = isset( $args[3] ) ? (string) $args[3] : 'fremde.person@example.org';
+		$vorher_id     = (int) $wpdb->get_var( "SELECT COALESCE( MAX( id ), 0 ) FROM $log" );
+
+		$ride = $repo->create_pending_ride(
+			array(
+				'event_id'      => isset( $args[0] ) ? (int) $args[0] : 0,
+				'mode'          => FG_RIDE_MODE_OFFER,
+				'alias'         => $alias,
+				'origin'        => 'Innenstadt',
+				'contact_email' => $kontakt,
+			)
+		);
+
+		$mailer = new FG_Mailer( $repo );
+		$wege   = $mailer->send_contact_notifications( $ride['id'], $fragende );
+
+		$zeilen = $wpdb->get_col( $wpdb->prepare( "SELECT mail_body FROM $log WHERE id > %d ORDER BY id ASC", $vorher_id ) );
+
+		$erste_zeile = static function ( $text ) {
+			$zeilen = explode( "\n", (string) $text );
+
+			return isset( $zeilen[0] ) ? $zeilen[0] : '';
+		};
+
+		// Two messages, creator first: send_contact_notifications() writes the
+		// creator's before the interested person's.
+		$an_kontrakt = $erste_zeile( isset( $zeilen[0] ) ? $zeilen[0] : '' );
+		$an_fragend  = $erste_zeile( isset( $zeilen[1] ) ? $zeilen[1] : '' );
+
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM $log WHERE id > %d",
+				$vorher_id
+			)
+		);
+		$repo->delete_ride( $ride['id'] );
+
+		if ( '1' === $option_vor ) {
+			update_option( 'fg_test_mail_enabled', '1', false );
+		} else {
+			delete_option( 'fg_test_mail_enabled' );
+		}
+
+		// Tab, not the comma that fg_state_out() uses for a list: a greeting ends
+		// in a comma of its own, and "Hallo Anredegruppe,,Hallo,,1,1" cannot be
+		// read back without knowing in which order the parts were joined.
+		fg_state_out(
+			implode(
+				"\t",
+				array(
+					'' === $an_kontrakt ? 'KEINE-MAIL' : $an_kontrakt,
+					'' === $an_fragend ? 'KEINE-MAIL' : $an_fragend,
+					$wege['creator'] ? 1 : 0,
+					$wege['requester'] ? 1 : 0,
+				)
+			)
+		);
+		break;
+
+	// mail-greeting <event_id> <member_no> <email> <first> <last>
+	//
+	// A real member, a real registration, a real message, and then the first
+	// line of what actually went out. The greeting is the one place in a mail
+	// where a missing name shows up as a broken sentence, so it is checked on
+	// the message and not on the helper that builds it.
+	case 'mail-greeting':
+		global $wpdb;
+
+		$log        = $wpdb->prefix . 'fg_test_mail_log';
+		$option_vor = (string) get_option( 'fg_test_mail_enabled', '0' );
+
+		update_option( 'fg_test_mail_enabled', '1', false );
+
+		$event_id  = isset( $args[0] ) ? (int) $args[0] : 0;
+		$member_no = isset( $args[1] ) ? (string) $args[1] : '7001';
+		$email     = isset( $args[2] ) ? (string) $args[2] : '7001@angeln.example.org';
+		$vorname   = isset( $args[3] ) ? (string) $args[3] : '';
+		$name      = isset( $args[4] ) ? (string) $args[4] : '';
+
+		// The newest row of the log is read only if this run put one there. A
+		// command that sends nothing and reads the newest row anyway prints the
+		// greeting of an earlier run, and every check built on it passes for a
+		// reason that has nothing to do with the code under test.
+		$vorher_id = (int) $wpdb->get_var( "SELECT COALESCE( MAX( id ), 0 ) FROM $log" );
+
+		$vorhanden = $repo->get_member_by_number( $member_no );
+		if ( $vorhanden ) {
+			$repo->delete_member( $vorhanden->id );
+		}
+
+		$repo->insert_member(
+			array(
+				'member_no'  => $member_no,
+				'email'      => $email,
+				'first_name' => $vorname,
+				'last_name'  => $name,
+			)
+		);
+
+		$member = $repo->get_member_by_number( $member_no );
+		$created = $member ? $repo->create_registration( $event_id, $member->id, '' ) : array( 'id' => 0 );
+
+		$mailer = new FG_Mailer( $repo );
+		$mailer->send_duty_signup( (int) $created['id'], 'https://example.invalid/abmelden' );
+
+		$zeile = (string) $wpdb->get_var( $wpdb->prepare( "SELECT mail_body FROM $log WHERE id > %d ORDER BY id ASC LIMIT 1", $vorher_id ) );
+
+		if ( '' === $zeile ) {
+			// Said out loud rather than answered with an empty line, because an
+			// empty line would be a greeting of its own and would be checked.
+			$zeile = "KEINE-MAIL: die Anmeldung ging nicht raus";
+		}
+
+		$rest = explode( "\n", $zeile );
+
+		// Everything this command built is removed again, including the log row,
+		// so the count other sections read is the count they left behind.
+		$wpdb->query( "DELETE FROM $log WHERE mail_to = " . $wpdb->prepare( '%s', $email ) );
+		$repo->delete_registration( (int) $created['id'] );
+		if ( $member ) {
+			$repo->delete_member( $member->id );
+		}
+
+		if ( '1' === $option_vor ) {
+			update_option( 'fg_test_mail_enabled', '1', false );
+		} else {
+			delete_option( 'fg_test_mail_enabled' );
+		}
+
+		fg_state_out( isset( $rest[0] ) ? $rest[0] : '' );
 		break;
 
 	case 'tables':

@@ -2,9 +2,9 @@
 /**
  * Uninstall cleanup.
  *
- * Removing the plugin removes its data: all four tables are dropped, so every
- * work service, ride, member and registration is gone for good. Export anything
- * you still need before deleting the plugin.
+ * Removing the plugin removes its data: all five tables are dropped, so every
+ * work service, ride, member, registration and mail text is gone for good.
+ * Export anything you still need before deleting the plugin.
  */
 
 defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
@@ -18,7 +18,7 @@ if ( class_exists( 'FG_Schema' ) ) {
 	// rebuilt from the table prefix.
 	global $wpdb;
 
-	foreach ( array( 'fg_rides', 'fg_event_members', 'fg_events', 'fg_members' ) as $tabelle ) {
+	foreach ( array( 'fg_rides', 'fg_event_members', 'fg_events', 'fg_members', 'fg_mail_templates' ) as $tabelle ) {
 		$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS `%s`', $wpdb->prefix . $tabelle ) );
 	}
 

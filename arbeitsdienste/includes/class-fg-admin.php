@@ -66,6 +66,13 @@ final class FG_Admin {
 	private $settings;
 
 	/**
+	 * Mail texts screen.
+	 *
+	 * @var FG_Admin_Mails
+	 */
+	private $mails;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param FG_Repository|null $repository Optional repository.
@@ -78,6 +85,7 @@ final class FG_Admin {
 		$this->members    = new FG_Admin_Members( $this->repository );
 		$this->rides      = new FG_Admin_Rides( $this->repository );
 		$this->settings   = new FG_Admin_Settings();
+		$this->mails      = new FG_Admin_Mails();
 
 		add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		add_action( 'admin_post_fg_delete_record', array( $this, 'delete_record' ) );
@@ -113,10 +121,10 @@ final class FG_Admin {
 		// add_submenu_page() call whose slug differs from the parent, and
 		// labels it like the parent. Registering the statistics screen first,
 		// under the parent slug, suppresses that entry: the guard in
-		// add_submenu_page() skips it when the slugs are equal. The four
+		// add_submenu_page() skips it when the slugs are equal. The five
 		// screens that carry their own slug are then placed in front of it, which
 		// yields the order Arbeitsdienste, Mitglieder, Fahrgemeinschaften,
-		// Einstellungen, Statistik.
+		// Einstellungen, E-Mails, Statistik.
 		//
 		// The member list stands between the two object screens because it is
 		// what the duties are made of: a duty says how many people it needs, and
@@ -176,6 +184,20 @@ final class FG_Admin {
 			FG_SETTINGS_PAGE_SLUG,
 			array( $this->settings, 'render' ),
 			3
+		);
+
+		// The wording of the messages is not a setting of the club but a text it
+		// writes, and it is the longest of the six screens. It stands behind the
+		// settings because the settings decide what goes into every one of the
+		// mails — logo and footer — and a club reads them in that order.
+		add_submenu_page(
+			FG_ADMIN_MENU_SLUG,
+			__( 'E-Mails', 'arbeitsdienste' ),
+			__( 'E-Mails', 'arbeitsdienste' ),
+			'edit_posts',
+			FG_MAILS_PAGE_SLUG,
+			array( $this->mails, 'render' ),
+			4
 		);
 	}
 
@@ -500,6 +522,7 @@ final class FG_Admin {
 				self::screen_id( FG_MEMBERS_PAGE_SLUG ),
 				self::screen_id( FG_RIDES_PAGE_SLUG ),
 				self::screen_id( FG_SETTINGS_PAGE_SLUG ),
+				self::screen_id( FG_MAILS_PAGE_SLUG ),
 			),
 			true
 		);

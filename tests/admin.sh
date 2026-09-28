@@ -74,6 +74,34 @@ else:
             tiefe += 1
         i = naechste.end()
     print(html.unescape(re.sub(r'<[^>]+>',' ', h[m.end():i])).replace('  ',' '))"; }
+# The same, but the argument is one word out of the class list instead of the
+# whole attribute. rahmen() needs "class=\"notice notice-error\"" to be exactly
+# what it is given, and both boxes of the mail screen carry three words; a helper
+# that fits one class attribute only would either not find them or, once the
+# words are dropped to make it fit, would find a box that is a different one. The
+# word is matched on a word border, so "notice-error" does not match
+# "notice-error fg-mail-meldung" by accident but "mel" does not match the first.
+kasten() { python3 -c "
+import re,sys,html
+h=sys.stdin.read()
+m=re.search(r'<div class=\"[^\"]*\b$1\b[^\"]*\"[^>]*>', h)
+if not m:
+    print('')
+else:
+    tiefe, i = 1, m.end()
+    while i < len(h):
+        naechste = re.compile(r'<div\b|</div>').search(h, i)
+        if not naechste:
+            break
+        if naechste.group(0) == '</div>':
+            tiefe -= 1
+            if tiefe == 0:
+                i = naechste.start()
+                break
+        else:
+            tiefe += 1
+        i = naechste.end()
+    print(html.unescape(re.sub(r'<[^>]+>',' ', h[m.end():i])).replace('  ',' '))"; }
 report() { rahmen 'fg-import-report'; }
 # The block of the import screen that names the accepted header columns, in a
 # form a caller can work with: one line "text<TAB>..." with the sentences, and
@@ -297,7 +325,7 @@ else:
     block = m.group(1)
     block = block[block.find(\"<ul class='wp-submenu\"):]
     print(' > '.join(label.strip() for _, label in re.findall(r\"admin\.php\?page=(fahrgemeinschaften[a-z\-]*)'[^>]*>([^<]*)<\", block)))")
-if [ "$order" = "Arbeitsdienste > Mitglieder > Fahrgemeinschaften > Einstellungen > Statistik" ]; then
+if [ "$order" = "Arbeitsdienste > Mitglieder > Fahrgemeinschaften > Einstellungen > E-Mails > Statistik" ]; then
 	ok "submenu shows the screens in the intended order"
 else
 	bad "submenu shows the screens in the intended order" "found: ${order:-<no menu block>}"
@@ -314,7 +342,7 @@ clean "$stats" "statistics screen"
 
 # The same order has to be visible from every screen of the plugin, and the
 # entry of the screen that is open has to be the marked one.
-for pair in "fahrgemeinschaften-events:Arbeitsdienste" "fahrgemeinschaften-members:Mitglieder" "fahrgemeinschaften-rides:Fahrgemeinschaften" "fahrgemeinschaften-settings:Einstellungen"; do
+for pair in "fahrgemeinschaften-events:Arbeitsdienste" "fahrgemeinschaften-members:Mitglieder" "fahrgemeinschaften-rides:Fahrgemeinschaften" "fahrgemeinschaften-settings:Einstellungen" "fahrgemeinschaften-mails:E-Mails"; do
 	page="${pair%%:*}"
 	label="${pair##*:}"
 	body=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=$page")
@@ -341,7 +369,7 @@ else:
 	else
 		bad "on $label that entry is marked as current" "found: ${here:-none}"
 	fi
-	if [ "$there" = "Arbeitsdienste > Mitglieder > Fahrgemeinschaften > Einstellungen > Statistik" ]; then
+	if [ "$there" = "Arbeitsdienste > Mitglieder > Fahrgemeinschaften > Einstellungen > E-Mails > Statistik" ]; then
 		ok "order holds on the $label screen"
 	else
 		bad "order holds on the $label screen" "found: ${there:-<no menu block>}"
@@ -1966,6 +1994,460 @@ s delete-member "$(s member-by-no 0852 id)" >/dev/null
 s delete-member "$(s member-by-no 0900 id)" >/dev/null
 s delete-member "$EVENTMITGLIED" >/dev/null
 
+
+# --- the wording of the five messages
+echo "[13] the wording of the messages"
+
+ANREDE=$(s make-event "Anrede der Mails" "$(date -d '+40 days' +%Y-%m-%d)" 6 "09:00")
+MAILS="$BASE/wp-admin/admin.php?page=fahrgemeinschaften-mails"
+
+list=$(curl -sk -b "$JAR" "$MAILS")
+clean "$list" "E-Mails screen"
+
+# One row per message plus the header. Counting the rows is what a check against
+# a word cannot do: the label of one message is not in another row, but both
+# would be found on the page.
+zeilen=$(printf '%s' "$list" | grep -c '<tr>')
+if [ "$zeilen" -eq 6 ]; then
+	ok "the list has one row per message and a header ($zeilen rows)"
+else
+	bad "the list has one row per message and a header" "$zeilen rows"
+fi
+
+for BESCHRIFTUNG in "Fahrgemeinschaft bestätigen" "Fahrgemeinschaft veröffentlicht" "Kontaktanfrage an den Ersteller" "Bestätigung an die anfragende Person" "Anmeldung zu einem Arbeitsdienst"; do
+	has "the list names: $BESCHRIFTUNG" "$list" "$BESCHRIFTUNG"
+done
+
+# A message that nobody changed says so. Four of the five are untouched at the
+# start of this section, and the fifth is put back to its default at the end of
+# it, so all five rows carry the word and no row carries a date. The word is
+# counted on a line of its own, because the page also says "Auf Standard
+# zurücksetzen" below the list and that one is not a row.
+standard=$(printf '%s' "$list" | grep -cE 'Standard[[:space:]]*</td>')
+if [ "$standard" -eq 5 ]; then
+	ok "an untouched message says Standard ($standard rows)"
+else
+	bad "an untouched message says Standard" "$standard of 5 rows"
+fi
+hasnt "an untouched message does not carry a date" "$list" "geändert am 1970"
+
+# --- the form of one message
+form=$(curl -sk -b "$JAR" "$MAILS&mail=duty_signup")
+clean "$form" "mail form"
+has "the form opens the requested message" "$form" "Anmeldung zu einem Arbeitsdienst"
+
+# Every placeholder of this message has to be on the page with its meaning. The
+# count is the plugin's own, so a placeholder that exists and is not offered
+# shows up as a difference, and one that is offered and not understood shows up
+# in the other direction.
+angeboten=$(printf '%s' "$form" | grep -o 'data-placeholder="{{[A-Za-z]*}}"' | sort -u | grep -c .)
+erklaert=$(printf '%s' "$form" | grep -o '<code>{{[A-Za-z]*}}</code>' | sort -u | grep -c .)
+if [ "$angeboten" -eq 8 ] && [ "$erklaert" -eq 8 ]; then
+	ok "every placeholder of the message is offered and explained ($angeboten)"
+else
+	bad "every placeholder of the message is offered and explained" "offered=$angeboten explained=$erklaert of 8"
+fi
+for PLATZHALTER in '{{Anrede}}' '{{Vorname}}' '{{Name}}' '{{Arbeitsdienst}}' '{{Arbeitsdienstdetails}}' '{{Datum}}' '{{Uhrzeit}}' '{{Abmeldelink}}'; do
+	has "the form offers $PLATZHALTER" "$form" ">$PLATZHALTER<"
+done
+
+# A placeholder of another message must not be offered here. The unregister link
+# belongs to a duty and not to a contact request, and offering it would let a
+# club write a message that can never be filled.
+hasnt "the form does not offer the confirmation link" "$form" '{{Bestaetigungslink}}'
+hasnt "the form does not offer the interested person" "$form" '{{Interessent}}'
+
+# The nonce fields of the two forms carry different names. They can carry the
+# same one: every form posts its own hidden field, and what it costs is that the
+# page stops saying which form a nonce belongs to — the one name then belongs to
+# two actions, and only one of them can be the one WordPress checks.
+anzahl_nonce=$(printf '%s' "$form" | grep -c 'name="fg_mail_nonce"')
+if [ "$anzahl_nonce" -eq 1 ]; then ok "the nonce field of the save form is named once"; else bad "the nonce field of the save form is named once" "$anzahl_nonce"; fi
+
+NONCE=$(printf '%s' "$form" | grep -o 'name="fg_mail_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+if [ -n "$NONCE" ]; then
+	ok "the save form carries a nonce"
+else
+	bad "the save form carries a nonce" "no field with a value"
+fi
+
+# An unchanged message has nothing to undo, so the way back is not offered and
+# the second form is not printed at all. A reset button that is there and greyed
+# out would be a control that does nothing; a second nonce field on a page that
+# has one form would be a form that cannot be seen.
+anzahl_reset=$(printf '%s' "$form" | grep -c 'fg_mail_reset_nonce')
+if [ "$anzahl_reset" -eq 0 ]; then
+	ok "an unchanged message prints no reset form at all ($anzahl_reset)"
+else
+	bad "an unchanged message prints no reset form at all" "$anzahl_reset mentions"
+fi
+
+# --- a placeholder that this message does not have is refused
+curl -sk -b "$JAR" -o /dev/null -d "action=fg_save_mail&mail=duty_signup&fg_mail_nonce=$NONCE" \
+	--data-urlencode "fg_mail_subject=Mein Betreff" \
+	--data-urlencode "fg_mail_body=Sehr geehrter {{Vorname}}, hier ist {{Unsinn}}." "$BASE/wp-admin/admin-post.php"
+
+nachher=$(curl -sk -b "$JAR" "$MAILS&mail=duty_signup")
+clean "$nachher" "after a refused save"
+# Read out of the box that carries the complaint and not out of the whole page:
+# the placeholder table on the form prints every allowed name, and a search over
+# the page would find {{Abmeldelink}} there whatever the server answered. The box
+# is addressed by the word that only it has — the complaint WordPress prints for
+# the admin, and the box of the held-back messages further down are two different
+# boxes that both carry notice-error.
+klage=$(kasten 'is-dismissible' <<< "$nachher")
+pruef "$klage" "a refused save says the text was not stored" "
+import sys
+h = sys.stdin.read()
+sys.exit(0 if 'wurde nicht gespeichert' in h else 1)
+" "the box of the complaint is empty"
+pruef "$klage" "the complaint names the placeholder that is not allowed" "
+import sys
+h = sys.stdin.read()
+sys.exit(0 if '{{Unsinn}}' in h else 1)
+" "the box does not name {{Unsinn}}"
+pruef "$klage" "the complaint names what is allowed instead" "
+import sys
+h = sys.stdin.read()
+sys.exit(0 if '{{Abmeldelink}}' in h else 1)
+" "the box does not name the allowed set"
+# The complaint is about a name the message does not have, and it has to say so
+# in words as well: {{Unsinn}} alone leaves a club guessing whether the server
+# did not understand the braces or the word inside them.
+pruef "$klage" "the complaint says these are the only ones possible" "
+import sys
+h = sys.stdin.read()
+sys.exit(0 if 'nur diese' in h.lower() else 1)
+" "the box does not say that the listed names are the only possible ones"
+has "the text that was typed is still in the form" "$nachher" "hier ist {{Unsinn}}."
+has "the subject that was typed is still in the form" "$nachher" 'value="Mein Betreff"'
+
+rows=$(s mail-text-rows duty_signup)
+if [ "$rows" = "0" ]; then ok "a refused text is not in the table"; else bad "a refused text is not in the table" "$rows rows"; fi
+
+# --- a change is stored
+NONCE=$(printf '%s' "$nachher" | grep -o 'name="fg_mail_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+curl -sk -b "$JAR" -o /dev/null -d "action=fg_save_mail&mail=duty_signup&fg_mail_nonce=$NONCE" \
+	--data-urlencode "fg_mail_subject=Angemeldet: {{Arbeitsdienst}} am {{Datum}}" \
+	--data-urlencode "fg_mail_body={{Anrede}},
+
+Servus, {{Vorname}}.
+
+Arbeitsdienst: {{Arbeitsdienst}}
+Datum: {{Datum}}
+Abmelden: {{Abmeldelink}}" "$BASE/wp-admin/admin-post.php"
+
+# One row, not two. The key is unique and the save is one statement, so a second
+# save of the same message cannot end in a second row — and two rows would mean
+# the message that goes out is the one that was written last, which nothing
+# would say.
+rows=$(s mail-text-rows duty_signup)
+if [ "$rows" = "1" ]; then ok "a changed text stands in the table exactly once"; else bad "a changed text stands in the table exactly once" "$rows rows"; fi
+
+liste=$(curl -sk -b "$JAR" "$MAILS")
+clean "$liste" "after a save"
+geaendert=$(printf '%s' "$liste" | grep -c 'geändert am 20')
+if [ "$geaendert" -eq 1 ]; then
+	ok "the list says that one message was changed ($geaendert row)"
+else
+	bad "the list says that one message was changed" "$geaendert rows"
+fi
+has "the list shows the new subject" "$liste" "Angemeldet: {{Arbeitsdienst}} am {{Datum}}"
+
+formular=$(curl -sk -b "$JAR" "$MAILS&mail=duty_signup")
+has "the form shows the saved subject" "$formular" 'value="Angemeldet: {{Arbeitsdienst}} am {{Datum}}"'
+has "the form shows the saved text" "$formular" "Servus, {{Vorname}}."
+has "a changed message offers the way back" "$formular" "Auf Standard zurücksetzen"
+
+# What is in the table is what was typed, with its placeholders: the send path
+# needs them and the screen is not the only thing that reads the row.
+s mail-text-body duty_signup > "$DIR/fg-mail-body.txt"
+if grep -q '{{Abmeldelink}}' "$DIR/fg-mail-body.txt"; then
+	ok "the stored text keeps its placeholders"
+else
+	bad "the stored text keeps its placeholders" "$(head -1 "$DIR/fg-mail-body.txt")"
+fi
+if grep -q '{{Unsinn}}' "$DIR/fg-mail-body.txt"; then
+	bad "the refused placeholder is not in the table" "found {{Unsinn}}"
+else
+	ok "the refused placeholder is not in the table"
+fi
+rm -f "$DIR/fg-mail-body.txt"
+
+# --- the preview shows both parts, with invented names
+# The link is the one that names this message. The page carries five of them,
+# one per row of the list above the form, and taking the first hands back the
+# preview of the first message — which is a different text with a different
+# subject, and every check below it would then be about the wrong message
+# without one of them being wrong.
+vorschau_url=$(printf '%s' "$formular" | python3 -c "
+import re, sys, html
+links = [html.unescape(u) for u in re.findall(r'href=\"([^\"]*fg_mail_text_preview[^\"]*)\"', sys.stdin.read())]
+print(next((u for u in links if 'mail=duty_signup' in u), ''))")
+if [ -n "$vorschau_url" ]; then
+	ok "the preview link of this message is findable among the five"
+else
+	bad "the preview link of this message is findable among the five" "no link with mail=duty_signup"
+fi
+vorschau=$(curl -sk -b "$JAR" "$vorschau_url")
+clean "$vorschau" "mail preview"
+has "the preview carries the finished subject" "$vorschau" "Angemeldet: Flussaktion am Samstag, den 12.06.2027"
+has "the preview shows the HTML part" "$vorschau" "</html>"
+has "the preview shows the text part" "$vorschau" "<pre"
+has "the preview greets the invented member" "$vorschau" "Hallo Anton"
+
+# A placeholder left over would be shown to the club as {{Datum}} in the preview
+# and would go out as those seven characters in a real mail. The check counts
+# them over the whole page, because both parts have to be free of them.
+pruef "$vorschau" "no placeholder is left in the preview" "
+import re, sys
+rest = sorted(set(re.findall(r'\{\{[A-Za-z]*\}\}', sys.stdin.read())))
+if rest:
+    print('left over: ' + ', '.join(rest))
+    sys.exit(1)
+sys.exit(0)
+" "the preview still shows a placeholder"
+
+# No recipient may be on a page that is served to a browser, cached with it and
+# screenshotted into a bug report. The names of the sample are read out of the
+# table, and every address that a member of this installation really has has to
+# be missing. The count of addresses is checked with it: a loop over no address
+# proves nothing, and would be green for that reason.
+geprueft=0
+while IFS=';' read -r nummer adresse vorname nachname; do
+	case "$adresse" in
+		*@*) ;;
+		*) continue ;;
+	esac
+	geprueft=$((geprueft+1))
+	hasnt "the preview does not carry the address of member $nummer" "$vorschau" "$adresse"
+	case "$vorname" in
+		Anton) continue ;; # the sample is called Anton too, that cannot decide it
+	esac
+	[ -n "$vorname" ] && hasnt "the preview does not carry the first name of member $nummer" "$vorschau" "$vorname"
+done < <(s members-csv)
+# Two is the smallest number the fixture of this installation ever has, and one
+# address in a loop is a check that would be green for the reason that it ran
+# once. The number goes into the message, so a suite that leaves fewer members
+# behind than it found says so instead of passing quietly.
+if [ "$geprueft" -ge 2 ]; then
+	ok "the check of the real addresses saw at least two of them ($geprueft)"
+else
+	bad "the check of the real addresses saw at least two of them" "$geprueft"
+fi
+
+# The other direction: the preview is meant to show the message as it goes out,
+# and the mail as it goes out carries the footer of the club. A preview without
+# it is the picture the club gets when the setting was never stored — which is
+# what this screen was opened for.
+# The other direction: the preview is meant to show the message as it goes out,
+# and a message as it goes out carries the footer of the club. A preview without
+# it is the picture a club gets when the setting was never stored — which is the
+# complaint this whole screen was opened for. Every line of the stored footer
+# has to be in the text part, not only in the layout: a footer that stands in the
+# HTML and not in the text is a mail without a sender in half of the programmes.
+vorschau_text=$(printf '%s' "$vorschau" | python3 -c "
+import re, sys, html
+m = re.search(r'<pre[^>]*>(.*?)</pre>', sys.stdin.read(), re.S)
+print(html.unescape(m.group(1)) if m else '')")
+fuss=$(s settings footer)
+fuss_zeilen=0
+fuss_fehlend=""
+while IFS= read -r zeile; do
+	[ -n "$zeile" ] || continue
+	fuss_zeilen=$((fuss_zeilen+1))
+	case "$vorschau_text" in
+		*"$zeile"*) ;;
+		*) fuss_fehlend="$fuss_fehlend | $zeile" ;;
+	esac
+done <<< "$fuss"
+if [ -n "$fuss_fehlend" ]; then
+	bad "the preview carries the stored footer in the text part" "missing:$fuss_fehlend"
+elif [ "$fuss_zeilen" -lt 2 ]; then
+	bad "the preview carries the stored footer in the text part" "only $fuss_zeilen lines of footer to look for"
+else
+	ok "the preview carries the stored footer in the text part ($fuss_zeilen lines)"
+fi
+
+# --- a wrong nonce changes nothing
+rows_vorher=$(s mail-text-rows duty_signup)
+curl -sk -o /dev/null -d "action=fg_save_mail&mail=duty_signup&fg_mail_nonce=verfalscht" \
+	--data-urlencode "fg_mail_subject=Übernommen" --data-urlencode "fg_mail_body=Übernommen" "$BASE/wp-admin/admin-post.php"
+if [ "$(s mail-text-rows duty_signup)" = "$rows_vorher" ]; then
+	ok "a wrong nonce changes nothing"
+else
+	bad "a wrong nonce changes nothing" "the text changed anyway"
+fi
+has "a wrong nonce does not change the text" "$(s mail-text-body duty_signup)" "Servus, {{Vorname}}."
+
+# --- one message is not the next
+NONCE=$(printf '%s' "$formular" | grep -o 'name="fg_mail_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+curl -sk -b "$JAR" -o /dev/null -d "action=fg_save_mail&mail=ride_pending&fg_mail_nonce=$NONCE" \
+	--data-urlencode "fg_mail_subject=Fremd" --data-urlencode "fg_mail_body=Fremd" "$BASE/wp-admin/admin-post.php"
+
+# The nonce of the form of one message opens the save of another. It has to:
+# WordPress cannot know which message a form belongs to, and a nonce that
+# belonged to one key would let a club open a form and then be told its own
+# nonce is wrong for a message it never typed.
+has "the text of another message can be saved with the nonce of this form" "$(s mail-text-body ride_pending)" "Fremd"
+
+# A key that is not one of the five must not become a row of its own. The table
+# has no foreign key to a list of keys, so this is the only thing that stops a
+# row that no screen can edit and no send path reads.
+fremd=$(s mail-text-rows fremde_mail)
+if [ "$fremd" = "0" ]; then ok "an unknown key becomes no row"; else bad "an unknown key becomes no row" "$fremd rows"; fi
+
+# The row above is put back now and not at the end of the section: the section
+# continues with a check that makes a message of its own, and a leftover from
+# this one would sit in the table as the state the section hands on.
+s mail-text-reset ride_pending > /dev/null
+if [ "$(s mail-text-rows ride_pending)" = "0" ]; then ok "the row of the other message is gone again"; else bad "the row of the other message is gone again" "$(s mail-text-rows ride_pending) rows"; fi
+
+# --- back to the standard
+formular_geaendert=$(curl -sk -b "$JAR" "$MAILS&mail=duty_signup")
+RESET_NONCE=$(printf '%s' "$formular_geaendert" | grep -o 'name="fg_mail_reset_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+# The way back now exists, and its nonce has to be a field of its own. With the
+# same field name as the save, one of the two actions could not be checked, and
+# which one depends on the order the two handlers are registered in.
+if [ -n "$RESET_NONCE" ]; then
+	ok "a changed message offers a reset with a nonce of its own"
+else
+	bad "a changed message offers a reset with a nonce of its own" "no field with a value"
+fi
+if [ "$RESET_NONCE" = "$NONCE" ]; then
+	bad "the nonce of the reset differs from the nonce of the save" "both are the same value"
+else
+	ok "the nonce of the reset differs from the nonce of the save"
+fi
+
+# The reset with the nonce of the save has to change nothing. The two fields have
+# different names, and a check that only reads the names says nothing about what
+# the server does with them: what counts is that the one nonce does not open the
+# other action.
+curl -sk -b "$JAR" -o /dev/null -d "action=fg_reset_mail&mail=duty_signup&fg_mail_reset_nonce=$NONCE" "$BASE/wp-admin/admin-post.php"
+if [ "$(s mail-text-rows duty_signup)" = "1" ]; then
+	ok "the save nonce does not open the reset"
+else
+	bad "the save nonce does not open the reset" "the text was reset anyway"
+fi
+
+curl -sk -b "$JAR" -o /dev/null -d "action=fg_reset_mail&mail=duty_signup&fg_mail_reset_nonce=$RESET_NONCE" "$BASE/wp-admin/admin-post.php"
+rows=$(s mail-text-rows duty_signup)
+if [ "$rows" = "0" ]; then ok "the reset removes the row"; else bad "the reset removes the row" "$rows rows"; fi
+
+formular=$(curl -sk -b "$JAR" "$MAILS&mail=duty_signup")
+has "the form shows the default text again" "$formular" "Der Link führt zu einer Seite, auf der du das Löschen noch einmal bestätigen musst."
+hasnt "an unchanged message is not offered the way back" "$formular" "Auf Standard zurücksetzen"
+s mail-text-body duty_signup | grep -q "{{Anrede}},$" && ok "the default text starts with the greeting" || bad "the default text starts with the greeting" "$(s mail-text-body duty_signup | head -1)"
+
+# --- a key that is not one of the five opens no form
+fremd_seite=$(curl -sk -b "$JAR" "$MAILS&mail=ganz_andere_mail")
+clean "$fremd_seite" "unknown message"
+hasnt "an unknown key opens no form" "$fremd_seite" 'name="fg_mail_body"'
+hasnt "an unknown key opens no reset" "$fremd_seite" "Auf Standard zurücksetzen"
+
+echo "[13b] the greeting of the messages"
+# The greeting is the one place in a mail where a missing name shows up as a
+# broken sentence, and it is the one thing a club cannot see: every address that
+# does not belong to a member is a case the screen never shows. All four cases
+# are read out of the messages that really went out.
+
+IFS=$'\t' read -r an_ersteller an_fragend gesendet_e gesendet_f <<< "$(s mail-anrede "$ANREDE" Anredegruppe niemand@wohnen.example.org fremde.person@example.org)"
+if [ "$an_ersteller" = "Hallo Anredegruppe," ]; then
+	ok "an address of nobody is greeted by the designation ($an_ersteller)"
+else
+	bad "an address of nobody is greeted by the designation" "$an_ersteller"
+fi
+if [ "$an_fragend" = "Hallo," ]; then
+	ok "an address of nobody with no designation is greeted plainly ($an_fragend)"
+else
+	bad "an address of nobody with no designation is greeted plainly" "$an_fragend"
+fi
+
+# Both addresses belong to members this section builds itself. Using a member of
+# the fixture would tie the check to what the sections before it leave behind,
+# and one of them prunes every member without a work service — so the address
+# would be a stranger again and the greeting would fall back to the designation,
+# green for a reason that has nothing to do with the code under test.
+neu 7201 ersteller@angeln.example.org Greta Gruen
+IFS=$'\t' read -r an_ersteller an_fragend _ _ <<< "$(s mail-anrede "$ANREDE" Anredegruppe ersteller@angeln.example.org fremde.person@example.org)"
+if [ "$an_ersteller" = "Hallo Greta," ]; then
+	ok "the member behind the address is greeted by the first name ($an_ersteller)"
+else
+	bad "the member behind the address is greeted by the first name" "$an_ersteller"
+fi
+
+neu 7202 fragende@angeln.example.org Frieda Fraglich
+IFS=$'\t' read -r an_ersteller an_fragend _ _ <<< "$(s mail-anrede "$ANREDE" Anredegruppe niemand@wohnen.example.org fragende@angeln.example.org)"
+if [ "$an_fragend" = "Hallo Frieda," ]; then
+	ok "a member who asks for contact is greeted by the first name ($an_fragend)"
+else
+	bad "a member who asks for contact is greeted by the first name" "$an_fragend"
+fi
+s delete-member "$(s member-by-no 7201 id)" > /dev/null
+s delete-member "$(s member-by-no 7202 id)" > /dev/null
+
+anrede_dienst=$(s mail-greeting "$ANREDE" 7101 dienst@angeln.example.org Anton Beispiel)
+if [ "$anrede_dienst" = "Hallo Anton," ]; then
+	ok "the signup mail greets the member by the first name ($anrede_dienst)"
+else
+	bad "the signup mail greets the member by the first name" "$anrede_dienst"
+fi
+
+# The greeting has to be there in the finished message and not only in a helper.
+# Two of the four cases above are the two ends of the fallback, and a member's
+# name is a piece of personal data that leaves the club with the mail.
+s mail-text-body duty_signup | grep -q '^{{Anrede}},' && ok "the default text of the signup mail begins with the greeting" || bad "the default text of the signup mail begins with the greeting" "$(s mail-text-body duty_signup | head -1)"
+
+echo "[13c] a stored text with a placeholder this version does not know"
+# A club can edit with a newer version and then go back to an older one. The
+# text in the table then names a placeholder this version has no value for, and
+# the message must not go out half-empty. The row is written directly, because
+# the screen refuses it — no form can build the state that has to be tested.
+ergebnis=$(s mail-holdback "$ANREDE")
+IFS=$'\t' read -r weg vorher nachher notizen <<< "$ergebnis"
+if [ "$weg" = "held-back" ]; then
+	ok "the send reports that it sent nothing ($weg)"
+else
+	bad "the send reports that it sent nothing" "$weg"
+fi
+if [ "$nachher" = "$vorher" ]; then
+	ok "the mail log does not grow ($vorher before, $nachher after)"
+else
+	bad "the mail log does not grow" "$vorher before, $nachher after"
+fi
+if [ "$notizen" -ge 1 ] 2>/dev/null; then
+	ok "a notice stands for the club ($notizen)"
+else
+	bad "a notice stands for the club" "$notizen notices"
+fi
+
+meldung=$(kasten 'fg-mail-meldung' <<< "$(curl -sk -b "$JAR" "$MAILS")")
+pruef "$meldung" "the notice names the message" "
+import sys
+sys.exit(0 if 'Fahrgemeinschaft bestätigen' in sys.stdin.read() else 1)
+" "the box does not name the message"
+pruef "$meldung" "the notice says the message was not sent" "
+import sys
+sys.exit(0 if 'nicht verschickt' in sys.stdin.read() else 1)
+" "the box does not say that the message was held back"
+pruef "$meldung" "the notice names the unknown placeholder" "
+import sys
+sys.exit(0 if '{{Erfunden}}' in sys.stdin.read() else 1)
+" "the box does not name {{Erfunden}}"
+# It must not promise a queue. There is no queue, and a sentence about one
+# leaves a club waiting for a mail that is gone.
+pruef "$meldung" "the notice does not promise a queue" "
+import sys
+h = sys.stdin.read()
+sys.exit(1 if ('Warteschlange' in h or 'geht raus, sobald' in h) else 0)
+" "the notice promises a queue that does not exist"
+
+s mail-text-clear > /dev/null
+if [ "$(s mail-text-notices)" = "0" ]; then ok "the notices can be cleared"; else bad "the notices can be cleared" "$(s mail-text-notices) left"; fi
+hasnt "a cleared notice is gone from the screen" "$(curl -sk -b "$JAR" "$MAILS")" "nicht verschickt"
+if [ "$(s mail-text-rows ride_pending)" = "0" ]; then ok "the held-back text is gone again"; else bad "the held-back text is gone again" "$(s mail-text-rows ride_pending) rows"; fi
+
 # Every work duty of this run is removed again, so a repeated run does not pile
 # them up in the offer form of a manual test afterwards. The list is written
 # here, at the end, and holds every id the suite has built — not the ones the
@@ -1973,7 +2455,7 @@ s delete-member "$EVENTMITGLIED" >/dev/null
 # section that created it is a duty that is left behind as soon as that
 # section changes, and that is how three of them survived a run that reported
 # itself clean.
-ALLEDIENSTE="$EVENT_ID $CASCADE $LOESCH $VOLLEDUTY $FREIES $OHNE $WEG $NEW_ID"
+ALLEDIENSTE="$EVENT_ID $CASCADE $LOESCH $VOLLEDUTY $FREIES $OHNE $WEG $NEW_ID $ANREDE"
 ERWARTET=0
 GERAUMT=0
 for dienst in $ALLEDIENSTE; do

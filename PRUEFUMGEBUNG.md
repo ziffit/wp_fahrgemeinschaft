@@ -4,7 +4,7 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **Admin-Ebene 443, öffentliches HTTP 179, Mail-Ebene 78,
+Letzter Lauf: 28.09.2026 — **Admin-Ebene 531, öffentliches HTTP 181, Mail-Ebene 78,
 0 Fehler**. Die CLI-Suite ist nicht gelaufen, weil `smoke.php` am Anfang
 alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht und dafür eine
 ausdrückliche Zustimmung braucht; ihre 482 Prüfungen stammen aus dem freigegebenen Lauf
@@ -136,7 +136,7 @@ Fahrgemeinschaften und Mitglieder sowie die Statistik-Option, es gibt also keine
 | CLI | `tests/smoke.php` | WordPress im Container, Abschnitte 0–20: Tabellen, Aktivitätsgrenze, öffentliche Seite samt beider Leermeldungen, Vormerkung, Token-Links, Kontakt, Löschung, Ablehnungen, Admin, Bereinigung, Datenschutz, HTTPS, Markup-Hygiene und die Mitgliederverwaltung; dazu die Abschnitte `[2a]` (die vier freiwilligen Angaben eines Arbeitsdienstes) und `[3c]` (die Liste der Arbeitsdienste) |
 | Öffentlich | `tests/http_setup.php` + `tests/http.sh` | `curl` gegen Apache über TLS: Weiterleitung, Standalone-Seiten mit Kopfzeilen, 405 bei GET, Hinweise, keine personenbezogenen Daten im HTML, Aufbau der kompakten Liste, Reihenfolge von Sprunglink, Liste und Formular, Rückkehrweg mit Sprungziel, Namensfeld gegen Kontaktdaten über den Zähler `publish_personal_data`, Verhalten der Schaltflächen im Stylesheet; dazu die Abschnitte `[8]` für die Arbeitsdienstliste auf einer eigenen Seite und `[9]` für den vollständigen Weg von der Anmeldung über die E-Mail bis zum Abmelden |
 | Mail-Ebene | `tests/mail.sh` + `tests/mail-mime.php` | Die Meldungen, die ein Browseraufruf wirklich an `wp_mail()` übergibt: Wortlaut, Empfänger, Zustellfehler. Dazu die fertige MIME-Struktur: `multipart/alternative`, Text als erste Alternative, HTML als zweite, eingebettetes Logo unter `cid:logo` |
-| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der fünf Unterseiten auf jeder Seite), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die Abschnitte `[9]` (Mitgliederverwaltung), `[10]` (CSV-Import), `[11]` (Anmeldung zu einem Dienst) und `[12]` (Aufräumen um alle Mitglieder ohne Arbeitsdienst) |
+| Admin | `tests/admin.sh` | Echter Login, echte Roundtrips über `admin-post.php`: Navigation (Name des Obermenüpunkts, Reihenfolge und Markierung der sechs Unterseiten auf jeder Seite, die neue Seite E-Mails eingeschlossen), Arbeitsdienst anlegen, ändern, ungültige Daten, nonce-geschütztes endgültiges Löschen, Kaskadenlöschung, Einstellungen der E-Mail inklusive Pflichtprüfung, Mediathek-Auswahl und Vorschau; dazu die Abschnitte `[9]` (Mitgliederverwaltung), `[10]` (CSV-Import), `[11]` (Anmeldung zu einem Dienst) und `[12]` (Aufräumen um alle Mitglieder ohne Arbeitsdienst) und `[13]` mit `[13b]` (Anrede der Nachrichten) und `[13c]` (Zurückhaltung bei einem unbekannten Platzhalter) — Wortlaut der fünf E-Mails, Platzhalter je Nachricht, Vorschau, Zurücksetzen |
 
 Zwei Eigenheiten der Suiten, die man kennen muss, bevor man einem Fehlschlag traut:
 
@@ -255,6 +255,63 @@ anderen anfangen und zwei Adressen nicht. Für den Hinweis nach dem Löschen gil
 dasselbe: Geprüft wird der **ganze** Text, nicht ein Wort daraus — die Seite erklärt im
 Abschnitt darüber in Worten, dass gelöscht wird, eine Prüfung, die die Seite liest, ist
 also immer grün.
+
+`[13]` in `admin.sh` ist der Wortlaut der fünf E-Mails. Drei Dinge darin sind nicht
+selbstverständlich und deshalb hier festgehalten:
+
+**Der Vorschau-Link wird nach seiner Nachricht gewählt, nicht als erster genommen.** Die
+Seite trägt fünf Vorschau-Links — einen je Zeile der Liste — und der erste gehört zur
+ersten Nachricht, nicht zu der, deren Formular offen ist. Ein Test, der den ersten nimmt,
+prüft eine andere Nachricht und bleibt grün. Das ist beim ersten Lauf des Abschnitts
+passiert: Die Prüfung auf den fertigen Betreff schlug fehl, während die auf den Textteil
+und die auf den HTML-Teil grün waren, und der Betreff stand in der Tabelle — nur in der
+falschen Zeile.
+
+**Die Klage über einen abgelehnten Text wird aus der Box gelesen, die sie trägt.** Die
+Formulare drucken unter dem Textfeld eine Tabelle mit allen erlaubten Platzhaltern, und
+eine Suche über die ganze Seite findet `{{Abmeldelink}}` dort, was der Server auch geantwortet
+hat. Die Klage steht in der Box, die WordPress für den Admin druckt, die Hinweise auf
+zurückgehaltene Nachrichten in einer anderen; beide tragen `notice-error` und sind
+deshalb über das Wort nicht zu unterscheiden. Der neue Helfer `kasten()` nimmt **ein Wort aus
+der Klassenliste**, während `rahmen()` die ganze Klasse verlangt — beide braucht es, und
+der Unterschied steht am Helfer.
+
+**Die Adressen der echten Mitglieder werden aus der Tabelle gelesen, nicht fest verdrahtet.**
+Die Vorschau zeigt erfundene Namen, und der Grund ist die Abwesenheit echter Daten. Eine
+feste Adresse im Test wäre eine zweite Wahrheit, die stimmen könnte, ohne dass die Vorschau
+etwas damit zu tun hat; gelesen wird `members-csv`, und die Zahl der geprüften Adressen
+wird mitprotokolliert, weil eine Schleife über keine Adresse nichts beweist und grün wäre.
+Die Adresse **des Vereins** steht dagegen mit Absicht in der Vorschau: Der Footer ist Teil
+der Nachricht, und eine Vorschau ohne ihn wäre genau das Bild, das diese Seite
+ausgelöst hat. Geprüft wird deshalb nicht die Domain, sondern jede einzelne
+Mitgliederadresse — und der Footer zusätzlich **im Textteil**, was seit 1.11.2 der
+eigentliche Fehlerort war.
+
+`[13b]` liest die Anreden aus den Nachrichten, die **wirklich verschickt wurden**: Der
+Zustandsbefehl `mail-anrede` legt eine Fahrt an, schickt die beiden Nachrichten der
+Kontaktanfrage an eigene Adressen und gibt die erste Zeile beider Nachrichten zurück;
+`mail-greeting` macht dasselbe für die Anmeldebestätigung. Zwei Fehler sind dabei gefallen und
+beide wären still gewesen: Der Befehl las zuerst die **neueste** Zeile des Mailsystems, und
+weil nichts verschickt worden war — der Dienst war voll — las er die Zeile eines früheren
+Laufs und meldete dreimal denselben Namen. Jetzt wird die höchste Nummer vor dem Versand
+gemerkt und nur eine spätere Zeile gelesen, und kommt keine, antwortet der Befehl mit dem
+Wort `KEINE-MAIL` statt mit einer leeren Zeile: Eine leere Zeile wäre eine Anrede, die
+mitgeprüft würde. Und die Adressen, die zu einem Mitglied gehören, baut sich der Abschnitt
+selbst — ein Abschnitt davor räumt jedes Mitglied ohne Anmeldung weg, eine Fixture-Adresse
+wäre also wieder eine Fremde gewesen, und die Begründung wäre auf den Algorithmmus
+zurückgefallen.
+
+`[13c]` ist der einzige Abschnitt, der einen Zustand schreibt, den kein Formular erzeugen
+kann: `mail-text-set` legt einen Text mit einem Platzhalter in die Tabelle, den diese Fassung
+nicht kennt, weil das Formular ihn ablehnen würde. Danach lässt `mail-holdback` eine echte
+Nachricht an eine echte Fahrt gehen und gibt vier Dinge zurück: den Rückgabewert des
+Versands, die Zahl der Zeilen im Mailsystem **vorher und nachher** und die Zahl der
+Hinweise. Drei Fehler können dort unabhängig voneinander passieren, und eine Prüfung, die
+nur eine davon misst, wäre bei den anderen beiden grün. Der Befehl räumt die Fahrt und
+den Text weg, **nicht** den Hinweis — sonst hätte der Abschnitt nichts zu lesen; gelöscht wird
+er am Ende des Abschnitts, wo auch geprüft wird, dass er sich überhaupt löschen lässt. Der
+Hinweis darf keine Warteschlange versprechen, weil es keine gibt; diese eine Prüfung sucht
+nach den Worten und wacht darüber.
 
 Der Abschnitt prüft außerdem das, was beim Löschen einzelner Anmeldungen sonst niemand
 prüft: dass ein **abgewiesener** Aufruf nichts bewirkt. Ein falscher Nonce muss mit 403
@@ -496,7 +553,13 @@ und schreibt über `FG_Repository` (`statuses`, `count`, `count-published`, `cou
 `event`, `ride`, `make-event`, `make-ride`, `find-event`, `exists-*`, `delete-*`, `purge`),
 damit die Skripte den Zustand der Installation prüfen können, ohne WordPress-Beiträge zu
 kennen. Feldzugriffe laufen über eine Whitelist; jeder Befehl gibt genau einen Wert aus.
-Dazu kommen `settings`, `settings-json` und `settings-restore` für die Option `fg_settings`:
+Dazu kommen für den Wortlaut der E-Mails `mail-text-rows`, `mail-text-body`,
+`mail-text-subject`, `mail-text-set`, `mail-text-reset`, `mail-text-notices` und
+`mail-text-clear` — und für die Nachrichten, die wirklich hinausgehen,
+`mail-anrede`, `mail-greeting` und `mail-holdback`. `mail-text-set` schreibt ohne die
+Prüfung des Formulars, weil sonst kein Formular den Zustand bauen könnte, den
+`mail-holdback` prüft. Dazu kommen `settings`, `settings-json` und `settings-restore`
+für die Option `fg_settings`:
 Die Admin-Suite liest die Option vor dem eigenen Lauf und stellt sie danach wieder her, damit
 eine von Hand gepflegte Fußzeile den Testlauf übersteht. Weil die Option dabei nicht leer
 sein muss, vergleichen die Prüfungen des Speicherns jeweils den Zustand davor und danach, statt
