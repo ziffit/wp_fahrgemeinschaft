@@ -237,7 +237,7 @@ final class FG_Public {
 			<?php else : ?>
 				<?php // The note says the same thing for every entry, so it is stated once for the whole list. ?>
 				<p class="fg-hint fg-list-hint">
-					<?php esc_html_e( 'Deine E-Mail-Adresse wird nur an das Mitglied gesendet, das die Fahrgemeinschaft angeboten hat, sofern sie zu einem Mitglied gehört, das sich für den Arbeitsdienst dieses Eintrags eingetragen hat. Angezeigt wird nur der Vorname aus der Mitgliederverwaltung.', 'arbeitsdienste' ); ?>
+					<?php esc_html_e( 'Deine Mitgliedsnummer und deine E-Mail-Adresse werden nur an das Mitglied gesendet, das die Fahrgemeinschaft angeboten hat, sofern beide zu einem Mitglied gehören, das sich für den Arbeitsdienst dieses Eintrags eingetragen hat. Angezeigt wird nur der Vorname aus der Mitgliederverwaltung.', 'arbeitsdienste' ); ?>
 					<?php if ( $privacy_url ) : ?>
 						<a href="<?php echo esc_url( $privacy_url ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'arbeitsdienste' ); ?></a>
 					<?php endif; ?>

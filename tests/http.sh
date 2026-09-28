@@ -551,13 +551,21 @@ sys.exit(0 if ok else 1)
 # The note is the same for every entry and is therefore stated once. The count
 # only says something with more than one entry, so both belong in one check: a
 # separate one would pass on a page that happens to have a single entry.
-struct "$body" "the note about the address is stated once for the whole list" "
+struct "$body" "the note about the pair is stated once for the whole list" "
 import re, sys
 h = sys.stdin.read()
 entries = len(re.findall(r'<article class=\"fg-ride\">', h))
-notes = h.count('wird nur an das Mitglied gesendet, das die Fahrgemeinschaft angeboten hat')
-sys.exit(0 if entries > 1 and notes == 1 else 1)
-" "not more than one entry, or the note is not stated exactly once"
+# The middle of the sentence, without the verb in front of it: the verb is
+# "werden" since the note names two values, and a check that carried the whole
+# sentence would have to be rewritten with every wording of it.
+notes = h.count('nur an das Mitglied gesendet, das die Fahrgemeinschaft angeboten hat')
+# The count alone proves nothing about the wording: it is the same sentence as
+# before, with the pair in front of it. A note that named the address alone
+# would pass a counting check, so the two values are looked for in it as well.
+nennt_paar = ('Deine Mitgliedsnummer und deine E-Mail-Adresse' in h
+              and 'sofern beide zu einem Mitglied gehören' in h)
+sys.exit(0 if entries > 1 and notes == 1 and nennt_paar else 1)
+" "not more than one entry, the note is not stated exactly once, or it names one of the two values alone"
 
 # --- 5d. the list comes first, the form below, a link leads down to it
 echo "[5d] list before form"
