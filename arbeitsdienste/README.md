@@ -2,7 +2,7 @@
 
 Minimales WordPress-Plugin zur Planung von Vereinsarbeitsdiensten, zur Anmeldung von Mitgliedern zu einem Dienst und zur Koordination der Fahrgemeinschaften je Dienst.
 
-Fassung 1.23.0.
+Fassung 1.24.0.
 
 ## Installation
 
@@ -202,6 +202,15 @@ Vor einer Installation sollten in einer Staging-Installation mindestens diese F�
   Suche das ganze Wort mit jedem Feld einzeln, und ein solcher Begriff fand niemanden. Jetzt
   muss jedes Wort des Suchbegriffs irgendwo in der Zeile stehen — und „0042 Mül" findet die
   Person mit der Nummer 0042.
+- **Nur der Name einer Zeile ist fett, der Wert nie.** Die linke Spalte der Karte ist der
+  Rahmen, die rechte ist der Text, und ein Wert in der Stärke seines Namens konkurriert mit
+  dem Namen um den Blick: Auf einer Karte mit sieben Zeilen landet das Auge auf drei davon,
+  und verloren geht die Struktur. Bis Version 1.24.0 war der **Wert** der ersten Zeile, das
+  Datum, fett — mit der Begründung, es sei das Erste, wonach man schaut. Es ist aber die
+  **erste Zeile**, und das ist Betonung genug. Ebenso ist es mit der Zahl der freien Plätze:
+  Was einen vollen von einem offenen Dienst unterscheidet, ist die Farbe — eine Null ist ein
+  Hinweis und keine Warnung, denn ein voller Dienst ist der normale Zustand eines Dienstes,
+  in dem alle da sind.
 - **Auf dem Telefon steht der Name einer Zeile über ihrem Wert.** Die Tabelle eines
   Arbeitsdienstes ist auf einem Desktop eine Tabelle mit zwei Spalten: links der Name, rechts
   der Wert, und der Name nimmt nur so viel Platz wie sein Wort braucht. Auf einem Telefon

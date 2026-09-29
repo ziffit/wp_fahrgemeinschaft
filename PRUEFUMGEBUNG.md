@@ -4,13 +4,12 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 29.09.2026 — **öffentliches HTTP 226, Mail-Ebene 124, Admin-Ebene 626,
-0 Fehler**, gegen den Stand **Plugin 1.23.0, Schema 1.7.0**, dazu **dreizehn von dreizehn
+Letzter Lauf: 29.09.2026 — **öffentliches HTTP 227, Mail-Ebene 124, Admin-Ebene 626,
+0 Fehler**, gegen den Stand **Plugin 1.24.0, Schema 1.7.0**, dazu **sechzehn von sechzehn
 Gegenproben mit dem gestellten Fehlerbild rot**. HTTP ist um eine Prüfung höher als bei
-1.22.0: die neue Prüfung für die Darstellung auf dem Telefon, die dieselbe Stylesheet-Datei
-liest wie die ältere daneben. Mail und Admin sind unverändert, weil diese Fassung kein Formular,
-keine Mail und keinen Zustandsschritt berührt — sie ändert Regeln, die der Browser liest, und
-der einzige Admin-Anteil ist die Weiterreichung von `FG_Stats`, die schon in 1.22.0 stand. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
+1.23.0, und zwar um die, die behauptet, dass nur der Name einer Zeile fett ist. Mail und Admin
+sind unverändert: Die beiden letzten Fassungen haben keinen Formulartext, keine Mail und
+keinen Zustandsschritt berührt, sondern Regeln, die der Browser liest. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
 Shell-Satz `mail.sh` und 58 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
 gibt 124 aus. Die HTTP-Zahl ist um eine Prüfung höher als bei 1.20.0, und die Mail-Ebene um
 acht: sechs davon sind der neue Abschnitt `[5b]` (die sechs Formen eines Mail-Händlers), zwei
@@ -1890,6 +1889,62 @@ alte Datei. Das Stylesheet war nach dem Schreiben nicht in die Testinstanz gespi
 im Arbeitsbaum. Die Prüfung war richtig und die Messung falsch; `rsync` vor dem Lauf ist
 deshalb kein Ritual, sondern die Voraussetzung dafür, dass eine Prüfung das Plugin misst und
 nicht den Stand von vor drei Minuten.
+
+## Fassung 1.24.0: nur der Name einer Zeile ist fett
+
+Der Wunsch aus dem Verein, kurz: **Die Datenseite soll nie fett sein, nur die linke.** Auf
+einer Karte mit sieben Zeilen war das Auge an zwei Werten hängen geblieben — am Datum und an
+der Zahl der freien Plätze — und damit an Inhalt statt an Struktur.
+
+### Was daran Regel war und nicht nur Geschmack
+
+Bis hier hatte das Stylesheet zwei Stellen, an denen ein **Wert** gesetzt war:
+
+- `.fg-event-data tr:first-child td { font-weight: 600 }` — der Kommentar daneben sagte
+  ausdrücklich: „The date is the one thing a reader looks for first, so it is not a note next
+  to the title like it is in the list of rides."
+- `.fg-places { font-weight: 600 }` — mit der Begründung, ein freier Platz sei „in der
+  Stärke des Bedarfs darüber" gesetzt, und eine Null sei ein Hinweis und keine Warnung.
+
+Beide Regeln sind weg, und mit ihnen ihre Begründungen. Was bleibt, ist die Formulierung,
+die trägt: **Der Name einer Zeile ist der Rahmen, der Wert ist der Text.** Ein Wert in der
+Stärke seines Namens konkurriert mit dem Namen um den Blick; auf einer Karte mit sieben Zeilen
+gewinnt er zweimal und verliert fünfmal den Aufbau. Das Datum ist die **erste** Zeile, und
+eine erste Zeile ist ohnehin die, auf die das Auge zuerst fällt.
+
+Bei den freien Plätzen bleibt die **Farbe** als Unterscheidung: `.fg-places-none` ist der
+gedämpfte Ton für die Null. Eine Regel `.fg-places` gibt es danach nicht mehr — der Klassenname
+im Markup bleibt, weil er der Haken ist, an dem die Prüfung des öffentlichen Satzes hängt und
+an dem eine Regel eines Themes ansetzen könnte.
+
+### Die Prüfung behauptet beide Hälften
+
+`only the name of a row is set in the weight` liest das Stylesheet zeilenweise und teilt jede
+Regel an ihrem letzten Selektor-Bein: Endet es auf `td`, ist es ein **Wert**, und dort darf
+kein `font-weight` stehen; endet es auf `th` und steht dort eins, ist der **Name** fett.
+
+Beide Hälften zu behaupten ist der entscheidende Punkt. Eine Prüfung, die nur sagt „ein Wert
+ist nicht fett\", ist auch für ein Stylesheet grün, in dem **gar nichts** fett ist — sie prüft
+dann eine Abwesenheit und übersieht den Verlust der einen Fettung, die bleiben sollte. Der
+Gegenlauf der ersten beiden Zeilen dieser Reihe zeigt den Unterschied: Nachprobe 1 und 2
+nehmen einem Wert die Fettung, Nachprobe 3 nimmt sie dem Namen, und alle drei machen dieselbe
+Prüfung rot.
+
+Die Meldung ist für beide Fälle eine, weil sie beide nennt: „a value of the duty table is set
+in the weight, or the name of a row is not". Das ist eine Ungenauigkeit, die man in Kauf
+nimmt, solange die Zahl der Fälle zwei ist; bei fünf würde sie lästig.
+
+### Die Gegenproben
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| `font-weight: 600` wieder am Wert der ersten Zeile | Kein Wert ist fett | 1 Prüfung |
+| `.fg-places { font-weight: 600 }` wiederhergestellt | Dasselbe für die freien Plätze | 1 Prüfung |
+| `font-weight: 600` am Namen der Zeile entfernt | Der Name ist fett | 1 Prüfung |
+
+Mail- und Admin-Ebene sind unverändert, weil diese Fassung keinen Formulartext, keine Mail und
+keinen Zustandsschritt berührt: Sie dreht an einer Eigenschaft, die der Browser liest. HTTP
+ist um eine Prüfung höher.
 
 ## Mail-Auswertung
 

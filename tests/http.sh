@@ -1221,6 +1221,36 @@ if not hat('.fg-places-none', 'color'):
 sys.exit(0)
 " "the card, the table, the signup block, its latch or the free places note has no rule"
 
+	struct "$list_style" "only the name of a row is set in the weight" "
+import re, sys
+css = re.sub(r'/\*.*?\*/', '', sys.stdin.read(), flags=re.S)
+regeln = re.findall(r'([^{}]+)\{([^}]*)\}', css)
+
+# The name of a row is the frame and is set in the weight; the value next to it is
+# what is being read and never is. Both halves are checked, because a claim about
+# weight that only says 'the value is not bold' is satisfied by a stylesheet in
+# which nothing is bold at all.
+name_dick = False
+for selektor, koerper in regeln:
+    for teil in [t.strip() for t in selektor.split(',')]:
+        # A rule that is only about the width of a cell may carry both classes in
+        # one line; the cell at the end of the selector is the one it draws.
+        letzte = teil.split()[-1] if teil.split() else ''
+        if letzte == '.fg-places':
+            if 'font-weight' in koerper:
+                sys.exit(1)
+            continue
+        if letzte.endswith('td'):
+            if 'font-weight' in koerper:
+                sys.exit(1)
+            continue
+        if letzte.endswith('th') and '.fg-event-data' in teil and 'font-weight' in koerper:
+            name_dick = True
+if not name_dick:
+    sys.exit(1)
+sys.exit(0)
+" "a value of the duty table is set in the weight, or the name of a row is not"
+
 	struct "$list_style" "the stylesheet stacks the duty table on a narrow screen" "
 import re, sys
 css = sys.stdin.read()

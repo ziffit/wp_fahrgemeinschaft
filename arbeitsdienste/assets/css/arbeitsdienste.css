@@ -318,23 +318,21 @@ details.fg-contact[open] > .fg-contact-latch {
 	border-top: 1px solid var(--fg-border);
 }
 
-/* The date is the one thing a reader looks for first, so it is not a note next
-   to the title like it is in the list of rides. */
-.fg-event-data tr:first-child td {
-	font-weight: 600;
-}
+/* **Only the name of a row is set in the weight; the value never is.** The name
+   is the frame of the row and the value is what is being read, and a value in the
+   weight of its name competes with the name for the eye: on a card of seven rows
+   the eye lands on three of them and the structure is what is lost. The date was
+   the one exception until version 1.24.0, because it is what a reader looks for
+   first — but it is the **first row**, and that is emphasis enough. */
 
-/* The number of free places. A place left is set in the weight of the demand
-   above it, and a zero is a note rather than a warning: a full duty is the
+/* The number of free places is a value and is therefore not set in the weight,
+   like every other value of the card. What tells a full duty from an open one is
+   the colour: a zero is a note rather than a warning, because a full duty is the
    normal state of a duty whose people are all there, and the sentence under the
-   table already says why. */
-.fg-places {
-	font-weight: 600;
-}
-
+   table already says why. The class of the cell is what the check in the public
+   suite reads, and it is also what a theme rule would find. */
 .fg-places-none {
 	color: var(--fg-muted);
-	font-weight: 400;
 }
 
 /* --- the registration of a work duty, closed until it is asked for --- */
