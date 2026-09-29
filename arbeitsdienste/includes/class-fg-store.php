@@ -1095,12 +1095,21 @@ final class FG_Store {
 
 		$result = array();
 		foreach ( (array) $rows as $row ) {
+			// The member of a joined row is built by hand, and that is not an
+			// accident: the row carries both tables, so its `id` belongs to the
+			// registration. to_member() would read that as the member's ID and hand
+			// out a record that points at the wrong row. The price of the hand is
+			// that a member field is not copied over by itself — a field the
+			// participant list shows has to be written here as well, and until
+			// 1.25.1 the work group was not, so the list showed a stroke where a
+			// club that had entered groups was looking for them.
 			$member = new FG_Member();
 			$member->id         = (int) $row['member_id'];
 			$member->member_no  = (string) $row['member_no'];
 			$member->email      = (string) $row['email'];
 			$member->first_name = (string) $row['first_name'];
 			$member->last_name  = (string) $row['last_name'];
+			$member->work_group = (string) $row['work_group'];
 
 			$result[] = array(
 				'registration' => $this->to_event_member( $row ),

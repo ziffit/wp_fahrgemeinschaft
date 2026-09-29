@@ -4,13 +4,16 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 29.09.2026 — **öffentliches HTTP 227, Mail-Ebene 124, Admin-Ebene 656,
-0 Fehler**, gegen den Stand **Plugin 1.25.0, Schema 1.8.0**, dazu **dreiundzwanzig von
-dreiundzwanzig Gegenproben mit dem gestellten Fehlerbild rot**. HTTP und Mail sind
-unverändert: Diese Fassung berührt nichts, was ein Browser von einer E-Mail liest. Die
-Admin-Ebene ist um 30 höher — 27 Prüfungen für die Arbeitsgruppe (Formular, Liste, Import,
-Datenschutzweg, Teilnehmerliste) und drei ersetzte Behauptungen, die von „vier Feldern" auf
-„fünf" umgestellt wurden. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
+Letzter Lauf: 29.09.2026 — **öffentliches HTTP 227, Mail-Ebene 124, Admin-Ebene 658,
+0 Fehler**, gegen den Stand **Plugin 1.25.1, Schema 1.8.0**, dazu **sechsundzwanzig von
+sechsundzwanzig Gegenproben mit dem gestellten Fehlerbild rot**. HTTP und Mail sind
+unverändert: Diese Fassung berührt nichts, was ein Browser liest und nichts, was in einer
+E-Mail steht. Die Admin-Ebene ist um 2 höher: **Eine** falsche Behauptung aus 1.25.0 wurde
+ersetzt (die Teilnehmerliste suchte über eine ganze Seite nach einem Wort, das im
+Vornamen des Prüfmitglieds stand) und drei kamen dazu, die die Tabelle über den Namen ihrer
+Spalte lesen; eine Zeile Aufräumen stand doppelt und ist weg. **Die Regel für die
+Fassungsnummern hat sich geändert:** ab 1.25.1 nur noch Bugfix-Sprünge, `Z` steigt bei
+jeder Änderung. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
 Shell-Satz `mail.sh` und 58 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
 gibt 124 aus. Die HTTP-Zahl ist um eine Prüfung höher als bei 1.20.0, und die Mail-Ebene um
 acht: sechs davon sind der neue Abschnitt `[5b]` (die sechs Formen eines Mail-Händlers), zwei
@@ -2030,6 +2033,109 @@ Die zweite Zeile ist die interessanteste: Die Spalte zur Pflicht zu machen ist n
 Detail, es reißt **jede** bestehende Datei eines Vereins weg, weil in der ganzen Suite jede
 Datei vier Spalten hat — 47 Prüfungen fallen. Das ist die Messung für die Frage „Pflicht oder
 freiwillig", und sie ist in Zahlen beantwortet, bevor die Frage gestellt wurde.
+
+## Fassung 1.25.1: die Teilnehmerliste zeigt die Arbeitsgruppe
+
+Gemeldet aus dem Verein: In den Arbeitsdiensten stehe in der Spalte *Arbeitsgruppe* immer
+nur ein Strich. Die Frage dazu: „Sind die Angaben kopiert?" — und der Wunsch, die
+Mitgliedsdaten in den Arbeitsdiensten **aus den Daten des Mitglieds** zu zeigen.
+
+### Nein, es ist nichts kopiert — und es bleibt nichts kopiert
+
+`fg_event_members` führt `event_id`, `member_id`, `registered_at`, `public_ref`,
+`source_url`, `notified_count` und `added_by_admin`. Keine Kopie von Name, Adresse oder
+Arbeitsgruppe. Die Teilnehmerliste holt sich das Mitglied über einen `INNER JOIN` dazu, und
+sie zeigt deshalb immer den Stand des Mitglieds. Eine Kopie müsste bei jeder Änderung
+mitgezogen werden, und der Moment, in dem das einmal vergessen wurde, ist der Moment, in
+dem die Liste etwas Falsches behauptet.
+
+Der Preis dieser Entscheidung ist ein Ort, an dem man aufpassen muss, und genau dort ist
+der Fehler passiert.
+
+### Die Ursache: eine Zeile, die fehlte
+
+`FG_Store::query_event_member_rows()` baut das Mitglied der verbundenen Zeile **von Hand**:
+
+```php
+$member = new FG_Member();
+$member->id         = (int) $row['member_id'];
+$member->member_no  = (string) $row['member_no'];
+$member->email      = (string) $row['email'];
+$member->first_name = (string) $row['first_name'];
+$member->last_name  = (string) $row['last_name'];
+```
+
+Die Abfrage holt `m.work_group` mit — der Wert lag in der Zeile. Er wurde nur nie ins
+Objekt kopiert, das Feld behielt seinen Standard `''`, und die Zelle druckt für `''` den
+Strich. Von Hand gebaut wird das Objekt mit Recht: Die Zeile mischt zwei Tabellen, ihre
+`id` stammt aus `r.*` und gehört der Anmeldung; `to_member()` hätte sie als Mitglieds-ID
+gelesen. Die Handarbeit ist nur nicht von selbst vollständig — die Zeile für `work_group`
+fehlte, und damit die fünfte.
+
+Dieselbe Fehlerform wie die beiden „vier Felder"-Vergleiche aus 1.25.0, und dieselbe
+Ursache: eine Liste, die bei vier Feldern stehen bleibt. Der Kommentar über dem Objekt
+sagt es jetzt ausdrücklich, damit der Ort beim nächsten Feld nicht wieder übersehen wird.
+
+### Die Prüfung von 1.25.0 war falsch und ist ersetzt
+
+Sie stand auf dem Namen des Prüfmitglieds:
+
+```bash
+neu "$GRUPPE_NR" dienstgruppe@example.org DienstGruppe Teilnehmer   # "DienstGruppe" = VORNAME
+if printf '%s' "$seite" | grep -qF "DienstGruppe"; then ok ...
+```
+
+„DienstGruppe" war der **Vorname** des Prüfmitglieds, und gesucht wurde auf der **ganzen
+Seite**. Die Namenszelle beantwortete die Frage, die Arbeitsgruppenzelle stand auf dem
+Strich, und die Zeile war grün. Der Fehler ist damit nicht durch eine zu schwache, sondern
+durch eine **falsche** Behauptung gegangen; sie ist nicht ergänzt, sondern ersetzt.
+
+Die neue Prüfung liest die Tabelle **über den Spaltennamen**:
+
+- Neuer Helfer `zelle <wert in der ersten Zelle> <Spaltenname>`. Er sucht die Tabelle,
+  deren Kopf die genannte Spalte führt, nimmt deren Index aus dem Kopf und gibt die Zelle
+  aus der Zeile aus, die mit diesem Wert in der ersten Zelle anfängt. Er meldet
+  `keine-spalte:`, `keine-zeile:` und `zu-wenig-zellen:`, damit eine rote Zeile sagt, was
+  gefehlt hat. Der vorhandene Helfer `cell` wurde dafür **nicht** erweitert: Er zählt
+  Spalten und findet seine Zeile an einem Link, und beides trägt für die Mitgliederliste
+  nicht — eine eingefügte Spalte würde jede Zelle dahinter um eins verschieben, und die
+  Zeile ist hier durch die Mitgliedsnummer benannt.
+- Das Prüfmitglied bekommt eine **gefüllte** Arbeitsgruppe, denn eine leere Zelle beweist
+  nichts. `make-member` hat dafür ein fünftes, freies Argument bekommen, das über
+  `insert_member()` geschrieben wird — derselbe Weg, den der Import nimmt.
+- **Der Erwartungswert steht nicht im Test**, er wird aus dem Mitglied gelesen
+  (`s member-by-no … work_group`).
+- Die zweite Behauptung ist die gegen den Fehler von eben: die **Namenszelle** derselben
+  Zeile darf den Wert **nicht** tragen. Eine Liste, die die Arbeitsgruppe in der Spalte des
+  Namens druckte, würde die erste Behauptung mit richtigem Text am falschen Ort beantworten.
+
+### Die Gegenproben
+
+| Fehlerbild | Erwartet rot | Tatsächlich rot |
+| --- | --- | --- |
+| Die Zeile im Speicher entfällt (Zelle liest `—`) | die Zell-Prüfung | **1** (die Zell-Prüfung) |
+| Die Spalte *Arbeitsgruppe* druckt den Vornamen | die Zell-Prüfung | **1** (die Zell-Prüfung, Zelle liest „Dienst") |
+| Die Spalte *Name* druckt die Arbeitsgruppe | die Namenszell-Prüfung | **2** |
+
+Die dritte Gegenprobe ist stärker als geplant: Sie macht zusätzlich die ältere Prüfung aus
+`[3]` rot, die auf der Dienstseite nach dem Namen des Mitglieds sucht („the member of this
+run is named in it"). Das ist kein Messfehler, sondern ein zweites, unabhängiges Zeugnis
+dafür, dass die Namenszelle den Namen trägt — und es zeigt zugleich, dass jene Prüfung
+die schwächere Sorte ist: Sie sucht ein Wort auf der ganzen Seite und wäre von einer
+Arbeitsgruppe im falschen Feld nicht gestört worden.
+
+### Was sich sonst geändert hat
+
+Nichts. `fg_event_members` wird nicht angefasst, es gibt keine Migration, und das Schema
+bleibt 1.8.0. Die Auswahlliste im Block „Mitglied zuweisen" bleibt unverändert; dort steht
+eine Liste von Kandidaten, keine Auskunft über die Eingetragenen.
+
+### Die Fassungsregel
+
+Ab dieser Fassung nur noch **Bugfix-Versionssprünge**, außer es wird anders gesagt:
+`FG_VERSION` wächst als `X.Y.Z`, und `Z` steigt bei jeder Änderung, auch bei einem neuen
+Feld. Festgelegt vom Nutzer am 29.09.2026. Das Schema folgt seiner eigenen Regel und steigt
+nur dort, wo sich die Datenhaltung ändert — deshalb steht hier 1.25.1 neben Schema 1.8.0.
 
 ## Mail-Auswertung
 

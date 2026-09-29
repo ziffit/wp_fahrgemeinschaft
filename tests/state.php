@@ -288,19 +288,25 @@ switch ( $command ) {
 
 	/* ---------------------------------------------------------------- members */
 
-	// make-member <member_no> <email> <first_name> <last_name>
+	// make-member <member_no> <email> <first_name> <last_name> [work_group]
 	//
 	// Prints the new member's ID, or 0 when the repository refused the values.
 	// The refusal is not worked around here: a suite that has to build a member
 	// that the real form would not accept is measuring the wrong thing.
+	//
+	// The fifth argument is the work group, and it goes through insert_member()
+	// like the other four — the same way the import writes it. A fixture that
+	// set the value in the database behind the repository's back could prove a
+	// list shows a stored value, but not that a stored value arrives there.
 	case 'make-member':
 		fg_state_out(
 			$repo->insert_member(
 				array(
-					'member_no'  => isset( $args[0] ) ? $args[0] : '',
-					'email'      => isset( $args[1] ) ? $args[1] : '',
-					'first_name' => isset( $args[2] ) ? $args[2] : '',
-					'last_name'  => isset( $args[3] ) ? $args[3] : '',
+					'member_no'   => isset( $args[0] ) ? $args[0] : '',
+					'email'       => isset( $args[1] ) ? $args[1] : '',
+					'first_name'  => isset( $args[2] ) ? $args[2] : '',
+					'last_name'   => isset( $args[3] ) ? $args[3] : '',
+					'work_group'  => isset( $args[4] ) ? $args[4] : '',
 				)
 			)
 		);

@@ -215,9 +215,16 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
 - **Die Redaktion trägt Mitglieder selbst in einen Arbeitsdienst ein, und die Benachrichtigung
   ist eine zweite, getrennte Handlung.** Auf der Detailseite eines Arbeitsdienstes steht unter
   der Teilnehmerliste ein Block mit Suchfeld, Auswahlliste, dem Kästchen „Mitglied
-  benachrichtigen" (Vorgabe aus) und der Schaltfläche „Zuweisen". Die Teilnehmerliste führt zwei
-  Spalten dazu: „Eingetragen von" (Mitglied selbst oder Redaktion) und „E-Mails" (die Zahl der
-  zugestellten Nachrichten), und je Zeile gibt es eine Schaltfläche „Benachrichtigung senden".
+  benachrichtigen" (Vorgabe aus) und der Schaltfläche „Zuweisen". Die Teilnehmerliste führt
+  zwei eigene Spalten dazu: „Eingetragen von" (Mitglied selbst oder Redaktion) und
+  „E-Mails" (die Zahl der zugestellten Nachrichten), und je Zeile gibt es eine Schaltfläche
+  „Benachrichtigung senden".
+  Seit 1.25.0 steht in der Teilnehmerliste außerdem die **Arbeitsgruppe des Mitglieds**. Sie
+  wird wie Nummer, Name und Adresse live aus dem Mitgliedsdatensatz gelesen; in der Anmeldung
+  steht keine Kopie, damit ein umbenanntes Mitglied oder eine neue Gruppe nicht an zwei
+  Stellen auseinanderlaufen kann. Weil die verbundene Datenzeile aus zwei Tabellen besteht,
+  wird das Mitglied in `FG_Store::query_event_member_rows()` von Hand in ein Objekt gesetzt —
+  ein neues Mitgliedsfeld, das die Liste zeigen soll, muss dort von Hand dazukommen.
   Der Zähler steht in `FG_Mailer::send_duty_signup()` nach einem erfolgreichen Versand und
   zählt deshalb nur zugestellte Mails — auf dem öffentlichen Weg, beim Eintragen durch die
   Redaktion und beim erneuten Versand über dieselbe Stelle. Anders als der öffentliche Weg

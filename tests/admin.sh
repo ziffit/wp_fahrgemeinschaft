@@ -200,6 +200,44 @@ if not row:
 else:
     c=re.findall(r'<td[^>]*>(.*?)</td>', row, re.S)
     print(re.sub(r'<[^>]+>','',c[$2]).strip() if len(c) > $2 else 'too-few-cells:%d' % len(c))"; }
+
+# One cell of one row, addressed by the NAME of its column and not by its
+# position: zelle <wert in der ersten Zelle> <Spaltenname>.
+#
+# cell() above cannot do this and is not widened to do it. It finds its row by a
+# link inside it, because the rows of the duty list are named by their own edit
+# link, and it counts columns, because that list has an order nobody changes. The
+# list of participants has neither: its row is named by the member number in its
+# first cell, and a column added in the middle would push every cell behind it
+# one to the right — a check that asked for "the third cell" would go on being
+# green while answering about a different column. The column is therefore looked
+# up in the head of the table, and the table is the one whose head carries that
+# name, because a page holds several tables and every one of them has a head of
+# its own.
+zelle() { python3 -c "
+import html,re,sys
+h=sys.stdin.read()
+def text(roh):
+    return re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',roh))).strip()
+for tabelle in re.findall(r'<table[^>]*>.*?</table>', h, re.S):
+    kopf=re.search(r'<thead[^>]*>(.*?)</thead>', tabelle, re.S)
+    if not kopf:
+        continue
+    spalten=[text(x) for x in re.findall(r'<th[^>]*>(.*?)</th>', kopf.group(1), re.S)]
+    if '$2' not in spalten:
+        continue
+    nummer=spalten.index('$2')
+    rumpf=re.sub(r'<thead[^>]*>.*?</thead>','',tabelle,flags=re.S)
+    for zeile in re.findall(r'<tr[^>]*>.*?</tr>', rumpf, re.S):
+        zellen=re.findall(r'<td[^>]*>(.*?)</td>', zeile, re.S)
+        if zellen and text(zellen[0]) == '$1':
+            print(text(zellen[nummer]) if len(zellen) > nummer else 'zu-wenig-zellen:%d' % len(zellen))
+            break
+    else:
+        print('keine-zeile:%s' % '$1')
+    break
+else:
+    print('keine-spalte:%s' % '$2')"; }
 # What a named field must be: an input tag carrying all the given attributes. A
 # check that only asks whether a name appears somewhere on the page is answered
 # just as well by a hidden field, and a hidden field cannot be typed into — the
@@ -1165,31 +1203,50 @@ fi
 
 # --- the work group in the list of participants
 #
-# It is the work group of the **member**, and not the group of the duty: two
-# different things that a column headed "Gruppe" would not tell apart. The check
-# is on a member whose group is filled, because an empty cell proves nothing —
-# and it gets a duty of its own, because the duty of the section above is deleted
-# before this line and a page without a table cannot answer anything about a
-# column.
+# It is the work group of the **member** and not the group of the duty: two
+# different things that a column headed "Gruppe" would not tell apart.
+#
+# The cell is read by the name of its column, the row is named by the member
+# number in its first cell, and the value is not written into this file at all —
+# it is read out of the member, and the cell has to be exactly that. All three
+# are here because of the mistake this section made in 1.25.0: it named the
+# member's first name after the work group and then asked the whole page whether
+# that word stood anywhere on it. The name cell answered, the work group cell
+# stood on a stroke, and the line was green. The duty is one of its own for the
+# same reason as before: the duty of the section above is deleted before this
+# line, and a page without a table cannot answer anything about a column.
 GRUPPE_DIENST=$(s make-event "Arbeitsgruppe in der Teilnehmerliste" "$(date -d '+73 days' +%Y-%m-%d)" 2 "13:00")
 GRUPPE_NR="0992"
-neu "$GRUPPE_NR" dienstgruppe@example.org DienstGruppe Teilnehmer
+GRUPPE_WERT="Gartenkolonne Nord"
+neu "$GRUPPE_NR" dienstgruppe@example.org Dienst Teilnehmer "$GRUPPE_WERT"
+if [ "$(s member-by-no "$GRUPPE_NR" work_group)" = "$GRUPPE_WERT" ]; then
+	ok "the member of this section carries a work group"
+else
+	bad "the member of this section carries a work group" "$(s member-by-no "$GRUPPE_NR" work_group)"
+fi
 seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$GRUPPE_DIENST&fg_event_member_search=$GRUPPE_NR")
 nonce=$(printf '%s' "$seite" | hidden fg_assign_nonce)
 sende_zuweisung "$GRUPPE_NR" "$(s member-by-no "$GRUPPE_NR" id)" "$GRUPPE_DIENST" mail
 seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$GRUPPE_DIENST")
 has "the list of participants has a column for the work group" "$seite" "<th>Arbeitsgruppe</th>"
-if printf '%s' "$seite" | grep -qF "DienstGruppe"; then
-	ok "and shows the work group of the member"
+zelle_gruppe=$(printf '%s' "$seite" | zelle "$GRUPPE_NR" Arbeitsgruppe)
+if [ "$zelle_gruppe" = "$(s member-by-no "$GRUPPE_NR" work_group)" ]; then
+	ok "and the cell in that column is the work group of the member"
 else
-	bad "and shows the work group of the member" "not on the page"
+	bad "and the cell in that column is the work group of the member" "cell reads: $zelle_gruppe"
+fi
+# And it has to stand in *that* cell. A list that printed the work group in the
+# column of the name would answer the line above with a cell full of the right
+# text in the wrong place, and the reader of the screen would see the group
+# where the name belongs.
+zelle_name=$(printf '%s' "$seite" | zelle "$GRUPPE_NR" Name)
+if printf '%s' "$zelle_name" | grep -qF "$GRUPPE_WERT"; then
+	bad "and the name cell does not carry the work group" "name cell reads: $zelle_name"
+else
+	ok "and the name cell does not carry the work group"
 fi
 hasnt "and the column is not called Gruppe, which is the group of the duty" "$seite" "<th>Gruppe</th>"
 s delete-event "$GRUPPE_DIENST" > /dev/null
-s delete-member "$(s member-by-no "$GRUPPE_NR" id)" > /dev/null
-
-# The lines of the section are read by name, so a member that is entered for the
-# duty and belongs to nobody else's test is removed again here.
 s delete-member "$(s member-by-no "$GRUPPE_NR" id)" > /dev/null
 s delete-member "$(s member-by-no 0951 id)" > /dev/null
 s delete-member "$(s member-by-no 0950 id)" > /dev/null
