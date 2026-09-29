@@ -4,12 +4,13 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 28.09.2026 — **öffentliches HTTP 225, Mail-Ebene 124, Admin-Ebene 626,
-0 Fehler**, gegen den Stand **Plugin 1.22.0, Schema 1.7.0**, dazu **zehn von zehn
-Gegenproben mit dem gestellten Fehlerbild rot**. Die Admin-Ebene ist um 52 höher als
-bei 1.21.0: der neue Abschnitt `[5g]` trägt 47 davon, die restlichen fünf sind Prüfungen
-für den Such- und den Löschweg, die es vorher nicht gab und die beide Stellen desselben
-Codewegs betreffen. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
+Letzter Lauf: 29.09.2026 — **öffentliches HTTP 226, Mail-Ebene 124, Admin-Ebene 626,
+0 Fehler**, gegen den Stand **Plugin 1.23.0, Schema 1.7.0**, dazu **dreizehn von dreizehn
+Gegenproben mit dem gestellten Fehlerbild rot**. HTTP ist um eine Prüfung höher als bei
+1.22.0: die neue Prüfung für die Darstellung auf dem Telefon, die dieselbe Stylesheet-Datei
+liest wie die ältere daneben. Mail und Admin sind unverändert, weil diese Fassung kein Formular,
+keine Mail und keinen Zustandsschritt berührt — sie ändert Regeln, die der Browser liest, und
+der einzige Admin-Anteil ist die Weiterreichung von `FG_Stats`, die schon in 1.22.0 stand. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
 Shell-Satz `mail.sh` und 58 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
 gibt 124 aus. Die HTTP-Zahl ist um eine Prüfung höher als bei 1.20.0, und die Mail-Ebene um
 acht: sechs davon sind der neue Abschnitt `[5b]` (die sechs Formen eines Mail-Händlers), zwei
@@ -1802,6 +1803,93 @@ bleibt, ist kein beruhigendes Zeichen, sondern ein fehlender Test — und die Re
 die Prüfung, dann die Gegenprobe" ist in dieser Fassung zweimal gescheitert: einmal, weil
 `$wpdb->delete()` still nichts tat, und einmal, weil die Prüfung die falsche Zeile gelesen
 hat.
+
+## Fassung 1.23.0: die Dienstliste auf dem Telefon
+
+Zwei Aufträge aus dem Verein, beide am Stylesheet, und der zweite war größer als er klang:
+Auf einem Telefon soll die Tabelle eines Arbeitsdienstes **zuverlässig** gehen, und ihre
+linke Spalte soll **über** dem Inhalt stehen.
+
+### Was vorher schiefging
+
+Die Tabelle `.fg-event-data` ist eine echte Tabelle mit zwei Spalten: links der Name der
+Zeile (`th`, `width: 1%`, `white-space: nowrap`), rechts der Wert. Das ist auf einem
+Desktop richtig und auf einem Telefon falsch. `width: 1%` gibt dem Namen genau so viel Platz,
+wie sein Wort braucht, und der Rest bleibt dem Wert — bei einer Beschreibung von zweihundert
+Wörtern bleiben dem Wert auf einem 360-Pixel-Bildschirm etwa neunzig Pixel. Der Wert ist
+genau der Teil, den man lesen will.
+
+Zweiter Fund in derselben Regel: `.fg-rides` stand auf
+`grid-template-columns: repeat(auto-fit, minmax(380px, 1fr))`. Eine feste Mindestbreite von
+380px ist **breiter als ein Telefon**, und ein Raster, dessen Spalte breiter ist als sein
+Behälter, schiebt die ganze Seite zur Seite: Man scrollt waagerecht durch eine Liste, die
+senkrecht gelesen werden sollte. `minmax(min(380px, 100%), 1fr)` macht aus der Mindestbreite
+ein „380px, aber nicht mehr, als da ist" — und die Regel steht damit **außerhalb** der
+Media-Abfrage, weil sie für jede Breite gilt und nicht nur für schmale.
+
+### Die Regel, die weg soll
+
+`.fg-section, .fg-event-card, .fg-ride { padding: 1rem; }` innerhalb von
+`@media (max-width: 640px)` ist entfernt. Seit 1.22.0 trägt die Karte `padding: 1.25rem 0` —
+oben und unten Luft, an den Seiten keiner. Die Telefonregel hat diesen Zustand wieder
+verdreht: Auf dem Telefon wäre an den Seiten doch wieder Luft entstanden, nur geringere. Der
+Innenabstand ist damit auf beiden Wegen derselbe, was auch der Grund ist, warum keine
+Ersatzregel nötig war.
+
+### Was auf dem Telefon jetzt gilt
+
+Innerhalb von `@media (max-width: 640px)`:
+
+- Tabelle, `tbody`, Zeile, Kopf- und Datenzelle werden **Blöcke**, und `width: auto` nimmt
+  dem Namen die feste Breite. Der Name steht über dem Wert, und der Wert nimmt die ganze
+  Breite.
+- `white-space: normal` auf dem Namen: „Beschreibung" muss nicht in eine Zeile gepresst
+  werden, wenn der Platz ohnehin breit ist.
+- Die Linie **zwischen** zwei Zeilen wandert mit: Sie steht über dem Namen der zweiten
+  Zeile (`tr + tr th { border-top }`) und **nicht** zwischen Name und Wert
+  (`tr + tr td { border-top: 0 }`). Eine Linie zwischen Name und Wert würde den Wert von
+  seinem Namen abschneiden — das ist der Fehler, den man macht, wenn man die alte Regel
+  einfach auf Blöcke umschreibt.
+- Die zwei Felder der Anmeldung stehen **untereinander**: `.fg-member-row .fg-field` bekommt
+  `flex: 1 1 100%`. Bisher standen sie auf einem Telefon nebeneinander, jede so breit wie
+  möglich, und ein Feld mit 14rem in einem Telefon von 15rem hat für seine eigene
+  Fehlermeldung nichts übrig.
+- Der Knopf des Formulars nimmt die **volle Breite**: `.fg-actions .fg-button`. Zwei Knöpfe
+  nebeneinander auf einem Telefon sind jeder ein Streifen, und der, der das Formular
+  abschließt, ist der, den ein Daumen finden muss.
+
+### Die Prüfung liest den Media-Block und zählt die Klammern
+
+Die neue Prüfung `the stylesheet stacks the duty table on a narrow screen` liest **nur den
+Block für schmale Bildschirme**, und sie findet ihn, indem sie die Klammern zählt statt an
+einer Absatzgrenze zu scheitern. Das ist der Punkt: Dieselben Selektoren stehen außerhalb
+des Blocks für den Desktop, und eine Prüfung, die die beiden nicht unterscheiden kann, wäre
+für ein Stylesheet grün, in dem die Tabelle auf dem Telefon noch zweispaltig ist.
+
+Sie behauptet sieben Dinge, darunter eines über eine **Abwesenheit**: die entfernte
+`padding: 1rem`-Regel für Karten, Abschnitte und Fahrgemeinschaften darf nicht wiederkehren.
+Für Abwesenheiten ist eine Prüfung das richtige Werkzeug — sie ist die einzige Stelle, an der
+sich „weg" festhalten lässt.
+
+Die Gitterregel wird in derselben Prüfung aus dem **ganzen** Stylesheet gelesen und nicht
+aus dem Media-Block, weil sie dort zu Recht nicht steht. Das war der erste Fehlschlag dieser
+Prüfung: Sie suchte `min(380px, 100%)` im Block für schmale Bildschirme und wäre für ein
+Stylesheet rot gewesen, in dem die Regel genau richtig steht.
+
+### Die Gegenproben
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| Die Stapel-Regeln der Tabelle entfernt | Der Name steht über dem Wert | 1 Prüfung |
+| Die entfernte `padding: 1rem`-Regel wiederhergestellt | Sie bleibt weg | 1 Prüfung |
+| `minmax(380px, 1fr)` wieder ohne `min()` | Das Raster ist nie breiter als die Seite | 1 Prüfung |
+
+Ein Detail, das beim Messen auffiel und nicht am Plugin liegt: Die Prüfung las zuerst eine
+alte Datei. Das Stylesheet war nach dem Schreiben nicht in die Testinstanz gespiegelt, und
+`http.sh` holt es über die Seite, die es verlinkt — also die Datei auf dem Server, nicht die
+im Arbeitsbaum. Die Prüfung war richtig und die Messung falsch; `rsync` vor dem Lauf ist
+deshalb kein Ritual, sondern die Voraussetzung dafür, dass eine Prüfung das Plugin misst und
+nicht den Stand von vor drei Minuten.
 
 ## Mail-Auswertung
 

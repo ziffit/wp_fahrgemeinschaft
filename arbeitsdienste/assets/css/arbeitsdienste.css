@@ -187,7 +187,12 @@
 
 .fg-rides {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+	/* The smallest column may never be wider than the column it stands in. A
+	   fixed `380px` is wider than a phone, and a grid whose column is wider than
+	   its container pushes the whole page sideways: the reader scrolls
+	   horizontally to see a list that was meant to be read downwards. `min()` is
+	   what turns the minimum into "380px, but not more than what is there". */
+	grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
 	gap: 0.75rem;
 }
 
@@ -430,10 +435,54 @@ details.fg-signup[open] > .fg-signup-latch {
 		grid-column: auto;
 	}
 
-	.fg-section,
-	.fg-event-card,
-	.fg-ride {
-		padding: 1rem;
+	/* The name of a row stands **above** its value on a narrow screen. A table
+	   with two columns shares the width out: the name takes what its own text
+	   needs, the value takes the rest, and on a phone the value — which is the
+	   part that is worth reading — is left with a column of ninety pixels while a
+	   description runs to forty lines. As blocks the row reads as a small heading
+	   over its text, and the value takes the whole width.
+
+	   The line between two rows moves with it: it stands above the name of the
+	   second row, and not between the name and the value, which would cut the
+	   value off from the name it belongs to. */
+	.fg-event-data,
+	.fg-event-data tbody,
+	.fg-event-data tr,
+	.fg-event-data th,
+	.fg-event-data td {
+		display: block;
+		width: auto;
+	}
+
+	.fg-event-data th {
+		padding: 0.55rem 0 0;
+		white-space: normal;
+	}
+
+	.fg-event-data td {
+		padding: 0.1rem 0 0.45rem;
+	}
+
+	.fg-event-data tr + tr th {
+		border-top: 1px solid var(--fg-border);
+	}
+
+	.fg-event-data tr + tr td {
+		border-top: 0;
+	}
+
+	/* One field per row in the signup form: the row already wraps, and a field
+	   that is 14rem wide inside a phone of 15rem has nothing left for its own
+	   error note. */
+	.fg-member-row .fg-field {
+		flex: 1 1 100%;
+	}
+
+	/* The button takes the whole width. A row of buttons next to each other on a
+	   phone leaves each of them a strip, and the one that ends the form is the
+	   one a thumb has to find. */
+	.fg-actions .fg-button {
+		width: 100%;
 	}
 
 	.fg-rides .fg-ride {

@@ -1220,6 +1220,64 @@ if not hat('.fg-places-none', 'color'):
     sys.exit(1)
 sys.exit(0)
 " "the card, the table, the signup block, its latch or the free places note has no rule"
+
+	struct "$list_style" "the stylesheet stacks the duty table on a narrow screen" "
+import re, sys
+css = sys.stdin.read()
+
+# Only the block for narrow screens is read, and it is read as text with its
+# braces counted. The rules of the same selectors outside the block are the
+# desktop ones, and a check that cannot tell the two apart would be green for a
+# stylesheet in which the table is still a two-column table on a phone.
+anfang = css.find('@media')
+if anfang < 0:
+    sys.exit(1)
+tief = 0
+ende = anfang
+for i, z in enumerate(css[anfang:], anfang):
+    if z == '{':
+        tief += 1
+    elif z == '}':
+        tief -= 1
+        if tief == 0:
+            ende = i
+            break
+block = re.sub(r'/\*.*?\*/', '', css[anfang:ende + 1], flags=re.S)
+regeln = re.findall(r'([^{}]+)\{([^}]*)\}', block)
+def hat(klassenname, eigenschaft):
+    return any(klassenname in s and eigenschaft in b for s, b in regeln)
+
+# The name of a row above its value: both cells become blocks, and the name is
+# allowed to wrap. A table that only loses its width keeps two columns.
+if not hat('.fg-event-data th', 'display: block'):
+    sys.exit(1)
+if not hat('.fg-event-data td', 'display: block'):
+    sys.exit(1)
+if not hat('.fg-event-data th', 'white-space: normal'):
+    sys.exit(1)
+# The line between two rows stands above the name of the second row and not
+# between the name and the value, which would cut the value off from its name.
+if not hat('.fg-event-data tr + tr th', 'border-top'):
+    sys.exit(1)
+if not hat('.fg-event-data tr + tr td', 'border-top: 0'):
+    sys.exit(1)
+# The grid of the rides may not be wider than the column it stands in: a fixed
+# minimum of 380px pushes a phone sideways. This one is read from the whole
+# stylesheet and not from the narrow-screen block, because the rule belongs to
+# every width: the grid is min(380px, 100%) on the desktop and on the phone, and
+# a rule inside the media query would only have fixed the second of the two.
+if not any('.fg-rides' in s and 'min(380px, 100%)' in b for s, b in re.findall(r'([^{}]+)\{([^}]*)\}', re.sub(r'/\*.*?\*/', '', css, flags=re.S))):
+    sys.exit(1)
+# The button that ends the form takes the whole width of the phone.
+if not hat('.fg-actions .fg-button', 'width: 100%'):
+    sys.exit(1)
+# What was removed: the cards, the sections and the rides no longer shrink their
+# padding on a phone. A rule that is gone cannot be looked for, so the claim is
+# the absence — and an absence is exactly what a check like this exists for.
+if re.search(r'\.fg-(section|event-card|ride)\b[^{}]*\{[^{}]*padding:\s*1rem', block):
+    sys.exit(1)
+sys.exit(0)
+" "on a narrow screen the name is not above the value, the line is in the wrong place, the rides grid is wider than the page, the button is not full width, or the removed padding rule is back"
 else
 	bad "the list page brings the stylesheet with it" "no stylesheet with a version on the page"
 fi

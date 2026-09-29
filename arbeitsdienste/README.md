@@ -2,7 +2,7 @@
 
 Minimales WordPress-Plugin zur Planung von Vereinsarbeitsdiensten, zur Anmeldung von Mitgliedern zu einem Dienst und zur Koordination der Fahrgemeinschaften je Dienst.
 
-Fassung 1.22.0.
+Fassung 1.23.0.
 
 ## Installation
 
@@ -202,6 +202,31 @@ Vor einer Installation sollten in einer Staging-Installation mindestens diese F�
   Suche das ganze Wort mit jedem Feld einzeln, und ein solcher Begriff fand niemanden. Jetzt
   muss jedes Wort des Suchbegriffs irgendwo in der Zeile stehen — und „0042 Mül" findet die
   Person mit der Nummer 0042.
+- **Auf dem Telefon steht der Name einer Zeile über ihrem Wert.** Die Tabelle eines
+  Arbeitsdienstes ist auf einem Desktop eine Tabelle mit zwei Spalten: links der Name, rechts
+  der Wert, und der Name nimmt nur so viel Platz wie sein Wort braucht. Auf einem Telefon
+  nimmt der Wert damit übrig, was der Name nicht braucht — bei einer Beschreibung bleiben
+  ihm neunzig Pixel. Ab 640 Pixeln Breite werden Tabelle, Zeile und beide Zellen Blöcke, der
+  Wert nimmt die ganze Breite, und der Name darf umbrechen. Die Linie zwischen zwei Zeilen
+  steht dabei **über** dem Namen der zweiten Zeile und nicht zwischen Name und Wert; eine
+  Linie dort würde den Wert von seinem Namen abschneiden.
+- **Kein Innenabstand an den Seiten, auch nicht auf dem Telefon.** Bis Version 1.23.0 stand
+  in der Telefonregel ein `padding: 1rem` für Abschnitte, Karten und Fahrgemeinschaften, das
+  den Zustand aus 1.22.0 wieder umgedreht hätte: oben und unten weniger Luft, an den Seiten
+  wieder welche. Die Regel ist weg, und beide Wege tragen denselben Innenabstand. Bei
+  `.fg-rides .fg-ride` steht er noch, weil diese Liste dichter ist — dort sagt die
+  Telefonregel `0.7rem 0.8rem`.
+- **Das Raster der Fahrgemeinschaften ist nie breiter als die Seite.** Es stand auf
+  `minmax(380px, 1fr)`, und 380px sind mehr als ein Telefon breit: Ein Raster, dessen Spalte
+  breiter ist als sein Behälter, schiebt die ganze Seite zur Seite, und man scrollt
+  waagerecht durch eine Liste, die senkrecht gelesen werden sollte.
+  `minmax(min(380px, 100%), 1fr)` gilt für jede Breite und steht deshalb außerhalb der
+  Telefonregel.
+- **Auf dem Telefon ein Feld je Zeile und ein Knopf über die ganze Breite.** Die beiden
+  Felder der Anmeldung standen nebeneinander, auch wenn das Telefon schmaler war als ihre
+  gemeinsame Grundbreite, und ein Feld ohne Platz für seine eigene Fehlermeldung ist ein Feld,
+  das eine Meldung nicht unterbringt. Der Knopf, der das Formular abschließt, nimmt die
+  volle Breite: Zwei Knöpfe nebeneinander sind auf einem Telefon je ein Streifen.
 - **Die Karte hat keinen Rahmen.** Der Rahmen um Arbeitsdienstkarte und Fahrgemeinschaft und
   der seitliche Innenabstand sind entfernt; oben und unten steht der Abstand weiter. Die Karte
   liest sich damit als Zeile der Liste und nicht als Kasten. Eine Prüfung im öffentlichen Satz

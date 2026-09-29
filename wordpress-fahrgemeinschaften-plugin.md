@@ -60,6 +60,14 @@ Ein schlankes WordPress-Plugin für Vereinsmitglieder, das öffentlich sichtbare
 - Keine öffentliche Anzeige von E-Mail-Adressen, internen IDs, UUIDs oder Lösch-Tokens.
 - Keine vollständigen Namen, exakten Adressen, Telefonnummern oder sonstigen privaten Angaben in öffentlichen Feldern.
 - Keine Speicherung von Kontaktverläufen oder personenbezogenen IP-Adressen.
+- **Die öffentliche Seite ist auf einem Telefon bedienbar, und zwar ohne Querformat.** Seit
+  1.23.0 steht der Name einer Zeile über ihrem Wert, sobald der Bildschirm schmaler als 640
+  Pixel ist, die beiden Felder einer Anmeldung stehen untereinander, und der Knopf nimmt die
+  volle Breite. Das Raster der Fahrgemeinschaften (`minmax(min(380px, 100%), 1fr)`) ist nie
+  breiter als sein Behälter, weil eine feste Mindestbreite von 380px ein Telefon breiter
+  machen und die ganze Seite seitwärts schieben würde. An den Seiten ist an keiner Stelle ein
+  Innenabstand: Der Rahmen um die Karten ist mit Version 1.22.0 weggefallen, und die
+  Telefonregel, die ihn wieder eingeführt hätte, ist mit 1.23.0 entfernt worden.
 
 ## Minimale technische Umsetzung
 
