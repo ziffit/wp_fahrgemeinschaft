@@ -278,7 +278,19 @@ final class FG_Member {
 	public $created_at = '';
 
 	/**
-	 * Time of the last change of name or address.
+	 * Work group of this member.
+	 *
+	 * Not a key and not the group of a work service: the duty carries its own
+	 * group, and this is the standing team or working circle a member belongs to,
+	 * the way the club's membership administration files it. Empty means that the
+	 * club's file said nothing about it.
+	 *
+	 * @var string
+	 */
+	public $work_group = '';
+
+	/**
+	 * Time of the last change of name, address or work group.
 	 *
 	 * @var string
 	 */

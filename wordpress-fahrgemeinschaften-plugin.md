@@ -397,7 +397,12 @@ Abweichungen und Entscheidungen“, die Prüfungen in `PRUEFUMGEBUNG.md`.
   stehen.
 - Die Kopfzeile ist Pflicht, die vier Spalten werden ohne Beachtung der Großschreibung
   über eine Liste von Alternativen erkannt, und fehlt eine, bricht der Import ab und
-  nennt die fehlende Spalte. Nach Position zuzuordnen wäre bei einer unbekannten Datei
+  nennt die fehlende Spalte. Die fünfte Spalte, die **Arbeitsgruppe**, ist freiwillig: Sie
+  darf in der Datei `E001: Arbeitsdienst`, `Arbeitsdienst`, `dienst`, `gruppe` oder
+  `arbeitsgruppe` heißen. Fehlt sie, bleiben die gespeicherten Arbeitsgruppen stehen; steht
+  sie drin, gilt die Datei, und eine leere Zelle leert den gespeicherten Wert. Die
+  Arbeitsgruppe ist 80 Zeichen lang, wird wie die anderen Felder geprüft und bei einem
+  zu langen Wert mit einer Meldung abgewiesen, die das Feld und die Grenze nennt. Nach Position zuzuordnen wäre bei einer unbekannten Datei
   ein Zufall, der beim nächsten Export aufhört.
 - Die Datei wird **ganz** geprüft, bevor irgendetwas geschrieben wird; die Meldung nennt
   Zeilennummer und Art des Fehlers. Ein halb importierter Mitgliederbestand sieht gepflegt

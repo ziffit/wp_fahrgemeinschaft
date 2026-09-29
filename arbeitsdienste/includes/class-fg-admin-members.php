@@ -126,6 +126,7 @@ final class FG_Admin_Members {
 						<th><?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Vorname', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Nachname', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Arbeitsgruppe', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Angemeldete Dienste', 'arbeitsdienste' ); ?></th>
 					</tr>
@@ -133,7 +134,7 @@ final class FG_Admin_Members {
 				<tbody>
 					<?php if ( empty( $members ) ) : ?>
 						<tr>
-							<td colspan="5"><?php esc_html_e( 'Es sind keine Mitglieder erfasst.', 'arbeitsdienste' ); ?></td>
+							<td colspan="6"><?php esc_html_e( 'Es sind keine Mitglieder erfasst.', 'arbeitsdienste' ); ?></td>
 						</tr>
 					<?php endif; ?>
 					<?php foreach ( $members as $member ) : ?>
@@ -143,6 +144,7 @@ final class FG_Admin_Members {
 							</td>
 							<td><?php echo esc_html( $member->first_name ); ?></td>
 							<td><?php echo esc_html( $member->last_name ); ?></td>
+							<td><?php $this->echo_work_group( $member ); ?></td>
 							<td><?php echo esc_html( $member->email ); ?></td>
 							<td><?php echo esc_html( (string) ( isset( $counts[ $member->id ] ) ? (int) $counts[ $member->id ] : 0 ) ); ?></td>
 						</tr>
@@ -159,6 +161,22 @@ final class FG_Admin_Members {
 	}
 
 	/**
+	 * Write the work group of one member into a cell of the list.
+	 *
+	 * An empty cell and a cell with a stroke say the same thing to a reader: the
+	 * file of the club said nothing about this member. The stroke makes that
+	 * visible without a word, and it does not look like a missing value.
+	 *
+	 * @param FG_Member $member Member.
+	 * @return void
+	 */
+	private function echo_work_group( FG_Member $member ) {
+		echo '' === $member->work_group
+			? '<span aria-hidden="true">—</span>'
+			: esc_html( $member->work_group );
+	}
+
+	/**
 	 * Render the create and edit form of one member.
 	 *
 	 * @param FG_Member|null $member Member to edit, or null to create one.
@@ -170,6 +188,7 @@ final class FG_Admin_Members {
 		$email       = $is_new ? '' : $member->email;
 		$first_name  = $is_new ? '' : $member->first_name;
 		$last_name   = $is_new ? '' : $member->last_name;
+		$work_group  = $is_new ? '' : $member->work_group;
 		$member_id   = $is_new ? 0 : $member->id;
 		$signups     = $is_new ? 0 : $this->repository->count_member_registrations( $member->id );
 		?>
@@ -208,6 +227,14 @@ final class FG_Admin_Members {
 						<th scope="row"><label for="fg-member-last"><?php esc_html_e( 'Nachname', 'arbeitsdienste' ); ?></label></th>
 						<td>
 							<input type="text" id="fg-member-last" name="fg_last_name" class="regular-text" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_NAME_MAX ); ?>" value="<?php echo esc_attr( $last_name ); ?>" required>
+						</td>
+					</tr>
+
+					<tr>
+						<th scope="row"><label for="fg-member-group"><?php esc_html_e( 'Arbeitsgruppe', 'arbeitsdienste' ); ?></label></th>
+						<td>
+							<input type="text" id="fg-member-group" name="fg_work_group" class="regular-text" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_WORK_GROUP_MAX ); ?>" value="<?php echo esc_attr( $work_group ); ?>">
+							<span class="description"><?php esc_html_e( 'Freiwillig. Das ist die stehende Gruppe oder der Arbeitskreis, in dem das Mitglied arbeitet — nicht die Gruppe eines Arbeitsdienstes, die dieser selbst trägt. Der Import kann das Feld aus der Mitgliederliste des Vereins übernehmen.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 				</table>
@@ -310,6 +337,7 @@ final class FG_Admin_Members {
 		<details class="fg-import-columns">
 			<summary><?php esc_html_e( 'Wie die Spalten heißen dürfen', 'arbeitsdienste' ); ?></summary>
 			<p><?php esc_html_e( 'Die Spalten dürfen in beliebiger Reihenfolge stehen. Die Kopfzeile muss genau einer der unten genannten Namen sein: Ein zusätzliches Wort in derselben Zelle, das Wort Pflicht etwa, macht sie zu einem unbekannten Namen. Groß- und Kleinschreibung spielt keine Rolle, Leerzeichen am Ende einer Zelle werden entfernt.', 'arbeitsdienste' ); ?></p>
+			<p><?php esc_html_e( 'Die Arbeitsgruppe ist freiwillig: Eine Datei ohne diese Spalte wird gelesen, und die gespeicherten Arbeitsgruppen bleiben, wie sie sind. Steht die Spalte darin, gilt die Datei — auch wenn eine Zelle leer ist, denn das ist eine Aussage des Vereins und keine fehlende Angabe.', 'arbeitsdienste' ); ?></p>
 			<table>
 				<thead>
 					<tr>
@@ -326,7 +354,19 @@ final class FG_Admin_Members {
 						}
 						?>
 						<tr>
-							<th scope="row"><?php echo esc_html( $feld ); ?></th>
+							<th scope="row">
+								<?php
+								// The one field a file does not have to carry is marked as such
+								// in the same row. The sentence under the table says the same
+								// thing, and this says it where the club is reading the names
+								// of the columns.
+								echo esc_html( $feld );
+
+								if ( in_array( FG_Member_Import::field_name_of( $feld ), FG_Member_Import::optional_columns(), true ) ) {
+									echo ' <span class="description">(' . esc_html__( 'freiwillig', 'arbeitsdienste' ) . ')</span>';
+								}
+								?>
+							</th>
 							<?php // Die Stuecke werden beim Bauen escaped und danach nur noch zusammengesetzt; ein zweites esc_html() wuerde die Tags mitnehmen. ?>
 							<td><?php echo implode( ', ', $stuecke ); ?></td>
 						</tr>
@@ -709,6 +749,11 @@ final class FG_Admin_Members {
 			'email'      => isset( $_POST['fg_member_email'] ) ? wp_unslash( $_POST['fg_member_email'] ) : '',
 			'first_name' => isset( $_POST['fg_first_name'] ) ? wp_unslash( $_POST['fg_first_name'] ) : '',
 			'last_name'  => isset( $_POST['fg_last_name'] ) ? wp_unslash( $_POST['fg_last_name'] ) : '',
+			// Always there, also when the field was not posted: this form writes
+			// the whole member, and a value that is not in the post was emptied by
+			// the person who saved. The import is the other way round — there a
+			// column that is not in the file means that nobody said anything.
+			'work_group' => isset( $_POST['fg_work_group'] ) ? wp_unslash( $_POST['fg_work_group'] ) : '',
 		);
 
 		foreach ( $fields as $key => $value ) {

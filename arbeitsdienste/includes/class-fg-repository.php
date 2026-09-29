@@ -1107,11 +1107,20 @@ final class FG_Repository {
 			return false;
 		}
 
+		// A key that is not in the prepared fields is a field nobody said anything
+		// about — the import of a file without the column comes through here — and
+		// such a field may not be compared as if it were empty. A comparison that
+		// read the missing key as an empty value would answer "nothing differs" for
+		// a member whose work group is stored, and the call would report a change
+		// as saved that no column carries.
+		$gruppe = array_key_exists( 'work_group', $prepared ) ? $prepared['work_group'] : $member->work_group;
+
 		if (
 			$prepared['member_no'] === $member->member_no
 			&& $prepared['email'] === $member->email
 			&& $prepared['first_name'] === $member->first_name
 			&& $prepared['last_name'] === $member->last_name
+			&& $member->work_group === $gruppe
 		) {
 			// Nothing differs, so there is nothing to write. Returning true here
 			// keeps the caller from telling the club a change was saved when no
@@ -1203,6 +1212,12 @@ final class FG_Repository {
 		$email       = $this->normalize_email( isset( $fields['email'] ) ? $fields['email'] : '' );
 		$first_name  = isset( $fields['first_name'] ) ? trim( (string) $fields['first_name'] ) : '';
 		$last_name   = isset( $fields['last_name'] ) ? trim( (string) $fields['last_name'] ) : '';
+		// The work group is the one field that may be empty, and it may also be
+		// missing altogether: a file of the club that does not have the column says
+		// nothing about work groups, and a missing key must not turn into an empty
+		// value that wipes what is stored. That is why the key is only added when
+		// it was handed in.
+		$work_group  = array_key_exists( 'work_group', $fields ) ? trim( (string) $fields['work_group'] ) : null;
 
 		if (
 			'' === $member_no
@@ -1212,16 +1227,23 @@ final class FG_Repository {
 			|| $this->string_length( $member_no ) > FG_Schema::MEMBER_NO_MAX
 			|| $this->string_length( $first_name ) > FG_Schema::MEMBER_NAME_MAX
 			|| $this->string_length( $last_name ) > FG_Schema::MEMBER_NAME_MAX
+			|| ( null !== $work_group && $this->string_length( $work_group ) > FG_Schema::MEMBER_WORK_GROUP_MAX )
 		) {
 			return null;
 		}
 
-		return array(
+		$out = array(
 			'member_no'  => $member_no,
 			'email'      => (string) $email,
 			'first_name' => $first_name,
 			'last_name'  => $last_name,
 		);
+
+		if ( null !== $work_group ) {
+			$out['work_group'] = $work_group;
+		}
+
+		return $out;
 	}
 
 	/**

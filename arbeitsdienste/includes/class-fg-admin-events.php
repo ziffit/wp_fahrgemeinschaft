@@ -515,6 +515,7 @@ final class FG_Admin_Events {
 					<tr>
 						<th><?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Name', 'arbeitsdienste' ); ?></th>
+						<th><?php esc_html_e( 'Arbeitsgruppe', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Angemeldet am', 'arbeitsdienste' ); ?></th>
 						<th><?php esc_html_e( 'Eingetragen von', 'arbeitsdienste' ); ?></th>
@@ -527,6 +528,9 @@ final class FG_Admin_Events {
 						<tr>
 							<td><?php echo esc_html( $row['member']->member_no ); ?></td>
 							<td><?php echo esc_html( trim( $row['member']->first_name . ' ' . $row['member']->last_name ) ); ?></td>
+							<?php // The work group of the member, not the group of the duty: two different
+							// things that a column headed "Gruppe" would not tell apart. ?>
+							<td><?php echo '' === $row['member']->work_group ? '—' : esc_html( $row['member']->work_group ); ?></td>
 							<td><?php echo esc_html( $row['member']->email ); ?></td>
 							<td><?php echo esc_html( $row['registration']->registered_at ); ?></td>
 							<td>

@@ -1163,8 +1163,34 @@ else
 	bad "and deleting the duty takes the links of its registrations with it" "$tokenen_vorher -> $tokenen_nachher, expected $((tokenen_vorher - 1))"
 fi
 
+# --- the work group in the list of participants
+#
+# It is the work group of the **member**, and not the group of the duty: two
+# different things that a column headed "Gruppe" would not tell apart. The check
+# is on a member whose group is filled, because an empty cell proves nothing —
+# and it gets a duty of its own, because the duty of the section above is deleted
+# before this line and a page without a table cannot answer anything about a
+# column.
+GRUPPE_DIENST=$(s make-event "Arbeitsgruppe in der Teilnehmerliste" "$(date -d '+73 days' +%Y-%m-%d)" 2 "13:00")
+GRUPPE_NR="0992"
+neu "$GRUPPE_NR" dienstgruppe@example.org DienstGruppe Teilnehmer
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$GRUPPE_DIENST&fg_event_member_search=$GRUPPE_NR")
+nonce=$(printf '%s' "$seite" | hidden fg_assign_nonce)
+sende_zuweisung "$GRUPPE_NR" "$(s member-by-no "$GRUPPE_NR" id)" "$GRUPPE_DIENST" mail
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$GRUPPE_DIENST")
+has "the list of participants has a column for the work group" "$seite" "<th>Arbeitsgruppe</th>"
+if printf '%s' "$seite" | grep -qF "DienstGruppe"; then
+	ok "and shows the work group of the member"
+else
+	bad "and shows the work group of the member" "not on the page"
+fi
+hasnt "and the column is not called Gruppe, which is the group of the duty" "$seite" "<th>Gruppe</th>"
+s delete-event "$GRUPPE_DIENST" > /dev/null
+s delete-member "$(s member-by-no "$GRUPPE_NR" id)" > /dev/null
+
 # The lines of the section are read by name, so a member that is entered for the
 # duty and belongs to nobody else's test is removed again here.
+s delete-member "$(s member-by-no "$GRUPPE_NR" id)" > /dev/null
 s delete-member "$(s member-by-no 0951 id)" > /dev/null
 s delete-member "$(s member-by-no 0950 id)" > /dev/null
 clean "$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG")" "assignment screen"
@@ -1510,12 +1536,17 @@ has "the import form carries a nonce" "$members" 'name="fg_import_nonce"'
 has "the search field is there" "$members" 'name="fg_member_search"'
 clean "$members" "member list"
 
-# A member has four fields and nothing else. A fifth column in the form would
-# be a fifth thing the club has to keep in step with its own administration.
+# Four of the five fields are what a member cannot do without, and the fifth —
+# the work group — is the one a file may leave out. Both halves are checked: the
+# four as required text inputs, and the fifth as a text input that is **not**
+# required. A form that marked the work group as required would refuse a member
+# the club knows perfectly well; a form that left it out would make a group that
+# nobody has to type a field that the club has to fill in.
 #
-# Each field is asked for as what it has to be: a text input, and a required
-# one. Looking for the name alone would be answered by a hidden field, and
-# "required" somewhere on the page says nothing about which field it belongs to.
+# Each field is asked for as what it has to be: a text input, and — for the four
+# — a required one. Looking for the name alone would be answered by a hidden
+# field, and "required" somewhere on the page says nothing about which field it
+# belongs to.
 s delete-member "$(s member-by-no "0700" id)" > /dev/null 2>&1
 form=$(curl -sk -b "$JAR" "$MEMBERS&member=0")
 for feldangabe in 'fg_member_no:text' 'fg_member_email:email' 'fg_first_name:text' 'fg_last_name:text'; do
@@ -1527,6 +1558,83 @@ for feldangabe in 'fg_member_no:text' 'fg_member_email:email' 'fg_first_name:tex
 		bad "the form has a required $feldart field $feldname" "$(printf '%s' "$form" | feld "$feldname" "['type=\"$feldart\"', 'required']")"
 	fi
 done
+if [ "$(printf '%s' "$form" | feld fg_work_group "['type=\"text\"']")" = "ok" ]; then
+	ok "the form has a text field fg_work_group"
+else
+	bad "the form has a text field fg_work_group" "$(printf '%s' "$form" | feld fg_work_group "['type=\"text\"']")"
+fi
+# feld() answers "required" or "fehlt: required", so the answer that proves that
+# the field is NOT required is the second one.
+if [ "$(printf '%s' "$form" | feld fg_work_group "['required']")" = "fehlt: required" ]; then
+	ok "and it is not marked as required, because a member may have none"
+else
+	bad "and it is not marked as required, because a member may have none" "$(printf '%s' "$form" | feld fg_work_group "['required']")"
+fi
+# --- the work group: on the form, in the list, and through the import
+
+# --- the work group: on the form, in the list, and through the import
+echo "[10a] the work group of a member"
+GRUPPE_NR="0991"
+neu "$GRUPPE_NR" gruppen@example.org Gruppen Test
+
+# The form, because a club that types its groups in by hand is the normal case.
+seite=$(curl -sk -b "$JAR" "$MEMBERS&member=$(s member-by-no "$GRUPPE_NR" id)")
+snonce=$(val /dev/stdin fg_member_nonce <<< "$seite")
+if [ -n "$snonce" ]; then
+	ok "the form of that member carries a nonce"
+else
+	bad "the form of that member carries a nonce" "no nonce on the page"
+fi
+
+speichere_gruppe() {
+	curl -sk -b "$JAR" -L -o "$DIR/gruppe.html" -X POST "$BASE/wp-admin/admin-post.php" \
+		--data-urlencode "action=fg_save_member" \
+		--data-urlencode "fg_member_id=$(s member-by-no "$GRUPPE_NR" id)" \
+		--data-urlencode "fg_member_no=$GRUPPE_NR" \
+		--data-urlencode "fg_member_email=gruppen@example.org" \
+		--data-urlencode "fg_first_name=Gruppen" \
+		--data-urlencode "fg_last_name=Test" \
+		--data-urlencode "fg_work_group=$1" \
+		--data-urlencode "fg_member_nonce=$snonce"
+}
+speichere_gruppe "Gartenbau"
+if [ "$(s member-by-no "$GRUPPE_NR" work_group)" = "Gartenbau" ]; then
+	ok "a group typed into the form is stored"
+else
+	bad "a group typed into the form is stored" "$(s member-by-no "$GRUPPE_NR" work_group)"
+fi
+
+liste=$(curl -sk -b "$JAR" "$MEMBERS")
+has "the member list has a column for it" "$liste" "<th>Arbeitsgruppe</th>"
+if printf '%s' "$liste" | grep -qF "Gartenbau"; then
+	ok "and shows the value of that member"
+else
+	bad "and shows the value of that member" "not on the page"
+fi
+# The value comes back into the form, not only into the table: a value that is
+# stored and never shown again is a value the club has to type twice.
+seite=$(curl -sk -b "$JAR" "$MEMBERS&member=$(s member-by-no "$GRUPPE_NR" id)")
+if [ "$(val /dev/stdin fg_work_group <<< "$seite")" = "Gartenbau" ]; then
+	ok "and the form brings it back"
+else
+	bad "and the form brings it back" "$(val /dev/stdin fg_work_group <<< "$seite")"
+fi
+
+# And the way back out. A form that kept a value nobody wants any more would be a
+# group a member can never leave.
+speichere_gruppe ""
+if [ -z "$(s member-by-no "$GRUPPE_NR" work_group)" ]; then
+	ok "an emptied field clears the stored group"
+else
+	bad "an emptied field clears the stored group" "$(s member-by-no "$GRUPPE_NR" work_group)"
+fi
+if printf '%s' "$(curl -sk -b "$JAR" "$MEMBERS")" | grep -qF "Gartenbau"; then
+	bad "and the list forgets it too" "still on the page"
+else
+	ok "and the list forgets it too"
+fi
+# The member of this section belongs to nobody else's test.
+s delete-member "$(s member-by-no "$GRUPPE_NR" id)" > /dev/null
 # The browser is told the same length the column has. An address field that
 # offers 254 characters while the column holds 190 invites a visitor to type
 # something that is checked, accepted and then dropped by the schema.
@@ -1981,17 +2089,26 @@ has "and that the case of a name does not matter" "$regel" "Groß- und Kleinschr
 # words: two of the names contain a space ("first name"), and a list of words
 # would cut them in half and ask the import about "first".
 mapfile -t KOPFZEILEN < <(printf '%s\n' "$kopfzeilen" | grep -e '^names	')
-# Four rows, one for each field, and no fifth. The member has four fields, and
+# Five rows, one for each field, and no sixth. The member has five fields, and
 # that is a constant of the thing itself and not a guess about the names in it,
 # so this number can be written down. What cannot be written down is how many
 # names each row carries: that is the import's own list, and a test that carried
 # its own copy of it would go on being green when the two drift apart — which is
 # exactly the failure the loop below is there to catch, from the other side.
 ANZ_FELDER=$(printf '%s\n' "${KOPFZEILEN[@]}" | cut -f2 | sort -u | grep -c .)
-if [ "$ANZ_FELDER" -eq 4 ]; then
-	ok "the screen names a row for each of the four fields"
+if [ "$ANZ_FELDER" -eq 5 ]; then
+	ok "the screen names a row for each of the five fields"
 else
-	bad "the screen names a row for each of the four fields" "$ANZ_FELDER rows: $(printf '%s\n' "${KOPFZEILEN[@]}" | cut -f2 | sort -u | tr '\n' ' ')"
+	bad "the screen names a row for each of the five fields" "$ANZ_FELDER rows: $(printf '%s\n' "${KOPFZEILEN[@]}" | cut -f2 | sort -u | tr '\n' ' ')"
+fi
+# The one field a file may leave out says so in its own row, and not only in the
+# sentence under the table. A club that is looking at the names of the columns
+# decides there whether it has to fill the column in.
+freiwillig=$(printf '%s\n' "${KOPFZEILEN[@]}" | grep -c $'\tArbeitsgruppe (freiwillig)\t')
+if [ "$freiwillig" -ge 1 ]; then
+	ok "and the row of the work group says that a file may leave it out"
+else
+	bad "and the row of the work group says that a file may leave it out" "no name carries the mark"
 fi
 # A fourth name, and the file that goes with it. "Name" is how a lot of German
 # member administrations write the last name, so it is a name the import has to
@@ -2043,6 +2160,10 @@ for zeile in "${KOPFZEILEN[@]}"; do
 		'E-Mail-Adresse')  kopf="Mitgliedsnummer;$name;Vorname;Nachname" ;;
 		'Vorname')         kopf="Mitgliedsnummer;E-Mail-Adresse;$name;Nachname" ;;
 		'Nachname')        kopf="Mitgliedsnummer;E-Mail-Adresse;Vorname;$name" ;;
+		# The fifth column travels at the end, and the file is written with a
+		# value in it: the claim here is that the import finds the field under
+		# this name, not what it does with the value.
+		'Arbeitsgruppe (freiwillig)') kopf="Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname;$name" ;;
 		*) UNBEKANNT=$((UNBEKANNT+1)); continue ;;
 	esac
 	nummer=$(printf '17%02d' "$LAUF")
@@ -2050,7 +2171,13 @@ for zeile in "${KOPFZEILEN[@]}"; do
 	# change that member instead of writing a new one. The check asks whether
 	# the file was taken, so the member has to be gone first.
 	s delete-member "$(s member-by-no "$nummer" id)" > /dev/null 2>&1
-	printf '%s\n%s;kopfzeile%d@example.org;Probe;Probe\n' "$kopf" "$nummer" "$LAUF" > "$IMPORT_CSV"
+	if [ "${feld#* }" = "Arbeitsgruppe (freiwillig)" ]; then
+		zeile="%s;kopfzeile%d@example.org;Probe;Probe;Gartenbau"
+	else
+		zeile="%s;kopfzeile%d@example.org;Probe;Probe"
+	fi
+	printf '%s\n' "$kopf" > "$IMPORT_CSV"
+	printf "$zeile\n" "$nummer" "$LAUF" >> "$IMPORT_CSV"
 	curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import-spalte.html" -X POST "$BASE/wp-admin/admin-post.php" \
 		-F "action=fg_import_members" \
 		-F "fg_import_nonce=$INONCE" \
@@ -2101,6 +2228,121 @@ fi
 
 
 # --- a full duty refuses the registration on the server as well
+# --- the work group through the import, which is where the club's file lands
+
+# --- the work group through the import, which is where the file of the club lands
+echo "[10b] the work group through the import"
+screen=$(curl -sk -b "$JAR" "$MEMBERS")
+INONCE=$(val /dev/stdin fg_import_nonce <<< "$screen")
+
+importiere() {
+	printf '%s' "$1" > "$DIR/gruppe.csv"
+	curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/gruppe-import.html" -X POST "$BASE/wp-admin/admin-post.php" \
+		-F "action=fg_import_members" \
+		-F "fg_import_nonce=$INONCE" \
+		-F "fg_member_file=@$DIR/gruppe.csv;type=text/csv" > /dev/null
+}
+# Two readers, because there are two blocks: the report carries the numbers and
+# the notice carries the sentence that says the file was taken. Reading the
+# notice out of the report, or the other way round, is green or red for a reason
+# that has nothing to do with the import.
+zahlen() { report < "$DIR/gruppe-import.html"; }
+seite_nach_import() { cat "$DIR/gruppe-import.html"; }
+
+# The header the club's own administration writes, with the number of the field in
+# front of it. The member does not exist yet: an import of a number that is
+# already in the table changes that member, and the report would then say
+# "changed" where the claim here is "created".
+NEU_NR="1990"
+s delete-member "$(s member-by-no "$NEU_NR" id)" > /dev/null 2>&1
+importiere "$(printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname;E001: Arbeitsdienst\n%s;neu1990@example.org;Neu;Import;Gartenbau\n' "$NEU_NR")"
+has "the import takes the column under the name of the club's system" "$(zahlen)" "1 neue Mitglieder angelegt"
+if [ "$(s member-by-no "$NEU_NR" work_group)" = "Gartenbau" ]; then
+	ok "and writes the value of the cell"
+else
+	bad "and writes the value of the cell" "$(s member-by-no "$NEU_NR" work_group)"
+fi
+s delete-member "$(s member-by-no "$NEU_NR" id)" > /dev/null
+
+# Every other name of the same column, one file each. The names are read from the
+# screen and handed to the import, so a name that drifts away from what the
+# screen shows turns this red instead of quietly doing nothing.
+kopfzeilen=$(printf '%s' "$screen" | spalten 'fg-import-columns')
+mapfile -t GRUPPEN_NAMEN < <(printf '%s\n' "$kopfzeilen" | grep $'^names\tArbeitsgruppe (freiwillig)\t' | cut -f3)
+LAUF=0
+for name in "${GRUPPEN_NAMEN[@]}"; do
+	[ -n "$name" ] || continue
+	LAUF=$((LAUF+1))
+	nummer=$(printf '19%02d' "$LAUF")
+	s delete-member "$(s member-by-no "$nummer" id)" > /dev/null 2>&1
+	importiere "$(printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname;%s\n%s;name%d@example.org;Namen;Test;Gartenbau\n' "$name" "$nummer" "$LAUF")"
+	if [ "$(s member-by-no "$nummer" work_group)" = "Gartenbau" ]; then
+		ok "the header name '$name' is taken and its value written"
+	else
+		bad "the header name '$name' is taken and its value written" "member is $(s member-by-no "$nummer" id), group is $(s member-by-no "$nummer" work_group)"
+	fi
+	s delete-member "$(s member-by-no "$nummer" id)" > /dev/null 2>&1
+done
+if [ "$LAUF" -eq 5 ]; then
+	ok "and the screen named five names for that column"
+else
+	bad "and the screen named five names for that column" "$LAUF names"
+fi
+
+# A file without the column: it is read, and what is stored stays. The first
+# import in section [10] proves the same thing for the whole list with four
+# columns; this one proves it for a member whose group is not empty.
+# Its own member, created here and not taken over from the section above: a
+# member that the previous section removed would have no form left to write into,
+# and a save with a nonce for a record that is gone is refused.
+GRUPPE_NR="0993"
+neu "$GRUPPE_NR" gruppen@example.org Gruppen Test
+GRUPPE_NONCE=$(val /dev/stdin fg_member_nonce <<< "$(curl -sk -b "$JAR" "$MEMBERS&member=$(s member-by-no "$GRUPPE_NR" id)")")
+curl -sk -b "$JAR" -L -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_member" \
+	--data-urlencode "fg_member_id=$(s member-by-no "$GRUPPE_NR" id)" \
+	--data-urlencode "fg_member_no=$GRUPPE_NR" \
+	--data-urlencode "fg_member_email=gruppen@example.org" \
+	--data-urlencode "fg_first_name=Gruppen" \
+	--data-urlencode "fg_last_name=Test" \
+	--data-urlencode "fg_work_group=Gartenbau" \
+	--data-urlencode "fg_member_nonce=$GRUPPE_NONCE"
+if [ "$(s member-by-no "$GRUPPE_NR" work_group)" = "Gartenbau" ]; then
+	ok "the member of this section has a stored work group to protect"
+else
+	bad "the member of this section has a stored work group to protect" "$(s member-by-no "$GRUPPE_NR" work_group)"
+fi
+importiere "$(printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n%s;gruppen@example.org;Gruppen;Test\n' "$GRUPPE_NR")"
+has "a file without that column is imported" "$(seite_nach_import)" "Der Import wurde verarbeitet."
+if [ "$(s member-by-no "$GRUPPE_NR" work_group)" = "Gartenbau" ]; then
+	ok "and the stored group of that member stays"
+else
+	bad "and the stored group of that member stays" "$(s member-by-no "$GRUPPE_NR" work_group)"
+fi
+has "and the report counts that member as unchanged" "$(zahlen)" "1 unverändert"
+
+# An empty cell in a file that has the column is a statement of the club, and it
+# empties what is stored. The other way round than a missing column, and that
+# difference is the whole content of the rule.
+importiere "$(printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname;Arbeitsgruppe\n%s;gruppen@example.org;Gruppen;Test;\n' "$GRUPPE_NR")"
+if [ -z "$(s member-by-no "$GRUPPE_NR" work_group)" ]; then
+	ok "an empty cell empties the stored group"
+else
+	bad "an empty cell empties the stored group" "$(s member-by-no "$GRUPPE_NR" work_group)"
+fi
+has "and the report counts that as a change" "$(zahlen)" "1 Mitglieder geändert"
+
+# A value longer than the column is refused, and the message names the field and
+# the bound instead of saying that something went wrong.
+importiere "$(printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname;Arbeitsgruppe\n%s;gruppen@example.org;Gruppen;Test;%s\n' "$GRUPPE_NR" "$(printf 'x%.0s' $(seq 1 81))")"
+has "a work group that is too long is refused" "$(seite_nach_import)" "Arbeitsgruppe in Zeile 2 ist zu lang"
+has "and the message names the bound" "$(seite_nach_import)" "höchstens 80 Zeichen"
+if [ -z "$(s member-by-no "$GRUPPE_NR" work_group)" ]; then
+	ok "and nothing was written"
+else
+	bad "and nothing was written" "$(s member-by-no "$GRUPPE_NR" work_group)"
+fi
+s delete-member "$(s member-by-no "$GRUPPE_NR" id)" > /dev/null
 echo "[11] a full duty refuses the registration on the server"
 VOLLEDUTY=$(s make-event "Voller Dienst aus dem Admin" "$(date -d '+30 days' +%Y-%m-%d)" 1)
 VOLLMITGLIED=$(neu "0850" "voll@example.org" "Voll" "Belegt")

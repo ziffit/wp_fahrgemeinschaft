@@ -4,12 +4,13 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 29.09.2026 — **öffentliches HTTP 227, Mail-Ebene 124, Admin-Ebene 626,
-0 Fehler**, gegen den Stand **Plugin 1.24.0, Schema 1.7.0**, dazu **sechzehn von sechzehn
-Gegenproben mit dem gestellten Fehlerbild rot**. HTTP ist um eine Prüfung höher als bei
-1.23.0, und zwar um die, die behauptet, dass nur der Name einer Zeile fett ist. Mail und Admin
-sind unverändert: Die beiden letzten Fassungen haben keinen Formulartext, keine Mail und
-keinen Zustandsschritt berührt, sondern Regeln, die der Browser liest. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
+Letzter Lauf: 29.09.2026 — **öffentliches HTTP 227, Mail-Ebene 124, Admin-Ebene 656,
+0 Fehler**, gegen den Stand **Plugin 1.25.0, Schema 1.8.0**, dazu **dreiundzwanzig von
+dreiundzwanzig Gegenproben mit dem gestellten Fehlerbild rot**. HTTP und Mail sind
+unverändert: Diese Fassung berührt nichts, was ein Browser von einer E-Mail liest. Die
+Admin-Ebene ist um 30 höher — 27 Prüfungen für die Arbeitsgruppe (Formular, Liste, Import,
+Datenschutzweg, Teilnehmerliste) und drei ersetzte Behauptungen, die von „vier Feldern" auf
+„fünf" umgestellt wurden. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
 Shell-Satz `mail.sh` und 58 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
 gibt 124 aus. Die HTTP-Zahl ist um eine Prüfung höher als bei 1.20.0, und die Mail-Ebene um
 acht: sechs davon sind der neue Abschnitt `[5b]` (die sechs Formen eines Mail-Händlers), zwei
@@ -1946,6 +1947,90 @@ Mail- und Admin-Ebene sind unverändert, weil diese Fassung keinen Formulartext,
 keinen Zustandsschritt berührt: Sie dreht an einer Eigenschaft, die der Browser liest. HTTP
 ist um eine Prüfung höher.
 
+## Fassung 1.25.0: das Mitglied trägt eine Arbeitsgruppe
+
+Der Wunsch aus dem Verein: Der Import soll eine Spalte **E001: Arbeitsdienst** lesen, das
+Mitglied soll eine Arbeitsgruppe tragen, die Mitgliedertabelle soll sie zeigen, und die
+Teilnehmerliste eines Arbeitsdienstes soll sie auch zeigen. Drei Antworten waren dazu
+nötig, und alle drei sind vom Verein gekommen.
+
+### Eine freiwillige Spalte, und was „freiwillig" genau heißt
+
+Der Import verlangt bisher vier Spalten und weist eine Datei ohne eine davon zurück. Die
+Arbeitsgruppe ist die **fünfte** und wird **nicht** verlangt. Der Grund ist nicht
+Bequemlichkeit: Sie ist kein Schlüssel, und in keinem Feld des Plugins dreht sich etwas darum.
+Wichtig ist nur, was daraus folgt, und beides steht jetzt im Code statt nur in diesem
+Abschnitt:
+
+- **Fehlt die Spalte, bleibt stehen, was dasteht.** Der Zeilenaufbau nimmt den Schlüssel
+  `work_group` nur mit, wenn die Spalte in der Datei stand. Ein Schlüssel, der nicht in der
+  Zeile ist, ist ein Feld, über das niemand etwas gesagt hat — und das ist etwas anderes als
+  eine leere Zelle.
+- **Eine leere Zelle leert den gespeicherten Wert.** Dieselbe Regel wie bei Adresse, Vor- und
+  Nachname: Die Datei ist die Wahrheit. Ohne diese Regel wäre ein von Hand eingetragener Wert
+  einer, den der Verein über die Datei nie mehr loswird.
+
+Die beiden Fälle landen im selben Feld und werden an zwei Stellen unterschieden. Beide Stellen
+hatten vorher einen Vergleich über **vier** Felder, und beide hätten eine Änderung der
+Arbeitsgruppe als „nichts hat sich geändert" gemeldet und **nichts geschrieben** — der
+Vergleich im Import (`unchanged`) und der Vergleich im Repository (`update_member()`, der bei
+Gleichheit gar nicht erst schreibt). Der zweite Ort ist beim Handlaufen aufgefallen, der erste
+beim Lesen; beide sind jetzt in den Prüfungen.
+
+### Die Namen, unter denen die Spalte gelesen wird
+
+`e001: arbeitsdienst`, `arbeitsdienst`, `dienst`, `gruppe`, `arbeitsgruppe` — die Zahl gehört
+zum Namen, weil sie im Namen steht. Der Importbildschirm zeigt alle fünf in der Zeile der
+Arbeitsgruppe und **markiert diese Zeile als „freiwillig"**, weil ein Verein, der gerade die
+Namen der Spalten liest, dort entscheidet, ob er die Spalte füllen muss. Die Prüfung liest die
+Namen **vom Bildschirm** und bietet sie dem Import an; eine Liste, die der Test selbst
+mitbrächte, bliebe grün, wenn die beiden auseinanderlaufen — und genau das ist der Fehler,
+den diese Reihe schon einmal gesehen hat.
+
+### Was an der Oberfläche dazukam
+
+- Eine Spalte **Arbeitsgruppe** in der Mitgliederliste, zwischen Nachname und Adresse. Eine
+  leere Zelle bekommt einen Strich und nicht nichts: „leer" und „nicht angegeben" sollen
+  unterschiedlich aussehen.
+- Ein Feld **Arbeitsgruppe** im Mitgliederformular, mit derselben Grenze (80 Zeichen) wie die
+  beiden Namensfelder und **ohne** `required` — ein Verein, der einem Mitglied keine Gruppe
+  gibt, muss es trotzdem anlegen können. Das Formular ist der ganze Datensatz: Was dort
+  fehlt, wurde geleert.
+- Eine Spalte **Arbeitsgruppe** in der Teilnehmerliste des Arbeitsdienstes, mit dem
+  ausdrücklichen Kommentar, dass es die Arbeitsgruppe des **Mitglieds** ist und nicht die
+  Gruppe des Dienstes. Zwei Dinge, die eine Spalte „Gruppe" nicht unterscheidet.
+- Ein Satz auf dem Importschirm, der die Regel in Wörtern sagt.
+- Die Arbeitsgruppe steht im **Bericht zur Datenauskunft**: Der Bericht verspricht, was dieses
+  Plugin speichert, und ein weggelassenes Feld wäre ein Versprechen, das nicht gehalten wird.
+
+### Die Prüfungen, die von „vier" auf „fünf" umgestellt wurden
+
+Drei Behauptungen in der Suite sprachen von **vier** Feldern des Mitglieds, und alle drei sind
+ersetzt statt gestrichen:
+
+| Vorher | Jetzt |
+| --- | --- |
+| *the screen names a row for each of the four fields* | *… of the five fields*, und *the row of the work group says that a file may leave it out* |
+| *A member has four fields and nothing else* (Kommentar über der Formularprüfung) | Vier Pflichtfelder als Pflicht-Textfelder, **plus** die Arbeitsgruppe als Textfeld **ohne** `required` |
+| Die Schleife über die Namen mit einem `case` je Feld (fünfter Fall: Arbeitsgruppe) | dieselbe Schleife, ein Fall mehr — und der Fall schreibt den Wert in die Datei, damit die Behauptung „der Import findet das Feld unter diesem Namen" auch eine Zelle prüft |
+
+### Die Gegenproben
+
+| Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
+| --- | --- | --- |
+| `read_member_fields()` lässt den Schlüssel fallen | Das Formular speichert die Gruppe | 12 Prüfungen |
+| Die Spalte wird zur Pflicht gemacht | Eine Datei ohne sie wird gelesen | **47** Prüfungen |
+| Der Vergleich `unchanged` im Import übersieht sie | Die Zähler stimmen | 3 Prüfungen |
+| Der Vergleich in `update_member()` übersieht sie | Eine leere Zelle leert den Wert | 6 Prüfungen |
+| Der Zeilenaufbau setzt den Schlüssel immer | Fehlende Spalte lässt den Wert stehen | 3 Prüfungen |
+| Die Spalte fehlt in der Teilnehmerliste | Die Liste zeigt sie | 1 Prüfung |
+| Das Formularfeld bekommt `required` | Es ist nicht als Pflicht markiert | 1 Prüfung |
+
+Die zweite Zeile ist die interessanteste: Die Spalte zur Pflicht zu machen ist nicht ein
+Detail, es reißt **jede** bestehende Datei eines Vereins weg, weil in der ganzen Suite jede
+Datei vier Spalten hat — 47 Prüfungen fallen. Das ist die Messung für die Frage „Pflicht oder
+freiwillig", und sie ist in Zahlen beantwortet, bevor die Frage gestellt wurde.
+
 ## Mail-Auswertung
 
 `tests/mail-log.php` wird als `wp-content/mu-plugins/fg-mail-log.php` eingespielt. Es
@@ -2061,7 +2146,8 @@ das: Der Hinweis ist hier nicht zu sehen, und das ist richtig.
 
 - **Nicht den echten Export der Mitgliederverwaltung.** Der Import erwartet eine
   CSV-Datei mit einer Kopfzeile und den vier Spalten für Mitgliedsnummer, E-Mail-Adresse,
-  Vorname und Nachname. Welche Überschriften eine Mitgliederverwaltung dafür schreibt,
+  Vorname und Nachname; die fünfte Spalte für die Arbeitsgruppe ist freiwillig und darf unter
+  fünf Namen kommen, von denen `E001: Arbeitsdienst` der des Vereins ist. Welche Überschriften eine Mitgliederverwaltung dafür schreibt,
   ist eine Vermutung: `class-fg-member-import.php` trägt pro Feld eine Liste von
   Alternativen, und der Test füttert sie mit Namen, die plausibel sind, nicht mit den
   des Vereins. Geprüft ist damit der Importweg, nicht die Erkennung der Spalten des

@@ -88,6 +88,10 @@ final class FG_Store {
 		'last_name',
 		'created_at',
 		'updated_at',
+		// At the end of the list, and that is where the column stands in the
+		// schema file too: dbDelta appends a missing column at the end, and a
+		// fresh installation and an upgrade have to come out in the same order.
+		'work_group',
 	);
 
 	/**
@@ -1079,7 +1083,7 @@ final class FG_Store {
 		$members       = FG_Schema::members_table();
 		$rows          = $this->db->get_results(
 			$this->db->prepare(
-				"SELECT r.*, m.member_no, m.email, m.first_name, m.last_name
+				"SELECT r.*, m.member_no, m.email, m.first_name, m.last_name, m.work_group
 				FROM $registrations r
 				INNER JOIN $members m ON m.id = r.member_id
 				WHERE r.event_id = %d
@@ -1638,6 +1642,7 @@ final class FG_Store {
 		$member->last_name  = (string) $row['last_name'];
 		$member->created_at = (string) $row['created_at'];
 		$member->updated_at = (string) $row['updated_at'];
+		$member->work_group = isset( $row['work_group'] ) ? (string) $row['work_group'] : '';
 
 		return $member;
 	}

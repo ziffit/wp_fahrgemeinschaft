@@ -327,7 +327,7 @@ switch ( $command ) {
 			break;
 		}
 
-		$fields = array( 'id', 'member_no', 'email', 'first_name', 'last_name' );
+		$fields = array( 'id', 'member_no', 'email', 'first_name', 'last_name', 'work_group' );
 		$name   = isset( $args[1] ) ? $args[1] : 'id';
 		fg_state_out( in_array( $name, $fields, true ) ? $member->{$name} : 'unknown-field' );
 		break;

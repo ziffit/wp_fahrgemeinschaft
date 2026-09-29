@@ -20,7 +20,7 @@ final class FG_Schema {
 	 *
 	 * @var string
 	 */
-	const VERSION = '1.7.0';
+	const VERSION = '1.8.0';
 
 	/**
 	 * Option name holding the installed schema version.
@@ -94,6 +94,18 @@ final class FG_Schema {
 	 * @var int
 	 */
 	const MEMBER_NAME_MAX = 80;
+
+	/**
+	 * Longest accepted work group of a member, in characters.
+	 *
+	 * A work group is a word or two — "Gartenbau", "Strand", "Küche Samstag" —
+	 * and 80 is the same bound as the two name columns. It is checked and refused
+	 * with a message rather than cut off, for the reason the address bound gives:
+	 * a value that is shortened without a word is a value the club did not write.
+	 *
+	 * @var int
+	 */
+	const MEMBER_WORK_GROUP_MAX = 80;
 
 	/**
 	 * Longest accepted e-mail address of a member.
@@ -324,6 +336,7 @@ final class FG_Schema {
 	first_name varchar(80) NOT NULL DEFAULT '',
 	last_name varchar(80) NOT NULL DEFAULT '',
 	updated_at datetime NOT NULL DEFAULT '1970-01-01 00:00:00',
+	work_group varchar(80) NOT NULL DEFAULT '',
 	PRIMARY KEY  (id),
 	UNIQUE KEY member_no (member_no),
 	KEY email (email)

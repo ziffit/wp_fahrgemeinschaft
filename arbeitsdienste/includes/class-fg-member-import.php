@@ -88,6 +88,13 @@ final class FG_Member_Import {
 		'email'      => array( 'e-mail', 'email', 'e-mail-adresse', 'email-adresse', 'mail', 'member_email' ),
 		'first_name' => array( 'vorname', 'first name', 'first_name' ),
 		'last_name'  => array( 'nachname', 'familienname', 'last name', 'last_name', 'surname', 'name' ),
+		// The column the club's own administration writes. Its name carries the
+		// number of the field in that system ("E001:"), and the number is part of
+		// the name because it is part of the name in the file. The plain words are
+		// listed next to it because a hand-made file says "Arbeitsgruppe" and a
+		// different one says "Dienst", and a club that is refused for a header it
+		// was shown on the screen a page earlier will not try a second time.
+		'work_group' => array( 'e001: arbeitsdienst', 'arbeitsdienst', 'dienst', 'gruppe', 'arbeitsgruppe' ),
 	);
 
 	/**
@@ -100,7 +107,20 @@ final class FG_Member_Import {
 		'email'      => 'E-Mail-Adresse',
 		'first_name' => 'Vorname',
 		'last_name'  => 'Nachname',
+		'work_group' => 'Arbeitsgruppe',
 	);
+
+	/**
+	 * The fields a file has to carry.
+	 *
+	 * Four of the five, and the work group is the one that is not: it is no key
+	 * and nothing in the plugin turns on it. A file without the column is read and
+	 * imported, and the work groups that are stored stay as they are — a file
+	 * that says nothing about them is not a file that empties them.
+	 *
+	 * @var string[]
+	 */
+	private static $required_fields = array( 'member_no', 'email', 'first_name', 'last_name' );
 
 	/**
 	 * Repository.
@@ -130,6 +150,42 @@ final class FG_Member_Import {
 	 *
 	 * @return array<string, string[]> Label to accepted header names.
 	 */
+	/**
+	 * The label of one field, as the club knows it.
+	 *
+	 * @param string $field Field name.
+	 * @return string
+	 */
+	public static function label_of( $field ) {
+		return isset( self::$field_labels[ $field ] ) ? self::$field_labels[ $field ] : (string) $field;
+	}
+
+	/**
+	 * The fields a file does not have to carry.
+	 *
+	 * @return string[]
+	 */
+	public static function optional_columns() {
+		return array_diff( array_keys( self::$field_labels ), self::$required_fields );
+	}
+
+	/**
+	 * The field name behind a label of the header list.
+	 *
+	 * The admin screen walks the labels and has to know which of them is the one
+	 * that a file may leave out. Reading the list backwards here instead of
+	 * building a second list of labels there keeps one place that knows which
+	 * fields are required.
+	 *
+	 * @param string $label Label as used on the import screen.
+	 * @return string Field name, or an empty string when the label is unknown.
+	 */
+	public static function field_name_of( $label ) {
+		$gefunden = array_search( $label, self::$field_labels, true );
+
+		return false === $gefunden ? '' : $gefunden;
+	}
+
 	public static function accepted_columns() {
 		$out = array();
 
@@ -144,8 +200,10 @@ final class FG_Member_Import {
 	 * Read a member list out of CSV text.
 	 *
 	 * The result is a list of rows in the order of the file, each with the four
-	 * fields under their own names. Nothing here knows the database; a file that
-	 * cannot be read is refused with a reason, never repaired.
+	 * fields under their own names — plus the work group if the file carries that
+	 * column, and **without** that key if it does not. Nothing here knows the
+	 * database; a file that cannot be read is refused with a reason, never
+	 * repaired.
 	 *
 	 * @param string $raw File contents.
 	 * @return array{ok: bool, error: array, rows: array<int, array<string, string>>}
@@ -192,7 +250,7 @@ final class FG_Member_Import {
 		$columns      = $this->map_header( $header_cells );
 
 		$missing = array();
-		foreach ( array_keys( self::$field_labels ) as $field ) {
+		foreach ( self::$required_fields as $field ) {
 			if ( ! isset( $columns[ $field ] ) ) {
 				$missing[] = self::$field_labels[ $field ];
 			}
@@ -201,7 +259,13 @@ final class FG_Member_Import {
 		if ( ! empty( $missing ) ) {
 			return $this->failure(
 				self::ERROR_MISSING_COLUMN,
-				array( 'spalten' => $missing, 'erwartet' => array_values( self::$field_labels ) )
+				array(
+					'spalten'  => $missing,
+					// Only the four are named as expected: a complaint that lists a
+					// column as missing and does not need it is a complaint the club
+					// cannot act on.
+					'erwartet' => array_map( array( __CLASS__, 'label_of' ), self::$required_fields ),
+				)
 			);
 		}
 
@@ -252,6 +316,14 @@ final class FG_Member_Import {
 				'last_name'  => $this->clean( $cells[ $columns['last_name'] ] ),
 			);
 
+			// Only if the column is there. Without it the key is left out of the
+			// row entirely, and a key that is not there is a field nobody said
+			// anything about — which is a different thing from a cell that is empty
+			// on purpose, and only the second one empties what is stored.
+			if ( isset( $columns['work_group'] ) ) {
+				$row['work_group'] = $this->clean( $cells[ $columns['work_group'] ] );
+			}
+
 			if ( '' === $row['member_no'] ) {
 				return $this->failure( self::ERROR_EMPTY_NUMBER, array( 'zeile' => $zeile ) );
 			}
@@ -292,7 +364,17 @@ final class FG_Member_Import {
 			// says whether two lines are the same member, and that is checked
 			// above.
 
-			foreach ( array( 'member_no' => FG_Schema::MEMBER_NO_MAX, 'first_name' => FG_Schema::MEMBER_NAME_MAX, 'last_name' => FG_Schema::MEMBER_NAME_MAX ) as $field => $limit ) {
+			$grenzen = array(
+				'member_no'  => FG_Schema::MEMBER_NO_MAX,
+				'first_name' => FG_Schema::MEMBER_NAME_MAX,
+				'last_name'  => FG_Schema::MEMBER_NAME_MAX,
+			);
+
+			if ( isset( $row['work_group'] ) ) {
+				$grenzen['work_group'] = FG_Schema::MEMBER_WORK_GROUP_MAX;
+			}
+
+			foreach ( $grenzen as $field => $limit ) {
 				if ( $this->string_length( $row[ $field ] ) > $limit ) {
 					return $this->failure(
 						self::ERROR_TOO_LONG,
@@ -357,10 +439,19 @@ final class FG_Member_Import {
 				continue;
 			}
 
+			// A file without the column says nothing about work groups, and a
+			// member whose only difference to the file is a work group that the
+			// file does not carry is **unchanged**: he is not written to, and the
+			// count of changed members stays true. Both cases are one comparison,
+			// because an absent column and a stored value have to be read as the
+			// same thing — a file that does not mention a field may not change it.
+			$gruppe = array_key_exists( 'work_group', $row ) ? $row['work_group'] : $existing->work_group;
+
 			if (
 				$existing->email === $email
 				&& $existing->first_name === $row['first_name']
 				&& $existing->last_name === $row['last_name']
+				&& $existing->work_group === $gruppe
 			) {
 				++$unchanged;
 				continue;
@@ -626,7 +717,11 @@ final class FG_Member_Import {
 	}
 
 	/**
-	 * Map the header cells onto the four fields.
+	 * Map the header cells onto the fields they name.
+	 *
+	 * A field that is not named by any cell does not get an entry, and that is how
+	 * a file without the work group column is read: the row leaves the key out and
+	 * nothing downstream can mistake it for an empty value.
 	 *
 	 * @param string[] $cells Header cells.
 	 * @return array<string, int> Field name to cell index.

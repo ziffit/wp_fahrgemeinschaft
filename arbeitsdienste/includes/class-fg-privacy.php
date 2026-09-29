@@ -163,6 +163,10 @@ final class FG_Privacy {
 					array( 'name' => __( 'Art', 'arbeitsdienste' ), 'value' => $ride_data['mode'] ),
 					array( 'name' => __( 'Vorname', 'arbeitsdienste' ), 'value' => $member ? $member->first_name : '' ),
 					array( 'name' => __( 'Nachname', 'arbeitsdienste' ), 'value' => $member ? $member->last_name : '' ),
+					// The work group is stored about a person, so it belongs in the
+					// report: the report promises what this plugin keeps, and leaving
+					// one field out would be a promise that is not kept.
+					array( 'name' => __( 'Arbeitsgruppe', 'arbeitsdienste' ), 'value' => $member ? $member->work_group : '' ),
 					array( 'name' => __( 'Arbeitsdienst', 'arbeitsdienste' ), 'value' => $event ? $event->title : '' ),
 					array( 'name' => __( 'Datum', 'arbeitsdienste' ), 'value' => $ride_data['event_date'] ),
 					array( 'name' => __( 'Abfahrtsbereich', 'arbeitsdienste' ), 'value' => $ride_data['origin'] ),
