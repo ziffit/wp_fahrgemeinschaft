@@ -4,9 +4,9 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 30.09.2026 — **öffentliches HTTP 236, Mail-Ebene 124, Admin-Ebene 658,
-0 Fehler**, gegen den Stand **Plugin 1.25.2, Schema 1.8.0**, dazu **achtundzwanzig von
-achtundzwanzig Gegenproben mit dem gestellten Fehlerbild rot**. HTTP und Mail sind
+Letzter Lauf: 30.09.2026 — **öffentliches HTTP 237, Mail-Ebene 124, Admin-Ebene 658,
+0 Fehler**, gegen den Stand **Plugin 1.25.3, Schema 1.8.0**, dazu **dreißig von dreißig
+Gegenproben mit dem gestellten Fehlerbild rot**. HTTP und Mail sind
 unverändert: Diese Fassung berührt nichts, was ein Browser liest und nichts, was in einer
 E-Mail steht. Die Admin-Ebene ist um 2 höher: **Eine** falsche Behauptung aus 1.25.0 wurde
 ersetzt (die Teilnehmerliste suchte über eine ganze Seite nach einem Wort, das im
@@ -1858,6 +1858,13 @@ senkrecht gelesen werden sollte. `minmax(min(380px, 100%), 1fr)` macht aus der M
 ein „380px, aber nicht mehr, als da ist" — und die Regel steht damit **außerhalb** der
 Media-Abfrage, weil sie für jede Breite gilt und nicht nur für schmale.
 
+**Nachtrag aus 1.25.3:** Diese Regel steht nicht mehr im Stylesheet. Der Verein hat eine
+Fahrgemeinschaft je Zeile verlangt, das Raster hat jetzt genau eine Spalte
+(`grid-template-columns: 1fr`), und der Grund von 1.23.0 ist damit gegenstandslos: Eine
+Spalte kann nicht breiter werden als ihr Behälter, wenn es nur eine gibt. Die Beobachtung
+von 1.23.0 war trotzdem richtig — sie hat nur eine andere Regel gefunden, und die Regel,
+die danebenstand, hat die zweite Spalte erzeugt.
+
 ### Die Regel, die weg soll
 
 `.fg-section, .fg-event-card, .fg-ride { padding: 1rem; }` innerhalb von
@@ -1907,13 +1914,22 @@ aus dem Media-Block, weil sie dort zu Recht nicht steht. Das war der erste Fehls
 Prüfung: Sie suchte `min(380px, 100%)` im Block für schmale Bildschirme und wäre für ein
 Stylesheet rot gewesen, in dem die Regel genau richtig steht.
 
+Seit 1.25.3 sucht diese Prüfung nichts mehr: Das Raster der Fahrgemeinschaften hat nur noch
+eine Spalte, und die Behauptung „nie breiter als die Seite" ist ohne `min(380px, 100%)`
+gegenstandslos. An ihrer Stelle steht ein **eigener** Test mit eigenem Namen
+(„the stylesheet puts one entry of the ride list per line, at any width"), der verbietet,
+dass irgendeine Regel eine zweite Spalte erzeugen kann. Er war vorher eine Zeile in diesem
+großen Test, und das war falsch: Als Fehler trug er dessen Namen und dessen Fehlermeldung
+(„on a narrow screen the name is not above the value"), obwohl der Fehler in der
+Fahrgemeinschaftsliste war.
+
 ### Die Gegenproben
 
 | Fehlerbild | Erwartete Prüfung | Was tatsächlich rot wurde |
 | --- | --- | --- |
 | Die Stapel-Regeln der Tabelle entfernt | Der Name steht über dem Wert | 1 Prüfung |
 | Die entfernte `padding: 1rem`-Regel wiederhergestellt | Sie bleibt weg | 1 Prüfung |
-| `minmax(380px, 1fr)` wieder ohne `min()` | Das Raster ist nie breiter als die Seite | 1 Prüfung |
+| `minmax(380px, 1fr)` wieder ohne `min()` | Das Raster ist nie breiter als die Seite | 1 Prüfung (seit 1.25.3 von der strengeren Behauptung „nur eine Spalte" mit abgedeckt) |
 
 Ein Detail, das beim Messen auffiel und nicht am Plugin liegt: Die Prüfung las zuerst eine
 alte Datei. Das Stylesheet war nach dem Schreiben nicht in die Testinstanz gespiegelt, und
@@ -2298,6 +2314,96 @@ Paares, die zweite Bedingung, der nächste Schritt und sieben aufgeführte Befun
 und zwei bestehende Prüfungen wurden auf **beide** Absagen umgestellt, ohne zu wachsen.
 Mail und Admin sind unverändert — diese Fassung berührt keinen Formulartext außer dem der
 Absage und keinen Zustandsschritt.
+
+## Fassung 1.25.3: eine Fahrgemeinschaft je Zeile
+
+Aus dem Verein: Bei der Darstellung der Fahrgemeinschaften **eine Fahrgemeinschaft pro
+Zeile, egal bei welcher Breite**. Aktuell werden manchmal zwei nebeneinander angezeigt.
+
+### Die Ursache war eine Absicht von 1.17.0, nicht ein Versehen
+
+`.fg-rides` war ein Raster, das so viele Spalten von mindestens 380px nebeneinander füllte,
+wie die Seite hergab:
+
+```css
+grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
+```
+
+Auf einem breiten Bildschirm passen zwei solche Spalten nebeneinander, und das ist genau,
+was dort geschah. Das `min()` stammt aus 1.23.0 und hatte einen guten, anderen Grund: Eine
+**feste** Mindestbreite von 380px ist breiter als ein Telefon, und ein Raster, dessen Spalte
+breiter ist als sein Behälter, schiebt die ganze Seite zur Seite — man scrollt waagerecht
+durch eine Liste, die senkrecht gelesen werden sollte. Dieser Grund ist mit der zweiten
+Spalte gegenstandslos: Eine Spalte kann nicht breiter werden als das, worin sie steht, wenn
+es nur eine gibt. `1fr` löst beides.
+
+Das Raster bleibt ein Raster, obwohl es nur noch eine Spalte hat: Seine einzige Aufgabe ist
+der Abstand zwischen zwei Einträgen, und ein einfacher Block bräuchte einen Außenabstand,
+den ein Theme überschreiben dürfte.
+
+### Die Regel steht außerhalb der Telefonregel — aus demselben Grund wie 1.23.0
+
+Eine Aussage über **jede** Breite gehört nicht in den Block für schmale Bildschirme. Ein
+Griff in die Grundregel allein hätte nur die erste der beiden Breiten entschieden, und eine
+Regel im Media-Block hätte nur die zweite. Genau das war der erste Fehlschlag der alten
+Prüfung: Sie suchte `min(380px, 100%)` im Block für schmale Bildschirme und wäre für ein
+Stylesheet rot gewesen, in dem die Regel **richtig** stand.
+
+### Die Prüfung, die das Zweispaltige verlangt hat, ist ersetzt
+
+Die alte Behauptung steckte als eine Zeile in einem großen Strukturtest über die
+Diensttabelle und hieß „das Raster ist nie breiter als die Seite". Sie ist durch einen
+**eigenen** Test mit eigenem Namen und eigener Fehlermeldung ersetzt. Zwei Gründe:
+
+- Der alte Test hätte die neue Regel nicht gefunden. Ein einspaltiges Raster ist nie breiter
+  als sein Behälter, `min(380px, 100%)` steht nicht mehr im Stylesheet — die Behauptung war
+  damit nicht falsch, aber **gegenstandslos**: Sie hätte eine seit 1.25.3 unmögliche
+  Wortlautform verlangt.
+- Als Zeile im großen Test trug sie dessen **Namen**. Eine rote Zeile las sich
+  „on a narrow screen the name is not above the value", während der Fehler in der
+  Fahrgemeinschaftsliste war. Der neue Test heißt nach dem, was er behauptet, und seine
+  Fehlermeldung nennt den Rastergrund.
+
+### Die neue Behauptung
+
+> **Das Stylesheet stellt je Zeile genau einen Eintrag der Fahrgemeinschaftsliste, bei jeder
+> Breite.**
+
+Nicht „der Wert ist ein bestimmter", sondern: **Keine Regel irgendwo kann eine zweite Spalte
+erzeugen.** Gelesen wird das ganze Stylesheet, nicht der Media-Block, und geprüft wird:
+
+- jede Regel, die `.fg-rides` nennt und `grid-template-columns` setzt, muss genau **ein**
+  `1fr` nennen — und darf weder `repeat(` noch `auto-fit` noch `auto-fill` enthalten;
+- **keine** Regel, die `.fg-rides` nennt, darf `grid-auto-flow: column` setzen. Ein Raster
+  bekommt eine zweite Spalte auch so, ohne eine zu benennen, und die Behauptung gilt dem,
+  was der Schirm zeigt, nicht der benutzten Eigenschaft;
+- es muss **überhaupt** eine solche Regel geben. „Gar keine Spalte" ist auch daneben.
+
+### Die Gegenproben
+
+| Fehlerbild | Erwartet rot | Tatsächlich rot |
+| --- | --- | --- |
+| Das Raster bekommt `repeat(auto-fit, minmax(min(380px, 100%), 1fr))` zurück | die Behauptung | **1**, mit richtigem Namen |
+| Die Grundregel bleibt einspaltig, eine Regel **im Media-Block** stellt sie auf `repeat(2, …)` | dieselbe | **1** |
+
+Die zweite ist die wichtigere: Sie zeigt, dass die Prüfung nicht nur die Grundregel liest,
+sondern beide Stellen — eine Prüfung, die nur die Grundregel ansehen würde, wäre bei
+beidem grün.
+
+### Ein Fehler, den die Suite sofort gemeldet hat
+
+Der erste Wurf des neuen Tests war **rot auf dem echten Stylesheet**. Ursache: Im
+Python-Teil stand `css`, ohne dass es gelesen wurde — der Name stammte aus dem Test darüber,
+und jeder Test ist ein eigenes Programm. Ein `NameError` wird von einer Prüfung zu einer
+roten Zeile über das Stylesheet, und eine rote Zeile ist nicht der Ort, an dem der Fehler
+zu suchen ist. Der Name wird jetzt am Anfang gelesen, und der Kommentar sagt, warum.
+
+### Läufe
+
+HTTP **237**, Mail 124, Admin 658, 0 Fehler. HTTP ist um 1 höher als bei 1.25.2: Die alte
+Forderung nach `min(380px, 100%)` steckte als Zeile **innerhalb** eines großen Tests und
+zählte deshalb nicht als eigene Prüfung; der neue Test daneben schon. Mail und Admin sind
+unverändert.
 
 ## Mail-Auswertung
 

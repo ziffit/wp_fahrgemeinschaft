@@ -183,16 +183,23 @@
 	color: #fff;
 }
 
-/* --- the list of rides, denser and in two columns on a wide page --- */
+/* --- the list of rides: one entry per line, at every width --- */
 
 .fg-rides {
 	display: grid;
-	/* The smallest column may never be wider than the column it stands in. A
-	   fixed `380px` is wider than a phone, and a grid whose column is wider than
-	   its container pushes the whole page sideways: the reader scrolls
-	   horizontally to see a list that was meant to be read downwards. `min()` is
-	   what turns the minimum into "380px, but not more than what is there". */
-	grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
+	/* One column, and no more at any width. This was a grid that fitted as many
+	   columns of at least 380px as the page had room for, so a wide page showed
+	   two entries next to each other; the club asked for one entry per line. The
+	   rule therefore stands here and not in the block for narrow screens, because
+	   a rule in that block would only have decided for the width it stands in.
+
+	   A single `1fr` also settles the question the `min(380px, 100%)` answered
+	   before: a column can no longer be wider than the column it stands in,
+	   because there is no width left in it that could exceed anything.
+
+	   The grid stays a grid. Its only job is the gap between two entries, and a
+	   plain block would have needed a margin that a theme is free to overrule. */
+	grid-template-columns: 1fr;
 	gap: 0.75rem;
 }
 

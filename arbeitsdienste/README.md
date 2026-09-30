@@ -2,7 +2,7 @@
 
 Minimales WordPress-Plugin zur Planung von Vereinsarbeitsdiensten, zur Anmeldung von Mitgliedern zu einem Dienst und zur Koordination der Fahrgemeinschaften je Dienst.
 
-Fassung 1.25.2.
+Fassung 1.25.3.
 
 ## Installation
 
@@ -278,12 +278,23 @@ Vor einer Installation sollten in einer Staging-Installation mindestens diese F�
   wieder welche. Die Regel ist weg, und beide Wege tragen denselben Innenabstand. Bei
   `.fg-rides .fg-ride` steht er noch, weil diese Liste dichter ist — dort sagt die
   Telefonregel `0.7rem 0.8rem`.
-- **Das Raster der Fahrgemeinschaften ist nie breiter als die Seite.** Es stand auf
-  `minmax(380px, 1fr)`, und 380px sind mehr als ein Telefon breit: Ein Raster, dessen Spalte
-  breiter ist als sein Behälter, schiebt die ganze Seite zur Seite, und man scrollt
-  waagerecht durch eine Liste, die senkrecht gelesen werden sollte.
-  `minmax(min(380px, 100%), 1fr)` gilt für jede Breite und steht deshalb außerhalb der
-  Telefonregel.
+- **Eine Fahrgemeinschaft je Zeile, bei jeder Breite.** Seit 1.25.3 hat das Raster der
+  Liste genau **eine** Spalte: `grid-template-columns: 1fr`. Vorher stand es auf
+  `repeat(auto-fit, minmax(min(380px, 100%), 1fr))` und füllte so viele Spalten von mindestens
+  380px nebeneinander, wie die Seite hergab — auf einem breiten Bildschirm standen zwei
+  Fahrgemeinschaften nebeneinander. Der Verein hat eine je Zeile verlangt, und das gilt auf
+  dem Telefon wie auf dem Desktop.
+  - Der alte Grund — das Raster darf nie breiter als sein Behälter werden, sonst schiebt es
+    die ganze Seite zur Seite — ist damit gegenstandslos: Eine Spalte kann nicht breiter
+    werden als das, worin sie steht, wenn es nur eine gibt. Die Regel `min(380px, 100%)`
+    und ihre Begründung sind deshalb aus dem Code **und** aus diesem Eintrag verschwunden.
+  - Die Regel steht weiterhin **außerhalb** der Telefonregel, und aus demselben Grund wie
+    damals: Eine Aussage über jede Breite gehört nicht in den Block, der nur für schmale
+    Bildschirme gilt. Ein Griff in die Grundregel allein hätte nur die erste der beiden
+    Breiten entschieden.
+  - Das Raster bleibt ein Raster, obwohl es nur noch eine Spalte hat: Seine einzige
+    Aufgabe ist der Abstand zwischen zwei Einträgen, und ein einfacher Block bräuchte einen
+    Außenabstand, den ein Theme überschreiben dürfte.
 - **Auf dem Telefon ein Feld je Zeile und ein Knopf über die ganze Breite.** Die beiden
   Felder der Anmeldung standen nebeneinander, auch wenn das Telefon schmaler war als ihre
   gemeinsame Grundbreite, und ein Feld ohne Platz für seine eigene Fehlermeldung ist ein Feld,

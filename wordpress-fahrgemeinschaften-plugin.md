@@ -63,9 +63,12 @@ Ein schlankes WordPress-Plugin für Vereinsmitglieder, das öffentlich sichtbare
 - **Die öffentliche Seite ist auf einem Telefon bedienbar, und zwar ohne Querformat.** Seit
   1.23.0 steht der Name einer Zeile über ihrem Wert, sobald der Bildschirm schmaler als 640
   Pixel ist, die beiden Felder einer Anmeldung stehen untereinander, und der Knopf nimmt die
-  volle Breite. Das Raster der Fahrgemeinschaften (`minmax(min(380px, 100%), 1fr)`) ist nie
-  breiter als sein Behälter, weil eine feste Mindestbreite von 380px ein Telefon breiter
-  machen und die ganze Seite seitwärts schieben würde. An den Seiten ist an keiner Stelle ein
+  volle Breite. Das Raster der Fahrgemeinschaften hat seit 1.25.3 genau **eine** Spalte
+  (`grid-template-columns: 1fr`), also steht eine Fahrgemeinschaft je Zeile, auf dem Telefon
+  wie auf dem Desktop; vorher füllte das Raster so viele Spalten von mindestens 380px, wie
+  die Seite hergab, und auf einem breiten Bildschirm standen zwei nebeneinander. Eine
+  feste Mindestbreite wäre dabei nie breiter als ihr Behälter geworden — sie ist mit der
+  zweiten Spalte verschwunden. An den Seiten ist an keiner Stelle ein
   Innenabstand: Der Rahmen um die Karten ist mit Version 1.22.0 weggefallen, und die
   Telefonregel, die ihn wieder eingeführt hätte, ist mit 1.23.0 entfernt worden.
 

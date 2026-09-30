@@ -1315,13 +1315,6 @@ if not hat('.fg-event-data tr + tr th', 'border-top'):
     sys.exit(1)
 if not hat('.fg-event-data tr + tr td', 'border-top: 0'):
     sys.exit(1)
-# The grid of the rides may not be wider than the column it stands in: a fixed
-# minimum of 380px pushes a phone sideways. This one is read from the whole
-# stylesheet and not from the narrow-screen block, because the rule belongs to
-# every width: the grid is min(380px, 100%) on the desktop and on the phone, and
-# a rule inside the media query would only have fixed the second of the two.
-if not any('.fg-rides' in s and 'min(380px, 100%)' in b for s, b in re.findall(r'([^{}]+)\{([^}]*)\}', re.sub(r'/\*.*?\*/', '', css, flags=re.S))):
-    sys.exit(1)
 # The button that ends the form takes the whole width of the phone.
 if not hat('.fg-actions .fg-button', 'width: 100%'):
     sys.exit(1)
@@ -1331,7 +1324,46 @@ if not hat('.fg-actions .fg-button', 'width: 100%'):
 if re.search(r'\.fg-(section|event-card|ride)\b[^{}]*\{[^{}]*padding:\s*1rem', block):
     sys.exit(1)
 sys.exit(0)
-" "on a narrow screen the name is not above the value, the line is in the wrong place, the rides grid is wider than the page, the button is not full width, or the removed padding rule is back"
+" "on a narrow screen the name is not above the value, the line is in the wrong place, the button is not full width, or the removed padding rule is back"
+
+	struct "$list_style" "the stylesheet puts one entry of the ride list per line, at any width" "
+import re, sys
+# The stylesheet arrives on stdin. The name `css` is read here and not borrowed
+# from the block above: these two programs are separate, and a program that
+# leans on a name it did not read fails with a NameError — which a check turns
+# into a red line about the stylesheet, and a red line is not where the mistake
+# is to be looked for.
+css = sys.stdin.read()
+# One entry per line, at every width. The list was a grid that fitted as many
+# columns of at least 380px as the page had room for, so a wide page showed two
+# entries next to each other; the club asked for one per line. This claim is not
+# that the value is a particular one, but that no rule anywhere can make a second
+# column: no repeat(), no auto-fit, no auto-fill, and exactly one 1fr in whatever
+# the rules do declare.
+#
+# Read from the whole stylesheet and not from the narrow-screen block, for the
+# reason written in the block above: a rule inside the media query would only
+# have decided for the width it stands in, and the claim is about every width.
+# The rule that decides it has to be looked for in both places, and both are.
+blatt = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+spalten = [(s, b) for s, b in re.findall(r'([^{}]+)\{([^}]*)\}', blatt)
+           if 'grid-template-columns' in b and '.fg-rides' in s]
+if not spalten:
+    sys.exit(1)
+for _, koerper in spalten:
+    for wert in re.findall(r'grid-template-columns\s*:\s*([^;]+)', koerper):
+        if re.search(r'repeat\(|auto-fit|auto-fill', wert):
+            sys.exit(1)
+        if len(re.findall(r'\b1fr\b', wert)) != 1:
+            sys.exit(1)
+# A grid can also get a second column without naming one, by being told to fill
+# in the direction of the line. That is checked for the same reason: it is a way
+# of drawing two entries next to each other, and the claim is about what the
+# screen shows, not about which property was used.
+if any('grid-auto-flow' in b and 'column' in b
+       for s, b in re.findall(r'([^{}]+)\{([^}]*)\}', blatt) if '.fg-rides' in s):
+    sys.exit(1)
+" "the list of rides can be drawn in more than one column, or not at all"
 else
 	bad "the list page brings the stylesheet with it" "no stylesheet with a version on the page"
 fi
