@@ -828,20 +828,44 @@ if printf '%s' "$loc" | grep -q "fg_notice=not_created"; then
 else
 	bad "a number and an address of two different members are refused" "$loc"
 fi
-# The two refusals above are read by a member who wants to know what to type next.
-# The form asks two values, so the message names two: the wording that told the
-# visitor to use the address on file is gone, because it would send a reader with
-# a correct number and a stale address looking for the mistake in the wrong
-# field. The sentence is also the one of the signup form; section 9 puts the two
-# next to each other, because a page may show one of them at a time.
+# The refusal is read by a member who wants to know what to do next. The form
+# asks two values and states two conditions — the pair has to belong to one
+# member, and that member has to be on the duty's list — so the refusal has to
+# name both. Until 1.25.2 it named only the pair, and the case this section
+# tests above, a member whose pair was right and who is not on the list, was told
+# to look for a mistake in the number or the address that was not there.
+#
+# The wording that told the visitor to use the address on file is gone for the
+# same reason: it would send a reader with a correct number and a stale address
+# looking in the wrong field.
 refusal=$(curl -sk "$BASE/?page_id=$PAGE_ID&fg_notice=not_created")
 refusal_text=$(printf '%s' "$refusal" | hinweis_text)
-PAAR_SATZ="Mitgliedsnummer und E-Mail-Adresse müssen zu einem Mitglied des Vereins passen."
-if [ "$refusal_text" = "Die Eintragung konnte nicht angelegt werden. $PAAR_SATZ" ]; then
-	ok "the refusal of the offer form names the pair in one sentence ($refusal_text)"
-else
-	bad "the refusal of the offer form names the pair in one sentence" "$refusal_text"
-fi
+has "the refusal names both values of the pair" "$refusal_text" "Mitgliedsnummer und E-Mail-Adresse zu einem Mitglied des Vereins passen"
+has "and it names the second condition as well" "$refusal_text" "das für diesen Arbeitsdienst angemeldet ist"
+has "and it says what to do about it" "$refusal_text" "trag dich zuerst für diesen Dienst ein"
+# And it names no finding. This is the claim that was missing until 1.25.2, and
+# it is the one that holds the wording on the safe side of a line the plugin
+# cannot cross: a sentence that says the number was right can only appear when
+# it was, and a stranger with a guessed member number would read its absence as
+# an answer.
+#
+# Every needle starts with a word that is never written in upper case — a field
+# name, or "Mitglied", or a part of a sentence. That is not tidiness: a needle
+# that starts with a small word is walked past by a sentence that starts with it,
+# because the comparison is case sensitive. The first version of this list began
+# with "deine Mitgliedsnummer stimmt", and a counter-check that wrote "Deine
+# Mitgliedsnummer stimmt." into the text left this line green — only the older
+# claim about one field on its own noticed it.
+for befund in \
+	"Mitgliedsnummer stimmt" \
+	"E-Mail-Adresse stimmt" \
+	"Nummer ist richtig" \
+	"Mitglied ist nicht angemeldet" \
+	"ist für den Dienst nicht angemeldet" \
+	"Mitgliedsnummer ist unbekannt" \
+	"E-Mail-Adresse passt nicht"; do
+	hasnt "and the refusal names no finding" "$refusal_text" "$befund"
+done
 nach_den_refusals=$(curl -sk "$BASE/?page_id=$PAGE_ID")
 hasnt "the ride of the member who is not in the duty is nowhere on the page" "$nach_den_refusals" "Nichtangemeldet"
 hasnt "and neither is the one of the mismatched pair" "$nach_den_refusals" "FalschesPaar"
@@ -1711,25 +1735,54 @@ fi
 # two without the other would do exactly that, so the two are looked at together:
 # every sentence of the message that mentions a field has to mention the other
 # one as well. The wording of the pair is compared further down.
-struct "$hinweis" "no sentence of the refusal names one of the two without the other" "
+struct "$hinweis
+%%FG_TRENNER%%
+$refusal_text" "no sentence of either refusal names one of the two without the other" "
 import re, sys
-t = sys.stdin.read().strip()
-saetze = [s for s in re.split(r'(?<=[.])\s+', t) if s.strip()]
-# Lower case, because the number sits in a compound word: 'Mitgliedsnummer' has
-# a small n in it, and a check for 'Nummer' would not find the field at all.
-sys.exit(0 if saetze and all(('nummer' in s.lower()) == ('adresse' in s.lower()) for s in saetze) else 1)
+beide = sys.stdin.read().split('%%FG_TRENNER%%')
+# Both notices, not just the shorter one: the refusal of the offer form carries
+# three sentences since 1.25.2, and a rule read on the one-sentence notice has
+# nothing to say about the two that were added.
+for t in beide:
+    t = t.strip()
+    saetze = [s for s in re.split(r'(?<=[.])\s+', t) if s.strip()]
+    # Lower case, because the number sits in a compound word: 'Mitgliedsnummer'
+    # has a small n in it, and a check for 'Nummer' would not find the field.
+    if not saetze or not all(('nummer' in s.lower()) == ('adresse' in s.lower()) for s in saetze):
+        sys.exit(1)
+sys.exit(0)
 " "a sentence names one of the two fields on its own, so it points at the wrong one"
-# The same rule, the same sentence. All three forms of this plugin ask for the
-# same pair, so a member who is refused by one of them has to read the same
-# sentence in the other: two messages about one rule that differ in wording read
-# as two rules. The two notices differ in their first half on purpose — one form
-# registers a member, the other publishes an entry — so the sentence behind it is
-# what is compared, and it is compared as the visitor reads it.
-if [ "$hinweis" = "Die Anmeldung ist nicht möglich. $PAAR_SATZ" ]; then
-	ok "the signup form refuses in the words the offer form uses"
-else
-	bad "the signup form refuses in the words the offer form uses" "$hinweis"
-fi
+# The same rule, the same wording — but only the part that names the pair, and
+# not the whole sentence. Until 1.25.2 both refusals ended in the same sentence
+# and were compared as a whole. The refusal of the offer form carries a second
+# condition since then, because it checks one, and a comparison of whole
+# sentences would either have forced the offer form to drop that condition or
+# demanded a rewrite of this line with every change of wording.
+#
+# So what is compared is the part both must carry: the two values, in the same
+# order and next to each other, and the club they have to belong to. The verb in
+# between and whatever stands behind it are each form's own — the offer form
+# continues with the condition of the duty, the signup form ends there, and that
+# difference is the point rather than a drift.
+struct "$refusal_text
+%%FG_TRENNER%%
+$hinweis" "both refusals name the pair in the same words" "
+import re, sys
+angebot, anmeldung = sys.stdin.read().split('%%FG_TRENNER%%')
+paar, verein = 'Mitgliedsnummer und E-Mail-Adresse', 'zu einem Mitglied des Vereins'
+def satz(t):
+    return re.search(re.escape(paar) + r'[^.]*?\bpassen\b[^.]*', t)
+a, m = satz(angebot), satz(anmeldung)
+if not a or not m:
+    sys.exit(1)
+for teil in (paar, verein):
+    if teil not in a.group(0) or teil not in m.group(0):
+        sys.exit(1)
+# And the continuation is not the same in the two: a signup refusal that carried
+# the condition of the duty would send the reader to a duty they are signing up
+# for in the first place.
+sys.exit(0 if 'Arbeitsdienst' in a.group(0) and 'Arbeitsdienst' not in m.group(0) else 1)
+" "the two refusals name the pair differently, or both carry the same conditions"
 
 # A registration whose mail does not arrive is a place that is taken and cannot
 # be given back: the link that would free it was in that mail. So the row has to

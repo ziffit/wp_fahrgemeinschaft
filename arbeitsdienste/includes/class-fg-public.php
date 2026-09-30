@@ -327,7 +327,22 @@ final class FG_Public {
 			// the reader looking for a mistake in the wrong field. Which of the two
 			// was wrong stays unsaid in all three, and that is the same decision.
 			'contact_received' => array( __( 'Vielen Dank für deine Anfrage. Wir informieren das Mitglied, das die Fahrgemeinschaft angeboten hat, sofern Mitgliedsnummer und E-Mail-Adresse zu einem Mitglied des Vereins passen, das sich für den gewählten Arbeitsdienst eingetragen hat.', 'arbeitsdienste' ), false ),
-			'not_created'      => array( __( 'Die Eintragung konnte nicht angelegt werden. Mitgliedsnummer und E-Mail-Adresse müssen zu einem Mitglied des Vereins passen.', 'arbeitsdienste' ), true ),
+			// This one is the refusal of the offer form, and it names the rule and the next
+			// step. It must never name a finding — which of the two conditions was
+			// wrong — because a sentence that says the number was right only appears
+			// when it was, and its appearance tells a passer-by that a guessed member
+			// number exists. The rule it names is printed under the form anyway, so
+			// saying it here gives away nothing, and the next step is true for every
+			// reader: one who is not on the duty's list can act on it, and one who
+			// mistyped the number learns nothing from a sentence that fits everybody.
+			//
+			// Five places lead here: a post without HTTPS, the honeypot, one block of
+			// eight conditions (class-fg-actions.php), a member who is not on the duty's
+			// list, and a write that failed. A sentence that fits all five cannot be
+			// specific, and the rule is the one thing all five share. Until 1.25.2 it
+			// named only the pair, and a member whose pair was right was sent to look
+			// for a mistake in the number or the address that was not there.
+			'not_created'      => array( __( 'Die Eintragung konnte nicht angelegt werden. Sie ist nur möglich, wenn Mitgliedsnummer und E-Mail-Adresse zu einem Mitglied des Vereins passen, das für diesen Arbeitsdienst angemeldet ist. Bist du noch nicht angemeldet, trag dich zuerst für diesen Dienst ein.', 'arbeitsdienste' ), true ),
 			'email_failed'     => array( __( 'Die Eintragung konnte nicht angelegt werden, weil die E-Mail mit dem Lösch-Link nicht zugestellt werden konnte. Bitte versuche es später erneut.', 'arbeitsdienste' ), true ),
 			'invalid_token'    => array( __( 'Der Link ist ungültig oder abgelaufen. Bitte kontaktiere uns, falls du Unterstützung benötigst.', 'arbeitsdienste' ), true ),
 			'form_expired'     => array( __( 'Das Formular ist nicht mehr gültig. Bitte lade die Seite neu und sende das Formular erneut ab.', 'arbeitsdienste' ), true ),

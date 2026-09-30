@@ -4,9 +4,9 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 29.09.2026 — **öffentliches HTTP 227, Mail-Ebene 124, Admin-Ebene 658,
-0 Fehler**, gegen den Stand **Plugin 1.25.1, Schema 1.8.0**, dazu **sechsundzwanzig von
-sechsundzwanzig Gegenproben mit dem gestellten Fehlerbild rot**. HTTP und Mail sind
+Letzter Lauf: 30.09.2026 — **öffentliches HTTP 236, Mail-Ebene 124, Admin-Ebene 658,
+0 Fehler**, gegen den Stand **Plugin 1.25.2, Schema 1.8.0**, dazu **achtundzwanzig von
+achtundzwanzig Gegenproben mit dem gestellten Fehlerbild rot**. HTTP und Mail sind
 unverändert: Diese Fassung berührt nichts, was ein Browser liest und nichts, was in einer
 E-Mail steht. Die Admin-Ebene ist um 2 höher: **Eine** falsche Behauptung aus 1.25.0 wurde
 ersetzt (die Teilnehmerliste suchte über eine ganze Seite nach einem Wort, das im
@@ -1235,11 +1235,39 @@ Stellen gleich aussehen soll, an drei Stellen gleich aussehen **muss**:
   nennen. Der Vergleich Formular für Formular hätte nichts bewiesen: Zwei Formulare, die
   gleich lauten, und ein drittes mit eigener Fassung, sind zwei Regeln mit einer
   Ausnahme.
-- **Die Absage nennt beide Angaben.** Im Angebotformular und im Anmeldeformular wird die
-  Meldung als **Text** gelesen (`hinweis_text()`, ohne Markup) und mit
-  „Die Eintragung konnte nicht angelegt werden. …“ bzw. „Die Anmeldung ist nicht möglich.
-  …“ verglichen. Der zweite Satz muss in beiden derselbe sein; die erste Hälfte darf es
-  nicht, weil das eine Formular eine Zeile anlegt und das andere eine Anmeldung.
+- **Die Absage des Angebotformulars nennt die Regel, den nächsten Schritt und keinen
+  Befund.** Bis 1.25.2 wurde die Meldung als **Text** gelesen (`hinweis_text()`, ohne
+  Markup) und **wörtlich** mit „Die Eintragung konnte nicht angelegt werden. „ + fester
+  Paar-Satz verglichen — eine Festlegung auf den ganzen Satz, die jede Umformulierung als
+  Fehler meldete und dabei die Frage nach sich selbst nicht stellen konnte. Seit 1.25.2
+  sind es drei Behauptungen über den Text: die Absage nennt **beide Werte** des Paares,
+  sie nennt die **zweite Bedingung** (das für diesen Arbeitsdienst angemeldet sein), und sie
+  sagt, **was zu tun** ist.
+  - Die vierte Behauptung ist die wichtige, und sie hatte bis 1.25.2 keine Entsprechung:
+    die Absage nennt **keinen Befund**. Sieben Wortlaute sind aufgeführt, die einen Befund
+    nennen würden, und keiner darf im Text stehen. Jede Nadel beginnt mit einem Wort, das
+    nie großgeschrieben wird — einem Feldnamen, „Mitglied" oder einem Satzteilstück; eine
+    Nadel mit kleinem Anfang wird von einem Satz, der damit beginnt, umgangen, weil der
+    Vergleich Groß- und Kleinschreibung unterscheidet. Das ist keine Formalie, sondern
+    gefunden: Die erste Fassung dieser Liste begann mit „deine Mitgliedsnummer stimmt", und
+    eine Gegenprobe mit dem Satz „**Deine** Mitgliedsnummer stimmt." ließ sie grün.
+    Zusammen mit der älteren Prüfung „kein Satz nennt ein Feld ohne das andere" decken die
+    beiden die Grenze des Plugins ab: Ein Satz, der sagt, dass die Nummer richtig war, kann
+    nur erscheinen, wenn sie es war, und sein Erscheinen verrät einem Fremden mit geratener
+    Nummer, dass es sie gibt. Die Regel stand seit 1.16.0 im **Code**; sie stand bis 1.25.2
+    in **keiner** Prüfung.
+  - **Der Formvergleich vergleicht den Teil, den beide Absagen tragen müssen, und nicht
+    den ganzen Satz.** „Beide Absagen nennen das Paar in denselben Worten" liest in beiden
+    Texten den Abschnitt, der die beiden Werte und den Verein nennt; was hinter dem Verb
+    steht, ist Sache der jeweiligen Form — die Absage des Angebots läuft mit der Bedingung
+    des Dienstes weiter, die des Anmeldeformulars endet dort. Die Regel „kein Satz nennt ein
+    Feld ohne das andere" gilt für **beide** Texte, seit 1.25.2 auch für den dreisätzigen.
+  - Der Wortlaut des Anmeldeformulars („Die Anmeldung ist nicht möglich. …“) bleibt
+    eigenständig und nennt weiterhin **nur** das Paar. Das ist keine Ungleichheit, sondern
+    die richtige Angabe: Dieses Formular legt die Anmeldung an, es gibt keine zweite
+    Bedingung, an der es scheitern könnte. Die alte Formulierung dieses Punktes — „der
+    zweite Satz muss in beiden derselbe sein“ — beschrieb einen Wortlaut, der es so nicht
+    mehr gibt, und ist mit ihm ersetzt.
 - **Keine der beiden Hälften wird herausgestellt.** Der Satz „… müssen zu einem Mitglied
   des Vereins passen“ nennt Nummer und Adresse in einem Satz. Eine Prüfung, die jede
   Nennung einzeln prüft, wäre die falsche: Sie fände in einem Satz, der nur die Adresse
@@ -2136,6 +2164,140 @@ Ab dieser Fassung nur noch **Bugfix-Versionssprünge**, außer es wird anders ge
 `FG_VERSION` wächst als `X.Y.Z`, und `Z` steigt bei jeder Änderung, auch bei einem neuen
 Feld. Festgelegt vom Nutzer am 29.09.2026. Das Schema folgt seiner eigenen Regel und steigt
 nur dort, wo sich die Datenhaltung ändert — deshalb steht hier 1.25.1 neben Schema 1.8.0.
+
+## Fassung 1.25.2: die Absage nennt den nächsten Schritt
+
+Die Frage aus dem Verein: Was passiert beim Angebot einer Fahrgemeinschaft, wenn
+Mitgliedsnummer und E-Mail-Adresse stimmen, das Mitglied aber **nicht für diesen
+Arbeitsdienst** angemeldet ist — und gibt es dafür eine passende Meldung?
+
+### Das Verhalten war richtig, die Meldung war es nicht
+
+`FG_Actions::submit_ride()` löst zuerst das Paar auf und fragt danach mit einem eigenen
+Aufruf `is_event_participant()`. Fehlt die Anmeldung am Dienst, wird **nichts geschrieben**
+— kein Eintrag, nicht einmal ein vorgemerkt —, es geht keine Mail, und der Besucher
+landet mit `fg_notice=not_created` auf der Seite zurück. Das war gemessen
+(`http.sh`: *a member who is not in the duty cannot offer a ride*, und die Fahrt steht
+danach nirgends) und bleibt.
+
+Die Meldung lautete: „Die Eintragung konnte nicht angelegt werden. Mitgliedsnummer und
+E-Mail-Adresse müssen zu einem Mitglied des Vereins passen." Für genau diesen Fall ist der
+zweite Satz **falsch** — das Paar passt. Der Leser wird in Nummer und Adresse geschickt,
+nach einem Fehler, den es dort nicht gibt, und die eigentliche Bedingung kommt in der
+Antwort nicht vor.
+
+Dabei steht die Regel an zwei anderen Stellen richtig: im Hinweis unter dem Angebotformular
+(„… das sich für diesen Arbeitsdienst eingetragen hat") und in der Empfangsbestätigung des
+Kontaktformulars. Nur die Absage nannte eine Bedingung von zweien.
+
+### Warum sie so allgemein ist, und was daraus folgt
+
+Fünf Stellen im Plugin führen in diese Absage: ein POST ohne HTTPS, der Honigtopf, ein
+Block aus **acht** Bedingungen, das fehlende Angebot und ein Schreibfehler. Ein Satz, der
+auf alle fünf passt, kann keine Besonderheit des einen Falls nennen, in dem er
+ausgerechnet erscheint. Der Ausweg ist nicht die Spezialmeldung, sondern ein Wechsel: die
+**Bedingung** statt des **Ergebnisses** zu nennen. Die Bedingung steht ohnehin unter dem
+Formular — sie zu wiederholen verrät nichts, und sie ist das Einzige, was alle fünf Fälle
+gemeinsam haben.
+
+### Die Grenze, die damit ausgesprochen ist
+
+Die Absage darf nie sagen, **welche** der beiden Bedingungen fehlte. Ein Satz wie „deine
+Mitgliedsnummer stimmt, aber du bist für den Dienst nicht angemeldet" erscheint nur dann,
+wenn das Paar stimmt — und sein Erscheinen verrät einem Fremden mit geratener
+Mitgliedsnummer, dass es sie gibt. Diese Regel steht seit 1.16.0 im Code; sie stand bis
+1.25.2 in **keiner** Prüfung, und die Absage stand knapp davor, in genau diese Richtung
+umgeschrieben zu werden.
+
+Der Hinweis auf den nächsten Schritt („Bist du noch nicht angemeldet, trag dich zuerst für
+diesen Dienst ein") steht deshalb für **alle** Leser da und nicht als Erklärung: Für ein
+Mitglied ohne Anmeldung ist er die Hilfe, und für einen mit falscher Nummer ist er ein
+Satz, der auch ohne sein Paar gilt.
+
+### Der Wortlaut, und was nicht mehr gilt
+
+> Die Eintragung konnte nicht angelegt werden. Sie ist nur möglich, wenn
+> Mitgliedsnummer und E-Mail-Adresse zu einem Mitglied des Vereins passen, das für
+> diesen Arbeitsdienst angemeldet ist. Bist du noch nicht angemeldet, trag dich zuerst
+> für diesen Dienst ein.
+
+Das Anmeldeformular sagt unverändert „Die Anmeldung ist nicht möglich. Mitgliedsnummer
+und E-Mail-Adresse müssen zu einem Mitglied des Vereins passen." — und das ist richtig so:
+Dieses Formular **legt** die Anmeldung an, es gibt keine zweite Bedingung, an der es
+scheitern könnte. Beide Formulierungen beginnen mit demselben Paar-Satz und unterscheiden
+sich danach, weil sie verschiedene Bedingungen haben.
+
+### Die Prüfung, die ersetzt wurde
+
+`http.sh` hielt den Wortlaut **wörtlich** fest: Der gelesene Text musste gleich
+„Die Eintragung konnte nicht angelegt werden. " + fester Paar-Satz sein. Das ist eine
+Festlegung auf den ganzen Satz — jede Umformulierung meldete sich als Fehler, und die Frage,
+die hier gestellt wurde, konnte sie nicht beantworten. Sie ist ersetzt durch vier
+Behauptungen über den Text:
+
+| Behauptung | Wofür sie steht |
+| --- | --- |
+| die Absage nennt **beide Werte** des Paares | das Formular fragt zwei Werte |
+| die Absage nennt die **zweite Bedingung** | das Angebot prüft zwei Bedingungen |
+| die Absage sagt, **was zu tun** ist | der Fall, um den es geht |
+| die Absage nennt **keinen Befund** (sieben aufgeführte Wortlaute) | die Grenze des Plugins |
+
+Die vierte ist die einzige, die die Grenze überhaupt festhält.
+
+### Der Kommentar beim Zähler
+
+Der Kommentar über `publish_invalid_email` sprach von „three refusals" und nannte zwei;
+im Code gibt es genau zwei Stellen, die ihn erhöhen. Beschriftung und Code stimmten
+zusammen, der Kommentar nicht. Er ist auf zwei gebracht und nennt die beiden Stellen.
+
+**Ein Irrtum, der bei dieser Fassung passiert ist und dokumentiert gehört:** Vor der
+Prüfung wurde behauptet, die Beschriftung des Zählers sei falsch, weil sie nur das Paar
+nenne. Sie nennt beide Gründe — „… passen nicht zu einem Mitglied, **oder das Mitglied ist
+für diesen Arbeitsdienst nicht angemeldet**" — und der Kommentar darüber sagt ausdrücklich,
+warum. Die Quelle des Irrtums war eine `has`-Nadel in `admin.sh`, die nur den Anfang der
+Beschriftung nennt und für die ganze gehalten wurde. **Eine Nadel in einer Prüfung ist kein
+Volltext**, und eine Behauptung über einen Bildschirm ist durch eine Prüfung nicht belegt,
+wenn die Prüfung nur einen Ausschnitt von ihm prüft. Am Zähler und an seiner Beschriftung
+ist deshalb nichts geändert worden.
+
+### Die Gegenproben
+
+| Fehlerbild | Erwartet rot | Tatsächlich rot |
+| --- | --- | --- |
+| Die Absage nennt einen Befund (ein zusätzlicher Satz, sonst alles unverändert) | die Grenzprüfung | **2** — die Grenzprüfung **und** die ältere Prüfung „kein Satz nennt ein Feld ohne das andere" |
+| Die zweite Bedingung fällt aus der Absage | die Bedingungsprüfung | **2** — die Bedingungsprüfung **und** der Formvergleich, der behauptet, dass die Absage des Angebots mit der Bedingung des Dienstes weiterläuft |
+
+Jede Gegenprobe hat neben ihrer eigenen Behauptung noch eine zweite, unabhängige rot werden
+lassen, und beide Male passt das zum Fehlerbild: Der eingeschobene Befundssatz nennt ein
+Feld allein, und die fehlende Bedingung macht die Behauptung des Formvergleichs
+unwahr. Ein Messergebnis also, das über die Erwartung hinausgeht, und keines, bei dem
+etwas Unerwartetes rot geworden wäre.
+
+Die erste Fassung der ersten Gegenprobe war unbrauchbar und ist durch diese ersetzt: Sie
+hatte den **ganzen** Satz ersetzt und dabei die beiden anderen Bedingungen mit
+weggerissen, zeigte also vier Folgen statt einer. Jetzt wird ein Satz **ergänzt** und
+sonst nichts angefasst, damit die Folge der Messung die Grenze ist und nicht der Zufall
+eines Ersetzens. Der dritte Durchlauf fand eine Lücke in der Prüfung selbst, siehe unten.
+
+**Eine Lücke, die erst die Gegenprobe gezeigt hat:** Die Nadeln der Grenzprüfung begannen
+mit kleinen Wörtern („deine Mitgliedsnummer stimmt"). Der eingesetzte Satz hieß aber
+„**Deine** Mitgliedsnummer stimmt.", und der Vergleich unterscheidet Groß- und
+Kleinschreibung — die Grenzprüfung blieb grün, und nur die ältere Strukturprüfung hat es
+gemerkt. Jede Nadel beginnt jetzt mit einem Wort, das nie großgeschrieben wird: einem
+Feldnamen, „Mitglied" oder einem Satzteilstück. Das ist im Kommentar an der Prüfung
+festgehalten, weil der Fehler beim nächsten Wortlaut wieder möglich wäre.
+
+Für den korrigierten Kommentar über dem Zähler gibt es keine Gegenprobe: Ein Kommentar ist
+nicht messbar, und das wird hier gesagt, statt es zu behaupten.
+
+### Läufe
+
+HTTP **236**, Mail 124, Admin 658, 0 Fehler. HTTP ist um 9 höher als bei 1.25.1: Eine
+Festlegung auf den ganzen Satz wurde durch **zehn** Behauptungen ersetzt (beide Werte des
+Paares, die zweite Bedingung, der nächste Schritt und sieben aufgeführte Befundswortlaute),
+und zwei bestehende Prüfungen wurden auf **beide** Absagen umgestellt, ohne zu wachsen.
+Mail und Admin sind unverändert — diese Fassung berührt keinen Formulartext außer dem der
+Absage und keinen Zustandsschritt.
 
 ## Mail-Auswertung
 

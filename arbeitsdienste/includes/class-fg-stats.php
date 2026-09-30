@@ -20,11 +20,17 @@ final class FG_Stats {
 		return array(
 			'publish_form_total'     => 'Veröffentlichungsformulare gesamt',
 			'publish_valid_email'    => 'Einträge mit passender Mitgliedsnummer und E-Mail-Adresse',
-			// One counter, three refusals: the pair does not belong to a member, or
-			// the member is not in the list of the duty. The label names all three,
-			// because a label that named one of them would be wrong for the other
-			// two. The key stays what it is; renaming a stored key would throw the
-			// days that have already been counted away.
+			// One counter, two refusals, and it said three until 1.25.2: the pair does
+			// not belong to a member (class-fg-actions.php, the find), or the member
+			// is not on the duty's list (the is_event_participant() check). Those are
+			// the two places that raise it, and the label names both, because a label
+			// that named one of them would be wrong for the other. The key stays what
+			// it is; renaming a stored key would throw the days that have already been
+			// counted away. Splitting the two into a counter each would only be worth
+			// it if the club asked how often the second one is the reason, and that
+			// question was asked and answered with "no": the label is read by an
+			// editor, and a second row of "people who are not on the list" beside the
+			// duty list would answer it with a guess either way.
 			'publish_invalid_email'  => 'Abgewiesene Einträge: Nummer und E-Mail-Adresse passen nicht zu einem Mitglied, oder das Mitglied ist für diesen Arbeitsdienst nicht angemeldet',
 			'publish_published'      => 'Veröffentlichte Einträge',
 			'publish_deleted'        => 'Gelöschte Einträge',

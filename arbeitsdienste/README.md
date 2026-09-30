@@ -2,7 +2,7 @@
 
 Minimales WordPress-Plugin zur Planung von Vereinsarbeitsdiensten, zur Anmeldung von Mitgliedern zu einem Dienst und zur Koordination der Fahrgemeinschaften je Dienst.
 
-Fassung 1.25.1.
+Fassung 1.25.2.
 
 ## Installation
 
@@ -162,7 +162,11 @@ Vor einer Installation sollten in einer Staging-Installation mindestens diese F�
 
 - Alle öffentlichen Mutationen (Eintrag, Kontakt, Anmeldung zu einem Dienst, Löschen von Fahrgemeinschaft und Anmeldung) beginnen mit einer POST-Prüfung. Jede andere Methode beantwortet WordPress mit Status 405 und `Allow: POST`, ohne etwas zu verändern.
 - Anmeldung mit einem Paar, das zu keinem Mitglied gehört, mit einer Nummer ohne Adresse, mit einer Adresse ohne Nummer, bei abgelaufener oder unbekannter Pflichtangabe, bei vollem Dienst oder bei einem Dienst ohne Bedarf: es wird nichts geschrieben, und die Meldung nennt den Grund nur so weit, wie er auf einer öffentlichen Seite gesagt werden darf. Die beiden Fälle, die sich hinter einem Satz verbergen, sind Nummer und Adresse.
-- Dasselbe gilt für das Angebotformular und für das Kontaktformular. Im Angebotformular lautet die Meldung „Die Eintragung konnte nicht angelegt werden. Mitgliedsnummer und E-Mail-Adresse müssen zu einem Mitglied des Vereins passen.“, im Anmeldeformular „Die Anmeldung ist nicht möglich. Mitgliedsnummer und E-Mail-Adresse müssen zu einem Mitglied des Vereins passen.“ — derselbe Satz, ein anderer Satz davor, weil das eine Formular eine Zeile anlegt und das andere eine Anmeldung. Das Kontaktformular antwortet auch im Fehlerfall mit demselben höflichen Satz wie im Erfolgsfall (`contact_received`), weil der Besucher sonst an einem Formular, das zwei Felder hat, aus der Antwort herausliest, welches der beiden nicht gepasst hat. Zwei Zeilen mit einer richtigen Nummer und einer fremden Adresse und umgekehrt enden deshalb gleich: keine Mail, derselbe Zähler `contact_invalid_email`, dieselbe Antwort.
+- **Die Absage des Angebotformulars nennt die Regel und den nächsten Schritt, nie einen Befund.** Seit 1.25.2 lautet sie: „Die Eintragung konnte nicht angelegt werden. Sie ist nur möglich, wenn Mitgliedsnummer und E-Mail-Adresse zu einem Mitglied des Vereins passen, das für diesen Arbeitsdienst angemeldet ist. Bist du noch nicht angemeldet, trag dich zuerst für diesen Dienst ein.“ Bis dahin nannte sie nur das Paar, und gerade der gemeldete Fall — Paar richtig, aber nicht für diesen Dienst angemeldet — schickte den Leser in Nummer und Adresse nach einem Fehler suchen, den es dort nicht gibt.
+  - Der Grund für diese Fassung ist nicht Höflichkeit, sondern eine Grenze: Fünf Stellen im Plugin landen in dieser Absage (ein POST ohne HTTPS, der Honigtopf, ein Block aus acht Bedingungen, ein Mitglied, das nicht im Dienst steht, und ein Schreibfehler), und ein Satz, der auf alle fünf passt, kann nicht speziell sein. Was alle fünf gemeinsam haben, ist die Regel — also nennt er die, und die steht ohnehin unter dem Formular.
+  - Der Satz „deine Nummer stimmt, aber du bist nicht im Dienst“ ist damit **ausgeschlossen**, und nicht aus Höflichkeit: Er kann nur erscheinen, wenn das Paar stimmt, und sein Erscheinen verrät einem Fremden, dass eine geratene Mitgliedsnummer existiert. Der nächste Schritt steht deshalb für alle Leser da und nicht als Erklärung.
+  - Das Anmeldeformular sagt weiterhin nur: „Die Anmeldung ist nicht möglich. Mitgliedsnummer und E-Mail-Adresse müssen zu einem Mitglied des Vereins passen.“ Das ist keine Auslassung, sondern die richtige Angabe: Dieses Formular **legt** die Anmeldung an, es gibt also keine zweite Bedingung, an der es scheitern könnte. Beide Formulare beginnen mit demselben Paar-Satz und unterscheiden sich danach, weil sie verschiedene Bedingungen haben.
+  - Das Kontaktformular antwortet auch im Fehlerfall mit demselben höflichen Satz wie im Erfolgsfall (`contact_received`), weil der Besucher sonst an einem Formular, das zwei Felder hat, aus der Antwort herausliest, welches der beiden nicht gepasst hat. Zwei Zeilen mit einer richtigen Nummer und einer fremden Adresse und umgekehrt enden deshalb gleich: keine Mail, derselbe Zähler `contact_invalid_email`, dieselbe Antwort. Das Kontaktformular antwortet auch im Fehlerfall mit demselben höflichen Satz wie im Erfolgsfall (`contact_received`), weil der Besucher sonst an einem Formular, das zwei Felder hat, aus der Antwort herausliest, welches der beiden nicht gepasst hat. Zwei Zeilen mit einer richtigen Nummer und einer fremden Adresse und umgekehrt enden deshalb gleich: keine Mail, derselbe Zähler `contact_invalid_email`, dieselbe Antwort.
 - Anmeldung für einen Dienst, für den das Mitglied schon eingetragen ist: es wird keine zweite Zeile angelegt, und die Meldung sagt das. Der Fall ist nicht selten: Nachdem die Schaltfläche **Eintragen** einmal nichts angezeigt hat, probiert es die meisten ein zweites Mal.
 - E-Mail mit dem Abmeldelink nicht zustellbar: Die Anmeldung wird wieder gelöscht, der Zähler `mail_send_failed` steigt, die öffentliche Antwort lautet `email_failed`. Eine Anmeldung ohne Abmeldeweg wäre eine Anmeldung, die nur noch über den Adminbereich zurückgenommen werden kann.
 - E-Mail zu einem eben angelegten Eintrag nicht zustellbar: Der Eintrag bleibt stehen und bleibt öffentlich, der Zähler `mail_send_failed` steigt und die öffentliche Antwort lautet `email_failed`. Der Zähler `publish_published` steigt **nicht**. Es gibt seit 1.15.0 kein Gegenteil dieses Falls mehr: Vor dieser Fassung wäre eine nicht zugestellte Mail Grund gewesen, eine Veröffentlichung zurückzunehmen, weil der Eintrag ohnehin noch vorgemerkt war und die Löschung des Vorgangs den Besitz der Zeile ungeklärt gelassen hätte. Ein Eintrag ohne Löschweg ist für den Besitzer kein Nachteil gegenüber einem gelöschten, und für den Verein ist der stehengebliebene Eintrag sichtbarer als ein verschwundener.
@@ -207,6 +211,16 @@ Vor einer Installation sollten in einer Staging-Installation mindestens diese F�
   Suche das ganze Wort mit jedem Feld einzeln, und ein solcher Begriff fand niemanden. Jetzt
   muss jedes Wort des Suchbegriffs irgendwo in der Zeile stehen — und „0042 Mül" findet die
   Person mit der Nummer 0042.
+- **Eine Absage nennt die Regel, nicht den Befund — und der nächste Schritt gehört
+  hinein.** Fünf Stellen im Plugin führen beim Angebotformular in dieselbe Absage, und ein
+  Satz, der auf alle fünf passt, kann keine Besonderheit des einen Falls nennen, in dem er
+  ausgerechnet erscheint. Der Ausweg ist, die **Bedingung** zu nennen statt des **Ergebnisses**:
+  Die Regel steht ohnehin unter dem Formular, also verrät sie nichts, während „deine Nummer
+  stimmt, aber du bist nicht im Dienst“ einem Fremden genau das verraten würde, was er nicht
+  wissen darf. Und der Hinweis auf den nächsten Schritt („trag dich zuerst ein“) ist für jeden
+  Leser wahr, also für den einen genauso wie für den anderen. Die Regel, dass niemals zu sagen
+  ist, **welche** der beiden Bedingungen fehlte, steht seit 1.16.0 im Code; seit 1.25.2 steht
+  sie auch in den Prüfungen, und vorher stand sie nur dort.
 - **Ab 1.25.1 nur noch Bugfix-Fassungen, außer es wird anders gesagt.** `FG_VERSION` wächst
   als `X.Y.Z`, und `Z` steigt bei **jeder** Änderung — auch bei einer, die ein neues Feld oder
   ein neues Verhalten bringt. Ein Sprung auf eine neue Nachkommastelle nur auf ausdrückliche

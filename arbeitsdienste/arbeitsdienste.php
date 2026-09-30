@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Arbeitsdienste
  * Description:       Arbeitsdienste eines Vereins planen, Mitglieder eintragen und öffentlich anbieten, mit Anmeldung zum Dienst und zu den Fahrgemeinschaften je Dienst.
- * Version:           1.25.1
+ * Version:           1.25.2
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            Verein
@@ -31,7 +31,7 @@ defined( 'ABSPATH' ) || exit;
  * Verein eine neue Version, die es nicht gibt, und liefert beim Update die alte
  * Optik zur neuen. Beide Zahlen werden deshalb zusammen gesetzt.
  */
-define( 'FG_VERSION', '1.25.1' );
+define( 'FG_VERSION', '1.25.2' );
 define( 'FG_ADMIN_MENU_SLUG', 'fahrgemeinschaften' );
 /**
  * Name of the element that carries a message after a form was sent.
