@@ -1677,6 +1677,49 @@ if [ "$(s free-places "$DIENST")" = "$PLATZE_VORHER" ]; then
 else
 	bad "and the place is free again" "$(s free-places "$DIENST")"
 fi
+# The removal itself is over, and then the member hears about it. The mail goes
+# out on this way and on the way through the backend, and it is the same
+# message: a member who signs out of a duty and a member an editor takes out of
+# it must not be able to tell the two apart from the wording alone, or the club
+# gets a letter about somebody else doing something.
+MAIL_TO=$(mail_to)
+MAIL_SUBJECT=$(mail_subject)
+MAIL_BODY=$(mail_body)
+# Address and subject are read out of ONE record and claimed together. The
+# member was sent the signup mail a few lines above, to the same address, so a
+# check that asks only for the address is answered by that mail and stays green
+# while no removal mail was written at all. With the subject in the same
+# condition, the newest record has to be this one and not the one before it.
+abmelde_neu=$(s mail-recipients | head -1)
+if [ "$(printf '%s' "$abmelde_neu" | cut -f1)" = "$MITGLIED_MAIL" ] && [ "$(printf '%s' "$abmelde_neu" | cut -f2)" = "Arbeitsdienst gelöscht" ]; then
+	ok "the newest mail is the removal mail, to the address of the member"
+else
+	bad "the newest mail is the removal mail, to the address of the member" "$abmelde_neu"
+fi
+has "its subject is the one of the message" "$MAIL_SUBJECT" "Arbeitsdienst gelöscht"
+has "the body greets the member with both names" "$MAIL_BODY" "Hallo Cem Cemu,"
+has "and says the member was taken off the duty" "$MAIL_BODY" "du wurdest aus dem Arbeitsdienst $DIENST_TITEL entfernt."
+has "and names where to find more" "$MAIL_BODY" "auf der Webseite der Arbeitsdienste"
+has "and thanks" "$MAIL_BODY" "Danke"
+# The text does not sign itself. The footer is a setting of the club and is
+# mandatory there, so a "Danke Die Verwaltung" in the body would stand twice in
+# every mail of a club that has filled the field in. The footer of the test
+# installation is the club's, and it has to be there exactly once.
+hasnt "the body does not sign the mail a second time" "$MAIL_BODY" "Die Verwaltung"
+# No link. The plugin does not know on which page a club puts the list of duties,
+# and a link to the wrong page is a question in the club's postbox. The sentence
+# stays.
+hasnt "and it carries no link to the list of duties" "$MAIL_BODY" "fg_duty_action=view"
+# The mail is a notice, not the way out: the member is already out, and a mail
+# that could not be delivered must not put it back on the duty. The delivery of
+# this one is deliberately made to fail further down, in the section that measures
+# the failure; here the counter is the claim.
+if [ "$(s stat duty_removed_mail)" -gt 0 ]; then
+	ok "and the counter of the message stands where the send worked ($(s stat duty_removed_mail))"
+else
+	bad "and the counter of the message stands where the send worked" "$(s stat duty_removed_mail)"
+fi
+
 # Signing out is signing out of one duty, not out of the club. The member
 # record belongs to the club and is not touched by anything a member does on
 # the list page.
@@ -1871,6 +1914,99 @@ fi
 # way it found it. The link cannot be used for that: its token is stored as a
 # hash and can therefore not be read back out of the database.
 s drop-registration "$DIENST" "$MITGLIED_NR" >/dev/null
+if [ "$(s count-registrations "$DIENST")" = "$VORHER" ]; then
+	ok "the section leaves the duty as it found it"
+else
+	bad "the section leaves the duty as it found it" "$(s count-registrations "$DIENST")"
+fi
+
+
+
+# And the same failure on the way out must not be treated the same way. The
+# signup mail takes the registration away again when it does not arrive, because
+# the link out of it was in that mail and a place that cannot be given back is a
+# trap. Copying that onto the removal would put a member back onto the very duty
+# it has just left — the opposite of what it asked for — and it would keep
+# failing on the second try, since the address that cannot be written to does not
+# become one that can. So here the removal stands, the confirmation is on the
+# page it came from, and the refused delivery is counted like every other.
+echo "[9b] a removal mail that does not arrive"
+# The member must not be on the duty yet. The section above leaves it off with
+# `drop-registration`, which deletes the row and with it the token — so a link
+# from that mail is a dead link, and a registration that is still standing would
+# answer this block with "already registered".
+s drop-registration "$DIENST" "$MITGLIED_NR" >/dev/null
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_register_member" \
+	--data-urlencode "fg_register_nonce=$SIGN_NONCE" \
+	--data-urlencode "fg_event_ref=$SIGN_REF" \
+	--data-urlencode "fg_member_no=$MITGLIED_NR" \
+	--data-urlencode "fg_member_email=$MITGLIED_MAIL" \
+	--data-urlencode "fg_website=" \
+	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+# The notice is compared exactly and not with a substring: "fg_notice=registered"
+# stands in "fg_notice=already_registered", and a check that cannot tell the two
+# apart passes on a registration that never happened. The jump mark behind the
+# notice is cut off first — it is there so the member reads the message, and it
+# is not part of the name of the message.
+hinweis() { printf '%s' "${1%%#*}" | sed -n 's/.*fg_notice=\([a-z_]*\).*/\1/p'; }
+if [ "$(hinweis "$loc")" = "registered" ]; then
+	ok "the member signs up again"
+else
+	bad "the member signs up again" "$loc"
+fi
+ABMELDE_URL=$(mail_body | grep -o "$BASE/?fg_duty_action=view[^\"]*" | head -1 | sed 's/&#038;/\&/g')
+ZWEITE_REF=$(printf '%s' "$ABMELDE_URL" | grep -o 'signup_ref=[^&]*' | sed 's/signup_ref=//')
+html=$(curl -sk "$ABMELDE_URL")
+# The token is read out of the form and not out of the address, the way the
+# section above reads it. Both carry the same token, but the form is what a
+# browser sends back, and a check that reads a value out of a place the browser
+# does not use is a check about a place the browser does not use.
+ZWEITER_TOKEN=$(printf '%s' "$html" | val token)
+ZWEITER_NONCE=$(printf '%s' "$html" | val token_nonce)
+if [ -n "$ZWEITE_REF" ] && [ -n "$ZWEITER_TOKEN" ] && [ -n "$ZWEITER_NONCE" ]; then
+	ok "and the unregistration link of that registration is read out of the mail"
+else
+	bad "and the unregistration link of that registration is read out of the mail" "ref='$ZWEITE_REF' token='$ZWEITER_TOKEN' nonce='$ZWEITER_NONCE'"
+fi
+ANZAHL_VORHER=$(s count-registrations "$DIENST")
+fehlgeschlagen_vorher=$(s stat mail_send_failed)
+mail_fail 1
+loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_process_duty_token" \
+	--data-urlencode "signup_ref=$ZWEITE_REF" \
+	--data-urlencode "intent=unregister" \
+	--data-urlencode "token=$ZWEITER_TOKEN" \
+	--data-urlencode "token_nonce=$ZWEITER_NONCE" \
+	--data-urlencode "source_url=$BASE$LIST_PATH")
+mail_fail 0
+if [ "$(hinweis "$loc")" = "unregistered" ]; then
+	ok "the member is told the removal worked"
+else
+	bad "the member is told the removal worked" "$loc"
+fi
+# The decisive claim. The member reads in that notice that the removal is done,
+# and the row has to be gone. A rollback would answer a member who asked to come
+# out with a place on the duty it left, taken away by a mail it never received.
+if [ "$(s count-registrations "$DIENST")" = "$((ANZAHL_VORHER - 1))" ]; then
+	ok "and the removal stands even though the mail did not arrive"
+else
+	bad "and the removal stands even though the mail did not arrive" "$(s count-registrations "$DIENST") registrations, was $ANZAHL_VORHER"
+fi
+fehlgeschlagen_nachher=$(s stat mail_send_failed)
+if [ "$fehlgeschlagen_nachher" -gt "$fehlgeschlagen_vorher" ]; then
+	ok "and the refused delivery is counted ($fehlgeschlagen_vorher -> $fehlgeschlagen_nachher)"
+else
+	bad "and the refused delivery is counted" "$fehlgeschlagen_vorher -> $fehlgeschlagen_nachher"
+fi
+if [ "$(s free-places "$DIENST")" = "$PLATZE_VORHER" ]; then
+	ok "and the place is free again"
+else
+	bad "and the place is free again" "$(s free-places "$DIENST"), expected $PLATZE_VORHER"
+fi
+# The duty is left as the section found it, and the row is gone by now because
+# the removal stood — the last line that could put it back is the claim above.
 if [ "$(s count-registrations "$DIENST")" = "$VORHER" ]; then
 	ok "the section leaves the duty as it found it"
 else

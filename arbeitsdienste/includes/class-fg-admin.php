@@ -285,6 +285,12 @@ final class FG_Admin {
 			$result = $this->repository->delete_member( $record_id );
 			$target = FG_MEMBERS_PAGE_SLUG;
 		} elseif ( 'registration' === $type ) {
+			// Read before the row is deleted, and for the same reason as on the
+			// public path: the registration is the only thing that still names the
+			// member and the duty after it is gone. Deleting a duty or a member is
+			// not here — those take their registrations with them, and a mail about
+			// a duty that no longer exists would be a lie.
+			$weg = $this->repository->get_registration( $record_id );
 			$result = array( 'deleted' => $this->repository->delete_registration( $record_id ) );
 			$target = FG_EVENTS_PAGE_SLUG;
 		} else {
@@ -297,6 +303,19 @@ final class FG_Admin {
 
 		if ( ! $result['deleted'] ) {
 			wp_die( esc_html__( 'Die Eintragung konnte nicht gelöscht werden.', 'arbeitsdienste' ) );
+		}
+
+		if ( 'registration' === $type && $weg ) {
+			// The mailer is built here, as it is built in the row button of the
+			// participant list: this class holds no mailer, and a fourth one just
+			// for two lines would be a property that one method uses.
+			$mailer = new FG_Mailer( $this->repository );
+
+			if ( ! $mailer->send_duty_removed( $weg->member_id, $weg->event_id ) ) {
+				$this->stats->increment( 'mail_send_failed' );
+			} else {
+				$this->stats->increment( 'duty_removed_mail' );
+			}
 		}
 
 		set_transient(

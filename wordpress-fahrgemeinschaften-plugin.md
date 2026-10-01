@@ -40,7 +40,7 @@
 
 > **Hinweis (28.09.2026, dritter Umschlag desselben Tages):** Der Auftrag ist ein fünftes Mal
 > umgestellt worden (Plugin 1.16.0, Schema **unverändert** 1.5.0 — diese Fassung ändert keine
-> Tabelle). Zwei sichtbare Dinge: Die Anrede aller vier Nachrichten lautet „Hallo Vorname
+> Tabelle). Zwei sichtbare Dinge: Die Anrede aller fünf Nachrichten lautet „Hallo Vorname
 > Nachname“, und das Kontaktformular eines Eintrags fragt zusätzlich nach der
 > Mitgliedsnummer. Damit steht das Paar in allen drei Formularen, es wird überall
 > gleich geprüft und überall gleich abgelehnt — siehe unten „Umsetzungsstand: Anrede und
@@ -243,6 +243,17 @@ Speicherung ohne E-Mail-Adressen, Namen, Labels, IP-Adressen oder Rohformulare. 
   verschickten Link stillschweigend ungültig machen würde. Ein Fehlschlag nimmt sein Token
   wieder mit sich. Jeder der vier Löschwege für Anmeldungen — Löschlink auf der Dienstseite,
   Mitgliederseite, Kaskade des Dienstes und die Datenschutflöschung — nimmt die Tokenzeilen mit.
+- Von den vier Löschwegen für eine Anmeldung schreiben **zwei** eine Mail an das Mitglied:
+  der Löschlink auf der Dienstseite (die eigene Abmeldung) und das Entfernen einer einzelnen
+  Anmeldung im Adminbereich. Beide schreiben dieselbe Nachricht, damit ein Mitglied nach der
+  eigenen Abmeldung und ein von der Redaktion herausgenommenes Mitglied am Wortlaut nicht
+  unterscheidbar sind. Die beiden anderen Wege schreiben keine, und das lässt sich nicht
+  anders entscheiden: Wird der **ganze Dienst** gelöscht, gibt es keinen Dienst mehr, dessen
+  Namen man nennen könnte, und wird das **Mitglied** gelöscht, gibt es kein Mitglied mehr,
+  dem man schreiben könnte. `FG_Mailer::send_duty_removed()` nimmt deshalb nicht die Anmeldung,
+  sondern **Mitglied und Dienst als Zahlen**: beide Aufrufer löschen vorher, und die Zeile ist
+  danach weg. Kommt die Mail nicht an, bleibt die Entfernung trotzdem stehen — das Gegenteil der
+  Regelung bei der Anmeldung, und mit einer Begründung, die dort nicht trägt.
 - Keine aus Benutzereingaben erzeugten HTML-Inhalte oder Mailheader: Benutzereingaben stehen im HTML-Teil ausschließlich escaped. Für die Links der Nachricht heißt das: Der Wortlaut des Ankers wird wie jeder andere Wert escaped, und er entsteht nicht aus dem Text, sondern aus einem der im Code hinterlegten Vorgabewortlaute oder einem Wortlaut, den `FG_Mail_Templates::mark_links()` gegen genau die Links dieser Nachricht geprüft hat. Die Adresse selbst geht durch `esc_url()`.
 - Jeder Link einer Nachricht ist ein `<a href>` im HTML-Teil, und sein Text nennt die Handlung. Bis 1.13.0 stand die Adresse als Klartext im Wortlaut, den `paragraphs()` Zeile für Zeile escaped; im HTML-Teil war sie damit weder klickbar noch kürzbar. Der Text, der an `wp_mail()` geht, ist trotzdem der fertige Textteil, nicht der Wortlaut mit den Marken: `FG_Mailer::send()` übergibt `FG_Mail_Templates::text_part()` an `wp_mail()` und den unaufgelösten Wortlaut an `phpmailer_init`. Filter auf `wp_mail()` — der Protokollierer dieses Plugins, ein Mail-Log, ein Plugin, das seine eigene Fußzeile anhängt — sehen also eine fertige Nachricht.
 - Ein Link-Platzhalter darf einen eigenen Wortlaut hinter einem Doppelpunkt mitbringen, `{{Loeschlink:Fahrgemeinschaft löschen}}`. Ohne den Doppelpunkt gilt der Vorgabewortlaut der Nachricht, damit ein vor 1.13.0 gespeicherter Text nicht bricht. Diese Form wird nur für die Links der jeweiligen Nachricht zugelassen.
@@ -704,7 +715,7 @@ kontaktiert niemanden, und das ist der Preis.
 
 ### Der Briefkasten
 
-- `FG_Mail_Texts::mails()` trägt für `{{Anrede}}` in allen vier Nachrichten dasselbe Beispiel
+- `FG_Mail_Texts::mails()` trägt für `{{Anrede}}` in allen fünf Nachrichten dasselbe Beispiel
   („Hallo Anton Berger“) und dieselbe Bedingung („Nummer und Adresse müssen zu einem Mitglied
   passen“). `{{Vorname}}` und `{{Name}}` bleiben in der Anmeldebestätigung, weil die Liste dort
   den Vornamen zeigt.

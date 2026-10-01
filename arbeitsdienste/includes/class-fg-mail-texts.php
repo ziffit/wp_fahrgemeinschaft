@@ -56,6 +56,13 @@ final class FG_Mail_Texts {
 	const DUTY_SIGNUP = 'duty_signup';
 
 	/**
+	 * Sent when a member is taken off a duty, by either of the two ways.
+	 *
+	 * @var string
+	 */
+	const DUTY_REMOVED = 'duty_removed';
+
+	/**
 	 * The option that holds the notices of held-back messages.
 	 *
 	 * @var string
@@ -63,7 +70,7 @@ final class FG_Mail_Texts {
 	const NOTICE_OPTION = 'fg_mail_text_notices';
 
 	/**
-	 * All four messages with their defaults and their placeholders.
+	 * All messages with their defaults and their placeholders.
 	 *
 	 * A message is a list rather than a single string because it is three
 	 * things at once: what a reader sees, what a club may change, and what a
@@ -188,6 +195,37 @@ final class FG_Mail_Texts {
 					'Datum'                => 'Samstag, den 12.06.2027',
 					'Uhrzeit'              => '08:00',
 					'Abmeldelink'          => 'https://example.org/?fg_duty_action=view&ref=5c0b7a91e2d34f68a1b4c7d09e3f28a6&token=d82f1b4c7a0e93f5618c4b2d7a0e9f35',
+				),
+			),
+			self::DUTY_REMOVED    => array(
+				'label'        => __( 'Entfernung aus einem Arbeitsdienst', 'arbeitsdienste' ),
+				'description'  => __( 'Geht an die Adresse des Mitglieds, sobald es von einem Arbeitsdienst wieder abgemeldet ist — durch den Abmeldelink aus der Anmeldung oder durch die Redaktion im Adminbereich.', 'arbeitsdienste' ),
+				'subject'      => 'Arbeitsdienst gelöscht',
+				// The text does not sign itself. The footer of every mail is a setting
+				// of the club and is mandatory there, so a "Danke Die Verwaltung" in the
+				// body would stand twice in every mail of a club that has filled the
+				// field in. The sign-off of a message is the footer's business, and this
+				// text says only what the club would otherwise have to say in two
+				// places.
+				'body'         => "{{Anrede}},\n\ndu wurdest aus dem Arbeitsdienst {{Arbeitsdienst}} entfernt.\n\nFalls du das nicht selbst veranlasst hast, findest du weitere Informationen auf der Webseite der Arbeitsdienste.\n\nDanke",
+				'placeholders' => array(
+					'{{Anrede}}'                => __( 'Anrede mit Vor- und Nachnamen, zum Beispiel „Hallo Anton Berger“. Diese Mail geht an das Mitglied, das vom Dienst genommen wurde, also steht hier immer ein Name.', 'arbeitsdienste' ),
+					'{{Vorname}}'               => __( 'Vorname des Mitglieds, um das es geht. Diese E-Mail geht an das Mitglied, das vom Dienst genommen wurde, hier steht also immer einer.', 'arbeitsdienste' ),
+					'{{Name}}'                  => __( 'Nachname des Mitglieds, um das es geht. Diese E-Mail geht an das Mitglied, das vom Dienst genommen wurde, hier steht also immer einer.', 'arbeitsdienste' ),
+					'{{Arbeitsdienst}}'         => __( 'Titel des Arbeitsdienstes.', 'arbeitsdienste' ),
+					'{{Arbeitsdienstdetails}}'  => __( 'Titel, Datum und Beginn in einer Zeile, zum Beispiel „Flussaktion, Samstag, den 12.06.2027, 08:00“.', 'arbeitsdienste' ),
+				),
+				// No link. The plugin does not know on which page a club puts the list
+				// of duties, and a link that points at the wrong page is a question the
+				// club then gets in its postbox. The sentence stays, the club writes the
+				// address itself if it wants one.
+				'links'        => array(),
+				'sample'       => array(
+					'Anrede'               => 'Hallo Anton Berger',
+					'Vorname'              => 'Anton',
+					'Name'                 => 'Berger',
+					'Arbeitsdienst'        => 'Flussaktion',
+					'Arbeitsdienstdetails' => 'Flussaktion, Samstag, den 12.06.2027, 08:00',
 				),
 			),
 		);

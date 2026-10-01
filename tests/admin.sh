@@ -1167,6 +1167,29 @@ if [ "$(s notified "$LOESCHEN" 0950 | cut -f1)" = "keine" ]; then
 else
 	bad "and the registration itself is gone" "$(s notified "$LOESCHEN" 0950)"
 fi
+# And the member is told about it. This is the second of the two ways a member
+# comes off a duty, and it has to be the same message: a member who signs out
+# and a member an editor takes out must not be able to tell the two apart from
+# the wording, or the club gets a letter about somebody else doing something.
+#
+# Read with the state commands and not with a second pair of mail helpers here:
+# two ways of reading the last recorded mail in two suites are two rules, and
+# they drift apart. The commands are the ones both suites already use.
+# mail-recipients gives one line per mail with the address and the subject,
+# newest first. Address and subject are claimed together and out of ONE record:
+# the member was sent the signup mail a few lines above, to the same address, so
+# a check that asks only for the address would be answered by that mail and stay
+# green while no removal mail was written at all.
+abmelde_neu=$(s mail-recipients | head -1)
+if [ "$(printf '%s' "$abmelde_neu" | cut -f1)" = "zuweisung@example.org" ] && [ "$(printf '%s' "$abmelde_neu" | cut -f2)" = "Arbeitsdienst gelöscht" ]; then
+	ok "the newest mail is the removal mail, to the address of the member the editor removed"
+else
+	bad "the newest mail is the removal mail, to the address of the member the editor removed" "$abmelde_neu"
+fi
+has "with the subject of the message" "$(s mail-bodies)" "Arbeitsdienst gelöscht"
+has "and the text that says the member was taken off the duty" "$(s mail-bodies)" "du wurdest aus dem Arbeitsdienst Löschen der Anmeldung entfernt."
+has "and the greeting with both names" "$(s mail-bodies)" "Hallo Zuweisung Test"
+
 s delete-event "$LOESCHEN" > /dev/null
 
 # The member page, which goes through the statement for all registrations of one
@@ -2832,26 +2855,29 @@ clean "$list" "E-Mails screen"
 # a word cannot do: the label of one message is not in another row, but both
 # would be found on the page.
 zeilen=$(printf '%s' "$list" | grep -c '<tr>')
-if [ "$zeilen" -eq 5 ]; then
+if [ "$zeilen" -eq 6 ]; then
 	ok "the list has one row per message and a header ($zeilen rows)"
 else
-	bad "the list has one row per message and a header" "$zeilen rows"
+	bad "the list has one row per message and a header" "$zeilen rows, expected one per message and a header"
 fi
 
-for BESCHRIFTUNG in "Fahrgemeinschaft eingetragen" "Kontaktanfrage an das Mitglied" "Bestätigung an die anfragende Person" "Anmeldung zu einem Arbeitsdienst"; do
+# One label per message, and the fifth one is named in the loop like the other
+# four: a list that grows and a loop that stays at four would leave the newest
+# message the only one no check knows by name.
+for BESCHRIFTUNG in "Fahrgemeinschaft eingetragen" "Kontaktanfrage an das Mitglied" "Bestätigung an die anfragende Person" "Anmeldung zu einem Arbeitsdienst" "Entfernung aus einem Arbeitsdienst"; do
 	has "the list names: $BESCHRIFTUNG" "$list" "$BESCHRIFTUNG"
 done
 
-# A message that nobody changed says so. All four are untouched at the start of
+# A message that nobody changed says so. All five are untouched at the start of
 # this section, and the one this section writes is put back to its default at
-# the end of it, so all four rows carry the word and no row carries a date. The
+# the end of it, so all five rows carry the word and no row carries a date. The
 # word is counted on a line of its own, because the page also says "Auf Standard
 # zurücksetzen" below the list and that one is not a row.
 standard=$(printf '%s' "$list" | grep -cE 'Standard[[:space:]]*</td>')
-if [ "$standard" -eq 4 ]; then
+if [ "$standard" -eq 5 ]; then
 	ok "an untouched message says Standard ($standard rows)"
 else
-	bad "an untouched message says Standard" "$standard of 4 rows"
+	bad "an untouched message says Standard" "$standard of 5 rows"
 fi
 hasnt "an untouched message does not carry a date" "$list" "geändert am 1970"
 

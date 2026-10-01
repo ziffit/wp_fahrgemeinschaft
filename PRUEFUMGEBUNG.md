@@ -4,9 +4,9 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 30.09.2026 — **öffentliches HTTP 237, Mail-Ebene 124, Admin-Ebene 658,
-0 Fehler**, gegen den Stand **Plugin 1.25.3, Schema 1.8.0**, dazu **dreißig von dreißig
-Gegenproben mit dem gestellten Fehlerbild rot**. HTTP und Mail sind
+Letzter Lauf: 01.10.2026 — **öffentliches HTTP 253, Mail-Ebene 124, Admin-Ebene 663,
+0 Fehler**, gegen den Stand **Plugin 1.25.4, Schema 1.8.0**, dazu **dreiunddreißig von
+dreiunddreißig Gegenproben mit dem gestellten Fehlerbild rot**. HTTP und Mail sind
 unverändert: Diese Fassung berührt nichts, was ein Browser liest und nichts, was in einer
 E-Mail steht. Die Admin-Ebene ist um 2 höher: **Eine** falsche Behauptung aus 1.25.0 wurde
 ersetzt (die Teilnehmerliste suchte über eine ganze Seite nach einem Wort, das im
@@ -335,7 +335,7 @@ dasselbe: Geprüft wird der **ganze** Text, nicht ein Wort daraus — die Seite 
 Abschnitt darüber in Worten, dass gelöscht wird, eine Prüfung, die die Seite liest, ist
 also immer grün.
 
-`[13]` in `admin.sh` ist der Wortlaut der vier E-Mails. Drei Dinge darin sind nicht
+`[13]` in `admin.sh` ist der Wortlaut der fünf E-Mails. Drei Dinge darin sind nicht
 selbstverständlich und deshalb hier festgehalten:
 
 **Der Vorschau-Link wird nach seiner Nachricht gewählt, nicht als erster genommen.** Die
@@ -1014,7 +1014,7 @@ Eine Prüfung in dieser Reihe ist **keine** Prüfung, sondern eine Bedingung fü
 die anderen: Der Vorgabewortlaut eines Links steht in zwei Listen derselben
 Definition, `links` und `placeholders`, und ein Name, der nur in einer davon
 steht, ist ein Link, den die Nachricht gar nicht anbietet. `mail-mime.php`
-vergleicht die beiden Listen für alle vier Nachrichten und verlangt zusätzlich
+vergleicht die beiden Listen für alle fünf Nachrichten und verlangt zusätzlich
 einen Wortlaut und eine Beispieladresse. Ohne diese Prüfung wären die Zeilen
 darüber grün, während die Vorschau im Adminbereich einen Link zeigt, der
 nirgends hingesetzt wird.
@@ -1196,7 +1196,8 @@ denn die Konstante ist mit dem Zustand weg.
 
 ## Fassung 1.16.0: Anrede und Kontaktformular
 
-Bis `1.15.0` stand in der Anrede aller vier Nachrichten nur der Vorname, und das
+Bis `1.15.0` stand in der Anrede aller Nachrichten nur der Vorname (es waren damals vier;
+seit 1.25.4 sind es fünf), und das
 Kontaktformular eines Eintrags fragte nach der Adresse allein. Seit `1.16.0` lautet die
 Anrede „Hallo Vorname Nachname“, und das Kontaktformular fragt nach Mitgliedsnummer **und**
 Adresse. Beides ist an der ausgelieferten Seite und an der wirklich verschickten Nachricht
@@ -1578,7 +1579,7 @@ protokolliert, nicht mitgenommen.
 
 ## Fassung 1.21.0: die Mail trägt ihr Layout in die Nachricht hinein
 
-Der Befund aus dem Verein: Die vier Nachrichten des Plugins kommen ohne Logo, ohne
+Der Befund aus dem Verein: Die Nachrichten des Plugins kommen ohne Logo, ohne
 Hintergrund und ohne Links an, obwohl die Vorschau auf der Seite **Einstellungen** alles
 zeigt. Im Quelltext der empfangenen Mail stand `Content-Type: text/plain`.
 
@@ -2404,6 +2405,109 @@ HTTP **237**, Mail 124, Admin 658, 0 Fehler. HTTP ist um 1 höher als bei 1.25.2
 Forderung nach `min(380px, 100%)` steckte als Zeile **innerhalb** eines großen Tests und
 zählte deshalb nicht als eigene Prüfung; der neue Test daneben schon. Mail und Admin sind
 unverändert.
+
+## Fassung 1.25.4: die Mail über die Entfernung aus einem Arbeitsdienst
+
+Aus dem Verein, mit einem Textvorschlag: Eine weitere E-Mail, Betreff **„Arbeitsdienst
+gelöscht"**. Sie geht raus, wenn sich ein Mitglied selbst vom Arbeitsdienst abmeldet **oder**
+wenn ein Redakteur es im Backend aus dem Dienst entfernt. Zwei Antworten kamen vom Verein
+dazu, und beide sind Fragen, deren Antwort man nicht raten sollte.
+
+### Kein Link, und die Nachricht unterschreibt sich nicht
+
+Der Textvorschlag trägt `<a href="..">Arbeitsdienste</a>`. **Ohne Link**, weil das Plugin
+nicht weiß, auf welcher Seite ein Verein die Liste unterbringt: Der Kurzcode liegt auf
+irgendeiner Seite, und die einzige Adresse, die das Plugin selbst baut, ist `home_url('/')` —
+auch der Abmeldelink geht dorthin. Ein Link, der daneben zeigt, ist eine Frage im Postfach des
+Vereins. Der Satz bleibt, die Adresse schreibt der Verein auf dem Bildschirm **E-Mails**, wenn
+er eine möchte.
+
+Der Vorschlag endet mit „Danke, die Verwaltung". Der **Text** endet mit „Danke", und die
+Unterschrift bleibt der **Fußzeile**. Die Fußzeile ist eine *Pflicht*-Einstellung und steht in
+jeder Mail des Plugins; ein „die Verwaltung" im Text stünde bei jedem Verein zweimal da, der
+das Feld ausgefüllt hat. Das ist beim Handlauf sichtbar geworden: Die Testinstallation trägt
+„Musterverein e.V. / Musterstraße 1 / info@…", und die Nachricht hätte die Vereinsadresse
+zweimal nach unten gesetzt.
+
+### Die Bedingung steht gegenläufig zur Anmeldung — und das ist gewollt
+
+Bei der Anmeldung wird die Anmeldung **zurückgenommen**, wenn die Mail nicht ankommt: Der
+Abmeldelink war in dieser Mail, und ein Platz, auf dem man nicht zurück kann, ist eine Falle.
+Dieselbe Regel auf die Entfernung zu übertragen hieße: Das Mitglied käme auf **genau den
+Dienst zurück**, von dem es sich gerade abgemeldet hat, und der zweite Versuch würde wieder
+scheitern, denn eine Adresse, an die nicht geschrieben werden kann, wird nicht dadurch
+schreibbar.
+
+Deshalb bleibt die Entfernung stehen (Entscheidung des Vereins). Das Mitglied liest die
+Bestätigung auf der Seite, von der es gekommen ist, und die nicht zugestellte Mail wird über
+`mail_send_failed` gezählt wie jede andere.
+
+### Zwei Wege, eine Nachricht, und einer davon ohne
+
+Von den vier Löschwegen für eine Anmeldung schreiben **zwei** eine Mail: der Löschlink auf der
+Dienstseite und das Entfernen einer einzelnen Anmeldung im Adminbereich. Beide schreiben
+dieselbe Nachricht — ein Mitglied soll am Wortlaut nicht ablesen können, ob es selbst gegangen
+ist oder herausgenommen wurde.
+
+Die anderen beiden schreiben keine, und das ist keine Unvollständigkeit: Wird der **ganze
+Dienst** gelöscht, gibt es keinen Dienst mehr, dessen Namen man nennen könnte; wird das
+**Mitglied** gelöscht, gibt es kein Mitglied mehr, dem man schreiben könnte.
+
+`FG_Mailer::send_duty_removed()` nimmt deshalb nicht die Anmeldung, sondern **Mitglied und
+Dienst als Zahlen**: Beide Aufrufer löschen vorher, und die Zeile ist danach weg. Das war beim
+Bau der Entscheidung nicht selbstverständlich — der Mailer hat keinen Zähler und bekommt
+hier keinen; `FG_Mailer` hat nie eine Statistik gehabt, und beide Zähler stehen bei den
+Aufrufern, die auch `mail_send_failed` selbst zählen.
+
+### Die Prüfungen: eine Ersatzprüfung, zwei neue Abschnitte
+
+Drei Behauptungen in der Suite sprachen von **vier** Nachrichten und sind ersetzt:
+
+| Vorher | Jetzt |
+| --- | --- |
+| *the list has one row per message and a header* (5 Zeilen) | 6 Zeilen, mit der Zahl der Nachrichten im Text der Fehlermeldung |
+| *an untouched message says Standard* (`-eq 4`) | `-eq 5`, und der Kommentar sagt „alle fünf" |
+| Die Schleife über die Beschriftungen (4 Namen) | dieselbe Schleife, ein Name mehr — die neueste Nachricht ist sonst die einzige, die keine Prüfung beim Namen kennt |
+
+Neu sind **16 HTTP-Prüfungen** in zwei Blöcken: neun für die eigene Abmeldung (Adresse,
+Betreff, Anrede, der Satz über die Entfernung, der Satz über die Webseite, „Danke", **kein
+Link**, **keine zweite Unterschrift**, der Zähler) und sieben für den Ausfallfall
+(`[9b]`): die entscheidende ist *the removal stands even though the mail did not arrive*.
+
+Vier **Admin-Prüfungen** kommen dazu: derselbe Nachrichtentext auf dem zweiten Weg.
+
+### Zwei Schwächen, die erst die Gegenproben zeigten
+
+**Der Empfänger allein beweist nichts.** Die erste Fassung der Empfängerprüfung verglich nur die
+Adresse. Auf der Dienstseite war zwei Zeilen zuvor die **Anmelde-Mail** an dieselbe Adresse
+gegangen — sie hätte die Prüfung grün gehalten, während gar keine Mail geschrieben wurde. Im
+Adminbereich dasselbe mit der Mail aus der Zuweisung. Beide Prüfungen lesen jetzt **Adresse
+und Betreff aus einem Datensatz** und behaupten beides zusammen; die neue Zeile beantwortet
+die Frage nicht mehr mit der falschen Mail.
+
+**Die erste Gegenprobe maß das Falsche.** Sie hieß „die eigene Abmeldung schreibt keine Mail"
+und ersetzte den Block durch einen Aufruf, der die Mail **weiterhin schickt** und nur die
+Zähler weglässt — rot wurden daraufhin nur die Zähler, nicht der Text. Jetzt lässt sie den
+Versand wirklich weg, und acht Prüfungen werden rot.
+
+### Die Gegenproben
+
+| Fehlerbild | Erwartet rot | Tatsächlich rot |
+| --- | --- | --- |
+| Die eigene Abmeldung lässt den Versand weg | die Nachricht und ihre Zähler | **8** |
+| Ein Rollback wie bei der Anmeldung (das Mitglied kommt zurück) | die Entfernung bleibt | **3** — die Behauptung, der freie Platz und der Zustand des Abschnitts |
+| Das Entfernen im Backend schreibt keine Mail | die Nachricht auf dem zweiten Weg | **3** |
+
+Die zweite ist die wichtigste, weil sie die Regel prüft, die man nicht aus dem Code ablesen
+kann: Sie hätte genau das getan, was bei der Anmeldung richtig ist.
+
+### Läufe
+
+HTTP **253**, Mail 124, Admin **663**, 0 Fehler. HTTP ist um 16 höher, Admin um 5. Die
+Mail-Ebene ist unverändert: Diese Nachricht wird nicht über die eigene Skript geprüft, sondern
+an ihren beiden Wegen entlang — sie aufzunehmen hieße, denselben Weg zweimal zu fahren. Schema
+unverändert bei 1.8.0: Die Tabelle der Vorlagen bekommt ihre Zeile erst, wenn jemand eine
+Nachricht speichert; bis dahin liefert `FG_Mail_Texts::get()` den mitgelieferten Wortlaut.
 
 ## Mail-Auswertung
 

@@ -590,11 +590,30 @@ final class FG_Actions {
 			FG_Security::redirect_with_notice( 'form_expired', $source );
 		}
 
+		// Member and duty are read before the row goes, because the row is the
+		// only thing that still ties the two together. After the deletion the mail
+		// has to be written without it, and it is written from these two.
+		$member = $this->repository->get_member( $registration->member_id );
+		$event  = $this->repository->get_event( $registration->event_id );
+
 		if ( ! $this->repository->delete_registration_with_token( $registration->id, $token ) ) {
 			FG_Security::redirect_with_notice( 'invalid_token', $source );
 		}
 
 		$this->stats->increment( 'signup_unregistered' );
+
+		// The member hears about it afterwards, and a mail that does not arrive
+		// does not put it back: the signup mail takes the registration away again
+		// when it fails, because the link out of it was in that mail. Here the same
+		// would put a member back onto the duty it has just left. The removal
+		// stands, the confirmation is on the page it came from, and the counter of
+		// a refused delivery rises like every other.
+		if ( $member && $event && ! $this->mailer->send_duty_removed( $member->id, $event->id ) ) {
+			$this->stats->increment( 'mail_send_failed' );
+		} elseif ( $member && $event ) {
+			$this->stats->increment( 'duty_removed_mail' );
+		}
+
 		FG_Security::redirect_with_notice( 'unregistered', $source );
 	}
 

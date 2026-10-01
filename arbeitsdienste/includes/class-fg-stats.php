@@ -54,6 +54,11 @@ final class FG_Stats {
 			// two acts are apart: entering a member is a list, sending the mail is
 			// a message, and a club that enters its board in October and writes in
 			// November has two different things to look at afterwards.
+			// The two ways a member comes off a duty write the same message, and the
+			// counter stands where the message went out rather than where the
+			// removal happened: an editor pressing the button is visible on the
+			// screen the button is on, while "nobody was told" is not.
+			'duty_removed_mail'         => 'E-Mails zur Entfernung aus einem Arbeitsdienst übergeben',
 			'admin_participant_added'   => 'Vom Redakteur eingetragene Anmeldungen',
 			'admin_participant_notified' => 'Vom Redakteur verschickte Anmelde-E-Mails',
 		);

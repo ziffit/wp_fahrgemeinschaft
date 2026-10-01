@@ -229,6 +229,65 @@ final class FG_Mailer {
 	}
 
 	/**
+	 * Tell a member that it is no longer on a duty.
+	 *
+	 * The two ids and not the registration, because both callers delete the
+	 * registration and then write: the row is gone, and a method that read it
+	 * would find nothing to write to. Member and duty survive the deletion, and
+	 * with them everything the message needs.
+	 *
+	 * What is NOT here is the counterpart of the rollback in send_duty_signup().
+	 * A registration whose mail does not arrive is taken back out again, because
+	 * a place that cannot be given back is a trap. Here the same trick would put
+	 * a member back onto the very duty it has just left, which is the opposite of
+	 * what it asked for — and it would keep failing on the second attempt, since
+	 * the address that cannot be written to does not become one that can. So the
+	 * removal stands, the member reads the confirmation on the page it came from,
+	 * and a refused delivery is counted where the others are counted too.
+	 *
+	 * @param int $member_id Member row ID.
+	 * @param int $event_id  Work service ID.
+	 * @return bool Whether the mail was handed over.
+	 */
+	public function send_duty_removed( $member_id, $event_id ) {
+		$member = $this->repository->get_member( $member_id );
+		$event  = $this->repository->get_event( $event_id );
+
+		if ( ! $member || ! $event ) {
+			return false;
+		}
+
+		$to = $this->repository->normalize_email( $member->email );
+		if ( ! $to ) {
+			return false;
+		}
+
+		$date = $this->repository->format_event_date_long( $event );
+		$time = $this->repository->format_event_time( $event );
+
+		$mail = FG_Mail_Texts::compose(
+			FG_Mail_Texts::DUTY_REMOVED,
+			array_merge(
+				$this->person_from_member( $member ),
+				array(
+					'Arbeitsdienst'        => (string) $event->title,
+					'Arbeitsdienstdetails' => trim( $event->title . ', ' . $date . ( '' === $time ? '' : ', ' . $time ), ', ' ),
+				)
+			)
+		);
+
+		if ( ! $mail ) {
+			return false;
+		}
+
+		// No counter here: the mailer has no statistics of its own and never had
+		// one. Both counters of this message stand at the two callers, which know
+		// where the removal came from and count `mail_send_failed` themselves —
+		// the same place the contact mail and the signup mail are counted from.
+		return $this->send( $to, $mail['subject'], $mail['body'], null, $mail['links'] );
+	}
+
+	/**
 	 * The name fields of the member a message goes to.
 	 *
 	 * Three values out of one record, and the record is required: every message
