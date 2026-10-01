@@ -4,15 +4,22 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 01.10.2026 — **öffentliches HTTP 266, Mail-Ebene 124, Admin-Ebene 693,
-0 Fehler**, gegen den Stand **Plugin 1.25.5, Schema 1.9.0**, dazu **sieben von sieben
-Gegenproben mit dem gestellten Fehlerbild rot** (die 33 der Fassungen davor wurden in
-diesem Lauf nicht wiederholt). HTTP ist um 13 höher, die Admin-Ebene um 30; die
-Mail-Ebene ist unverändert, weil die beiden Nachrichten über einen Dienst über die
-öffentliche Seite und den Admin-Satz geprüft werden, nicht über `mail.sh` — dieselbe
-Sache zweimal zu fahren wäre eine Behauptung mehr und kein Wissen mehr. Die CLI-Suite
-wurde **nicht** gefahren: Sie löscht Arbeitsdienste, Fahrgemeinschaften und Mitglieder,
-und dafür ist die Zustimmung nötig; ihr Stand ist der von 1.25.4.
+Letzter Lauf: 01.10.2026 — **öffentliches HTTP 270, Mail-Ebene 124, Admin-Ebene 693,
+0 Fehler**, gegen den Stand **Plugin 1.25.6, Schema 1.9.0**, dazu **zehn von zehn
+Gegenproben mit dem gestellten Fehlerbild rot** (drei davon aus dieser Fassung; die 33 der
+Fassungen davor wurden in diesem Lauf nicht wiederholt). HTTP ist um 4 höher als bei 1.25.5,
+Mail und Admin sind unverändert. Die CLI-Suite wurde **nicht** gefahren: Sie löscht
+Arbeitsdienste, Fahrgemeinschaften und Mitglieder, und dafür ist die Zustimmung nötig; ihr
+Stand ist der von 1.25.4.
+
+Der Lauf hat zwei Dinge zutage gefördert, die keine Fehler des Plugins sind: Ein
+unmaskiertes Anführungszeichen hat zum **dritten Mal** einen Python-Block abgeschnitten,
+diesmal im Code statt im Kommentar — die Wache aus 1.25.5 sah nur die Kommentare und ist
+deshalb weiter ausgebaut worden. Und der Container las nach einem Gegenprobenlauf eine
+**alte** Datei, weil `rsync` die Zeitstempel zurücknimmt und opcache nur nach der Zeit
+entscheidet: Der Baum war byteweise richtig und die sechs Admin-Behauptungen trotzdem rot.
+Das Gegenproben-Werkzeug stellt seitdem frische Zeitstempel her und fährt am Ende selbst
+nach.
 
 Der Lauf hat drei Dinge zutage gefördert, die alle drei eigenen Fehler waren und keine
 Fehler des Plugins: eine Regel („ein Link nur mit Text“) an drei Stellen statt an einer,
@@ -2610,6 +2617,85 @@ stehen bleibt“: die Positivliste des Speicherns ohne `meeting_point`, eine Zuo
 Die **CLI-Suite** (`smoke.php`) wurde in diesem Lauf **nicht** gefahren: Sie löscht
 Arbeitsdienste, Fahrgemeinschaften und Mitglieder, und dafür ist die Zustimmung des
 Verfassers nötig. Ihr Stand ist der von 1.25.4.
+
+## Fassung 1.25.6: der Treffpunktlink öffnet in einem neuen Tab
+
+Aus dem Verein, mit einem Satz: „Wenn ein Link angegeben ist, sollte er in einem neuen Tab
+geöffnet werden.“ Betroffen sind die öffentliche Karte und die beiden Nachrichten über einen
+Arbeitsdienst. **Das Schema bleibt bei 1.9.0**: An den Spalten ändert sich nichts.
+
+### Warum neben dem `target` noch ein `rel` steht
+
+Ohne `rel="noopener noreferrer"` darf die geöffnete Seite über `window.opener` in die
+Adresszeile der eigenen schreiben. Auf einer Vereinsseite, die Mitgliedsnummer und Adresse
+nennt, sieht dann jemand auf seinem eigenen Bildschirm eine fremde Adresse. Beide Behauptungen
+stehen einzeln im Skript, und jede davon allein wäre wenig wert: Ein `target` ohne `rel` ist
+ein Loch, ein `rel` ohne `target` sagt nichts, was ein Browser befolgt.
+
+### Die Angabe hängt an der Definition, nicht am Anker
+
+`FG_Mail_Templates::anchor()` baut **jeden** Link des Plugins. Ein `target`, das dort für
+einen einzigen Zweck gesetzt wird, landet auf allen — der Abmeldelink und der Bestätigungslink
+öffneten dann in einem neuen Tab, und das Mitglied fände ein leeres Fenster vor. Die zweite
+Form der Link-Liste bekommt dafür einen dritten Schlüssel (`'tab' => true`), den nur der
+Treffpunkt trägt.
+
+Daraus folgen **vier** Behauptungen, und die vierte ist die wichtigste, weil sie die Grenze
+bewacht:
+
+| Behauptung | Ebene |
+| --- | --- |
+| der Treffpunkt der ersten Karte öffnet neben der Seite, `rel` daneben | HTTP 270 |
+| der Treffpunkt in der Anmeldemail öffnet in einem neuen Tab | HTTP 270 |
+| der Treffpunkt in der Entfernungsmail ebenso | HTTP 270 |
+| der **Abmeldelink** derselben Mail öffnet **nicht** in einem neuen Tab | HTTP 270 |
+
+### Drei Gegenproben, alle drei rot
+
+| # | Störung | Behauptung, die rot wird |
+| --- | --- | --- |
+| 8 | die Seite zeichnet den Treffpunktlink ohne `target` | der Treffpunkt der Karte öffnet neben der Seite |
+| 9 | der Anker der Mails setzt kein `target` | der Treffpunkt in der Mail öffnet in einem neuen Tab |
+| 10 | der Anker setzt `target` bei **jedem** Link | der Abmeldelink bleibt im selben Tab |
+
+Probe 10 ist die wichtigste der drei: Sie baut genau den Fehler, den ein Unaufmerksamer
+gerne macht, und die negative Behauptung ist die, die ihn fängt.
+
+### Der Container liest nicht immer, was auf der Platte liegt
+
+Der Rücklauf am Ende des Gegenproben-Werkzeugs ist nicht auf Verdacht hin eingebaut: Ohne
+ihn wäre dieser Lauf **grün und falsch** gewesen.
+
+`rsync -a` nimmt einem wiederhergestellten Baum die alten Zeitstempel mit. Apache hält jede
+Datei übersetzt im opcache und prüft bei jedem Zugriff nur die Zeit — eine Störung und ihre
+Rücknahme fallen in dieselbe Sekunde, dann stimmt die Zeit, und der Container läuft weiter mit
+der **gestörten** Fassung. Sichtbar war das an genau sechs Admin-Behauptungen, die nach einem
+Gegenprobenlauf rot wurden, während Baum und Mount byteweise gleich waren; dieselben sechs
+waren es noch einmal, nachdem der Baum von Hand zurückgesetzt worden war.
+
+Der Unterschied zwischen „das Plugin ist falsch" und „der Container liest eine alte Datei" ist
+damit ein Zeitstempel. Zwei Dinge folgen daraus: Das Werkzeug stellt nach jedem Zurücksetzen
+frische Zeitstempel her (`sleep 1`, dann `touch`), und es **fährt am Ende selbst nach** —
+der Admin-Satz muss nach dem Lauf grün sein, sonst sagt es das.
+
+### Noch einmal die abgeschnittene Behauptung, diesmal im Code
+
+Der Befund aus 1.25.5 — ein unmaskiertes `"` schneidet den Python-Block ab — kam beim Bau
+dieser Fassung **ein drittes Mal** vor, diesmal an einem `'target="_blank"'` in einer
+Zeile Python. Die Wache aus 1.25.5 sah es nicht: Sie prüfte Anführungszeichen nur in
+Kommentaren, und dieses stand in Code.
+
+Die Regel ist deshalb jetzt weiter: **jedes** Anführungszeichen im Block, nicht nur das in
+einem Kommentar, und es zählt der Lauf der Backslashes davor — ein gerader Lauf ist ein
+geschlossener Fluchtpunkt, also ein Anführungszeichen, das die Shell-Zeichenkette beendet.
+Zwei Fehlalarme hat die erste Fassung der Regel gemacht (Zeilen der Argumentliste wurden als
+Code gelesen); der Blockanfang ist jetzt die `import`-Zeile.
+
+### Läufe
+
+HTTP **270**, Mail 124, Admin **693**, 0 Fehler. HTTP ist um 4 höher: die vier Behauptungen
+dieser Fassung. Mail unverändert, Admin unverändert — an beiden hat diese Fassung nichts
+geändert. Die CLI-Suite wurde nicht gefahren.
 
 ## Mail-Auswertung
 

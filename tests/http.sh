@@ -1017,20 +1017,50 @@ struct "" "no claim in this file or in admin.sh is cut short by a stray quote" "
 import io, re, sys
 
 Q = chr(34)
-B = chr(92) + Q
 schaden = []
 for pfad in ('$DIR/http.sh', '$DIR/admin.sh'):
     zeilen = io.open(pfad, encoding='utf-8').read().split(chr(10))
     n = 0
     while n < len(zeilen):
         if zeilen[n].startswith('struct '):
+            # The block ends at the line that carries the fourth argument — and it
+            # also ends at the NEXT claim, because a claim without a fourth
+            # argument has no such line of its own. Without that second rule the
+            # search walks over the following claims and reports their opening
+            # lines as damaged, which is how three false alarms came about.
             m = n + 1
             while m < len(zeilen) and not re.match(r'^' + Q + chr(92) + 's+' + Q, zeilen[m]):
+                if zeilen[m].startswith('struct ') or zeilen[m].startswith('# ---'):
+                    break
                 m += 1
+            # Every quote of the block has to be written as \" — a bare one ends
+            # the shell string, wherever it stands: In a comment it was cut off
+            # twice, and the third time it sat in a line of code, which is why
+            # this rule now looks at the whole block and not only at the comments.
+            # A quote is safe when the run of backslashes before it is odd: an even
+            # run is a closed escape, so the quote closes the string.
+            # The code starts at the import line and runs to the line with the
+            # fourth argument. The lines before it belong to the argument list: A
+            # claim whose first argument spans three lines looks exactly like code,
+            # and its quotes are the ones that delimit the arguments.
+            anfang = n + 1
             for k in range(n + 1, m):
+                if zeilen[k].startswith('import '):
+                    anfang = k
+                    break
+            for k in range(anfang, m):
                 z = zeilen[k]
-                if re.match(r'^' + chr(92) + 's*#', z) and Q in z and B not in z:
-                    schaden.append('%s:%d has a bare quote in a comment' % (pfad, k + 1))
+                for stelle, zeichen in enumerate(z):
+                    if zeichen != Q:
+                        continue
+                    lauf = 0
+                    j = stelle - 1
+                    while j >= 0 and z[j] == chr(92):
+                        lauf += 1
+                        j -= 1
+                    if lauf % 2 == 0:
+                        schaden.append('%s:%d has a bare quote in a code line' % (pfad, k + 1))
+                        break
             letzte = [z for z in zeilen[n + 1:m] if z.strip() and not re.match(r'^' + chr(92) + 's*#', z)]
             if not letzte or 'sys.exit(' not in letzte[-1]:
                 schaden.append('%s:%d does not end in sys.exit()' % (pfad, n + 1))
@@ -1155,6 +1185,34 @@ if besch < 0:
     sys.exit(1)
 sys.exit(0 if 0 <= treff < besch else 1)
 " "the row of the meeting point does not come behind the description"
+# A link to a map is a link away from this page. It opens beside it, and the rel
+# beside the target says that the new page may not write into ours — without that
+# half the opened page can put its own address into our address bar, and a visitor
+# who comes back with the back button sees a foreign address on a page that looks
+# like the club's.
+#
+# Both halves are claimed separately, and each on its own would be worth little:
+# a target without a rel is a hole, and a rel without a target says nothing the
+# browser acts on. The claim looks at the FIRST card only, for the reason that is
+# written at the other claims about cards.
+struct "$list" "the meeting point of the first card opens beside the page" "
+import re, sys
+h = sys.stdin.read()
+karte = re.search(r'<article class=\"fg-event-card\".*?</article>', h, re.S).group(0)
+zelle = re.search(r'<th scope=\"row\">Treffpunkt</th>\s*<td[^>]*>(.*?)</td>', karte, re.S).group(1)
+anker = re.search(r'<a\s([^>]*)>', zelle)
+if not anker:
+    print('no anchor in the meeting point cell', file=sys.stderr)
+    sys.exit(1)
+attribute = anker.group(1)
+if 'target=\"_blank\"' not in attribute:
+    print('the anchor has no target: %r' % attribute, file=sys.stderr)
+    sys.exit(1)
+if 'noopener' not in attribute or 'noreferrer' not in attribute:
+    print('the target stands without the rel: %r' % attribute, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the meeting point link opens in a new tab, and the rel beside it says noopener noreferrer"
 
 # The description keeps its line break, and the line break is the only markup the
 # card adds: a description typed with <b> in it must reach the page as those five
@@ -1774,6 +1832,38 @@ if 'alt=\"📍\"' not in inhalt:
 text = re.sub(r'<[^>]+>', '', inhalt).strip()
 sys.exit(0 if text == 'Parkplatz Westbad, Nürnberg' else 1)
 " "the meeting point in the mail is a link with the text of the duty, the pin as a picture"
+struct "$MAIL_BODY" "the meeting point in the mail opens in a new tab" "
+import re, sys
+h = sys.stdin.read()
+anker = re.search(r'<a\s([^>]*openstreetmap[^>]*)>', h, re.S)
+if not anker:
+    print('no anchor of the meeting point in the mail', file=sys.stderr)
+    sys.exit(1)
+attribute = anker.group(1)
+fehlt = [t for t in ('target=\"_blank\"', 'noopener', 'noreferrer') if t not in attribute]
+if fehlt:
+    print('the anchor lacks %s: %r' % (', '.join(fehlt), attribute), file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the meeting point link in the mail lacks target or the rel beside it"
+# The other way round, and this is the claim that keeps the attribute where it
+# belongs. The anchor of this plugin is built in ONE place, so a target added
+# there for one link would land on all of them without anyone noticing: every
+# mail would then open the unregister link and the confirmation link in a new
+# tab, and the member would come back to a closed window.
+struct "$MAIL_BODY" "the unregister link in the same mail stays in the same tab" "
+import re, sys
+h = sys.stdin.read()
+anker = re.search(r'<a\s([^>]*intent=unregister[^>]*)>', h, re.S)
+if not anker:
+    print('no anchor of the unregister link in the mail', file=sys.stderr)
+    sys.exit(1)
+attribute = anker.group(1)
+if 'target=' in attribute:
+    print('the unregister link carries a target: %r' % attribute, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the unregister link in the mail was given a target as well"
 has "the description of the duty goes into the mail" "$MAIL_BODY" "Handschuhe sind vorhanden."
 # The description is a paragraph of its own and keeps its line break, so the mail
 # and the public page read alike. Two claims, because they are two things: both
@@ -1944,6 +2034,20 @@ if 'alt=\"📍\"' not in inhalt:
     sys.exit(1)
 sys.exit(0 if re.sub(r'<[^>]+>', '', inhalt).strip() == 'Parkplatz Westbad, Nürnberg' else 1)
 " "the meeting point in the removal mail is a link with the text of the duty"
+struct "$MAIL_BODY" "the meeting point in the removal mail opens in a new tab" "
+import re, sys
+h = sys.stdin.read()
+anker = re.search(r'<a\s([^>]*openstreetmap[^>]*)>', h, re.S)
+if not anker:
+    print('no anchor of the meeting point in the removal mail', file=sys.stderr)
+    sys.exit(1)
+attribute = anker.group(1)
+fehlt = [t for t in ('target=\"_blank\"', 'noopener', 'noreferrer') if t not in attribute]
+if fehlt:
+    print('the anchor lacks %s: %r' % (', '.join(fehlt), attribute), file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the meeting point link in the removal mail lacks target or the rel beside it"
 has "and the description of the duty goes into it as well" "$MAIL_BODY" "Handschuhe sind vorhanden."
 # The mail is a notice, not the way out: the member is already out, and a mail
 # that could not be delivered must not put it back on the duty. The delivery of

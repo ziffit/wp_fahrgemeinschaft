@@ -968,6 +968,27 @@ und macht aus der zweiten Form einen Satz — für die Anzeige der erlaubten Pla
 für `links_of()` aber die Information weg. Eine Nachricht, die ihre eigene Fassung des
 Treffpunkts mitführt, könnte der öffentlichen Seite widersprechen.
 
+### Der Treffpunktlink öffnet in einem neuen Tab
+
+Seit 1.25.6 gilt das für die öffentliche Karte **und** für beide Nachrichten über einen
+Dienst. Der Grund ist derselbe wie dort: Der Treffpunkt führt aus der Seite heraus, und der
+Rückweg über den Zurück-Button führt bei neu gezeichneter Liste ins Leere.
+
+Zwei Dinge stehen dabei fest:
+
+- **Neben `target="_blank"` steht `rel="noopener noreferrer"`.** Ohne das zweite darf die
+  geöffnete Seite über `window.opener` in die Adresszeile der eigenen schreiben; auf einer
+  Vereinsseite, die Mitgliedsdaten nennt, wäre das sichtbar.
+- **Die Angabe hängt an der Link-Definition, nicht am Anker des Layouts.**
+  `FG_Mail_Templates::anchor()` baut **jeden** Link dieses Plugins. Ein `target`, das dort
+  für einen einzigen Zweck gesetzt würde, landet auf allen — und der Abmeldelink und der
+  Bestätigungslink würden in einem neuen Tab öffnen. Die zweite Form der Link-Liste
+  bekommt dafür einen dritten Schlüssel (`'tab' => true`), den nur der Treffpunkt trägt.
+
+Beide Wege sind geprüft — und auch der dritte: dass der **Abmeldelink** kein `target`
+bekommt. Diese negative Behauptung ist die, die eine Änderung am Anker des Layouts sofort
+rot macht.
+
 ### Der Pin
 
 Die Nadel 📍 tippt der Verein mit. Sie wird nirgends erzeugt und nirgends ergänzt, damit die

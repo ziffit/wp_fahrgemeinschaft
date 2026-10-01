@@ -415,7 +415,9 @@ final class FG_Mail_Templates {
 				return $wortlaut;
 			}
 
-			$ersetzung = 'text' === $format ? static::link_as_text( $url, $wortlaut ) : static::anchor( $url, $wortlaut );
+			$ersetzung = 'text' === $format
+				? static::link_as_text( $url, $wortlaut )
+				: static::anchor( $url, $wortlaut, ! empty( $link['tab'] ) );
 
 			if ( 'text' === $format ) {
 				return $ersetzung;
@@ -446,9 +448,10 @@ final class FG_Mail_Templates {
 	 *
 	 * @param string $url     Address.
 	 * @param string $wortlaut Wording of the link.
+	 * @param bool   $neuer_tab Whether the link opens beside this page.
 	 * @return string
 	 */
-	private static function anchor( $url, $wortlaut ) {
+	private static function anchor( $url, $wortlaut, $neuer_tab = false ) {
 		$url = esc_url( (string) $url );
 
 		if ( '' === $url ) {
@@ -457,7 +460,14 @@ final class FG_Mail_Templates {
 
 		$wortlaut = trim( (string) $wortlaut );
 
-		return '<a href="' . $url . '" style="color: #1a82e2; text-decoration: underline">'
+		// target="_blank" without the rel beside it opens a hole: the new page may
+		// then write into the window.opener of ours and put its own address into
+		// our address bar. A member who clicks a map and comes back with the back
+		// button would then see a foreign address on a page that looks like the
+		// club's. noreferrer additionally leaves nothing behind.
+		$attr = $neuer_tab ? ' target="_blank" rel="noopener noreferrer"' : '';
+
+		return '<a href="' . $url . '"' . $attr . ' style="color: #1a82e2; text-decoration: underline">'
 			. esc_html( '' === $wortlaut ? $url : $wortlaut )
 			. '</a>';
 	}

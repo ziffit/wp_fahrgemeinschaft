@@ -202,6 +202,13 @@ final class FG_Mail_Texts {
 					'{{Treffpunkt}}'  => array(
 						'url'   => 'Treffpunktlink',
 						'label' => 'Treffpunkt',
+						// The only link of this plugin that leaves the site: a map, a
+						// route, an address to look up. It opens beside the mail and not
+						// instead of it, because the member still has the wording of the
+						// duty in front of him. The other links of this plugin lead to a
+						// page that belongs to the same step of the same matter — there is
+						// nothing to come back to.
+						'tab'   => true,
 					),
 				),
 				'sample'       => array(
@@ -247,6 +254,7 @@ final class FG_Mail_Texts {
 					'{{Treffpunkt}}' => array(
 						'url'   => 'Treffpunktlink',
 						'label' => 'Treffpunkt',
+						'tab'   => true,
 					),
 				),
 				'sample'       => array(
@@ -689,6 +697,12 @@ final class FG_Mail_Texts {
 					'url'   => isset( $werte[ $form['url'] ] ) ? (string) $werte[ $form['url'] ] : '',
 					'label' => isset( $werte[ $form['label'] ] ) ? (string) $werte[ $form['label'] ] : '',
 				);
+				// A third key, and it means: this link leaves the site. Only the
+				// entry in the second form can carry it, because a link with a fixed
+				// wording belongs to the site (see the loop above).
+				if ( ! empty( $form['tab'] ) ) {
+					$out[ $schluessel ]['tab'] = true;
+				}
 				continue;
 			}
 

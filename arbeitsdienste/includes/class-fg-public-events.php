@@ -206,7 +206,8 @@ final class FG_Public_Events {
 								<?php
 								if ( ! empty( $row['link'] ) ) :
 									?>
-									<a href="<?php echo esc_url( $row['link'] ); ?>"><?php echo esc_html( $row['wert'] ); ?></a>
+									<?php // A map opens in a new tab, and `rel` says to the browser that this page may not reach into the new one. Without the second half the opened page can change the address bar of ours, and a visitor who follows the back button then lands somewhere that looks like the club's page. ?>
+									<a href="<?php echo esc_url( $row['link'] ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $row['wert'] ); ?></a>
 									<?php
 								else :
 									?>
