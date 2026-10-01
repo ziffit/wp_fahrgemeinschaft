@@ -920,3 +920,68 @@ die Mehrzahl. Die Stammdatensätze der Mitglieder bleiben wie bisher unangetaste
 Die Absage, die derselbe Weg früher gab, wäre hier die gewesen: nichts exportieren, nichts
 löschen, auf die Nummer verweisen. Sie ist am WortPress-Werkzeug nicht umsetzbar und hätte
 einem Anfragenden mit gemeinsamem Postfach eine Sackgasse gelassen.
+
+## Umsetzungsstand: Der Treffpunkt eines Arbeitsdienstes (1.25.5, Schema 1.9.0)
+
+Ein Arbeitsdienst bekommt **zwei** Felder: **Treffpunkt** (Text, 100 Zeichen) und **Link zum
+Treffpunkt** (Text, 500 Zeichen). Zwei und nicht eines, weil beide einzeln nichts sind: Ein
+Ortsname ohne Adresse nennt niemandem einen Weg, und eine Adresse ohne Namen zeigt einen Link,
+dessen Beschriftung leer ist.
+
+### Die eine Regel, an drei Stellen
+
+**Ein Link wird nur gezeichnet, wenn ein Text daneben steht.** Der Satz steht unverändert in der
+öffentlichen Karte, in der Anmeldemail und in der Entfernungsmail, und er steht an jeder Stelle
+einzeln — nicht an einer Stelle und „sinngemäß" an den anderen. Eine Regel, die man einmal
+schreibt, wird zweimal angewandt und dann nur noch einmal befolgt.
+
+Der Satz gilt auch für den umgekehrten Fall: Ein Text ohne Adresse ist eine ganz normale Zeile.
+Der Verein entscheidet, ob der Treffpunkt ein Link ist oder nicht, indem er eine Adresse
+einträgt. Steht im Datensatz eine Adresse ohne Text, bleibt sie stehen — der Verein hat sie
+getippt, und sie zu löschen wäre Datenverlust — sie erscheint aber nirgends.
+
+### Was die beiden Felder nicht heißen
+
+Das zweite heißt ausdrücklich **Link zum Treffpunkt** und nicht „Adresse". Sonst tippt erfahrungs-
+gemäß die Straße hinein, und eine Postadresse ist keine Webadresse. Das Formular sagt das auch,
+und das Feld nimmt nur eine auf, die mit `http://`, `https://`, `mailto:`, `tel:`, `/` oder `#`
+beginnt. Alles andere wird mit einer Meldung abgelehnt, die das Feld nennt, und es wird nichts
+gespeichert. Die Prüfung sitzt im Adminbereich und nicht im Repository, weil nur hier die Meldung
+das Feld nennen kann; aus dem Repository käme eine Zeile für den ganzen Datensatz, und eine
+Redaktion, der „der Arbeitsdienst konnte nicht gespeichert werden" gesagt wird, schaut auf das
+Datum.
+
+### Der Treffpunkt in den Nachrichten
+
+Die beiden Nachrichten über einen Dienst — **Anmeldung** und **Entfernung** — kennen die Platz-
+halter `{{Beschreibung}}` und `{{Treffpunkt}}`. Beide stehen im mitgelieferten Wortlaut in einem
+**eigenen Absatz**, und der Grund ist derselbe wie bei der Uhrzeit: Ein Absatz ohne Zeile wird
+nicht geschrieben. Als Zeile hinter „Beginn:" geschrieben, ließe ein Dienst ohne Beschreibung ein
+„Beschreibung:" mit nichts dahinter stehen, und das liest sich wie ein Formular, das niemand
+ausgefüllt hat.
+
+Steht zum Treffpunkt eine Webadresse, wird der Absatz ein Link, und sein **Wortlaut ist der Text,
+den der Verein am Dienst geschrieben hat**. Dafür lernt `FG_Mail_Texts::links_of()` eine zweite
+Form der Link-Definition (`array( 'url' => 'Treffpunktlink', 'label' => 'Treffpunkt' )`), und
+deshalb gibt es zusätzlich `raw_links()`: `link_labels()` nimmt die Klammern von den Namen ab
+und macht aus der zweiten Form einen Satz — für die Anzeige der erlaubten Platzhalter richtig,
+für `links_of()` aber die Information weg. Eine Nachricht, die ihre eigene Fassung des
+Treffpunkts mitführt, könnte der öffentlichen Seite widersprechen.
+
+### Der Pin
+
+Die Nadel 📍 tippt der Verein mit. Sie wird nirgends erzeugt und nirgends ergänzt, damit die
+Angabe genau die ist, die der Verein meint. Auf der öffentlichen Seite steht sie als Zeichen,
+in der E-Mail macht WordPress aus ihr ein Bild — dieselbe Angabe, zwei Darstellungen. Prüfungen
+müssen das getrennt erwarten; eine Prüfung, die in der Mail nach den zwei Zeichen der Nadel sucht,
+ist rot bei einer richtigen Mail.
+
+### Für das Speichern gilt dieselbe Regel wie darunter im Repository
+
+**Nicht mitgeschickt heißt behalten, mitgeschickt und leer heißt gelöscht.** Der Browser schickt
+beide Felder immer mit, auch leer — so leert man einen Treffpunkt. Ein Formular, das sie gar
+nicht kennt, ist eins, das vor der Aktualisierung offen war; ein solches Speichern darf den
+gespeicherten Wert nicht mitnehmen. Die beiden Feldnamen stehen zusätzlich von Hand in der
+Positivliste von `FG_Repository::update_event()`, in `$event_columns` von `FG_Store` und in der
+Feldliste des Prüfwerkzeugs. Ein Name, der in einer dieser Listen fehlt, macht jedes Speichern
+dieses Feldes wirkungslos — lautlos, weil das Speichern Erfolg meldet.

@@ -178,6 +178,8 @@ final class FG_Admin_Events {
 		$demand   = $is_new ? '' : (string) $event->demand;
 		$duration = $is_new ? '' : (string) $event->duration_hours;
 		$text     = $is_new ? '' : $event->description;
+		$treffpunkt      = $is_new ? '' : $event->meeting_point;
+		$treffpunkt_link = $is_new ? '' : $event->meeting_point_url;
 		$ride_count = $is_new ? 0 : $this->repository->count_event_rides( $event->id );
 		$registered = $is_new ? array() : $this->repository->get_event_registrations( $event->id );
 		?>
@@ -236,6 +238,20 @@ final class FG_Admin_Events {
 						<td>
 							<textarea id="fg-description" name="fg_description" rows="5" class="large-text" maxlength="<?php echo esc_attr( FG_Schema::DESCRIPTION_MAX ); ?>"><?php echo esc_textarea( $text ); ?></textarea>
 							<span class="description"><?php esc_html_e( 'Zeilenumbrüche bleiben auf der öffentlichen Seite erhalten. HTML ist hier nicht möglich; eine Angabe wie „<b>fett</b>“ erscheint genau so, wie sie eingegeben wurde.', 'arbeitsdienste' ); ?></span>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="fg-meeting"><?php esc_html_e( 'Treffpunkt', 'arbeitsdienste' ); ?></label></th>
+						<td>
+							<input type="text" id="fg-meeting" name="fg_meeting_point" class="regular-text" maxlength="<?php echo esc_attr( FG_Schema::MEETING_POINT_MAX ); ?>" value="<?php echo esc_attr( $treffpunkt ); ?>">
+							<span class="description"><?php esc_html_e( 'Freiwillig. Steht auf der öffentlichen Seite und in den E-Mails zur Anmeldung und zur Entfernung. Das Symbol für den Ort tippst du mit dazu, oder du lässt es weg.', 'arbeitsdienste' ); ?></span>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="fg-meeting-link"><?php esc_html_e( 'Link zum Treffpunkt', 'arbeitsdienste' ); ?></label></th>
+						<td>
+							<input type="url" id="fg-meeting-link" name="fg_meeting_point_url" class="regular-text" maxlength="<?php echo esc_attr( FG_Schema::MEETING_POINT_URL_MAX ); ?>" value="<?php echo esc_attr( $treffpunkt_link ); ?>">
+							<span class="description"><?php esc_html_e( 'Freiwillig. Zum Beispiel die Adresse aus Google Maps oder OpenStreetMap. Eine Webadresse ohne Text wird nicht angezeigt, weil ein Link ohne Namen niemanden zu einer Strecke führt. Hier gehört keine Postadresse hinein.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 					<tr>
@@ -813,6 +829,32 @@ final class FG_Admin_Events {
 		$raw_demand   = isset( $_POST['fg_demand'] ) ? sanitize_text_field( wp_unslash( $_POST['fg_demand'] ) ) : '';
 		$raw_duration = isset( $_POST['fg_duration_hours'] ) ? sanitize_text_field( wp_unslash( $_POST['fg_duration_hours'] ) ) : '';
 		$text         = isset( $_POST['fg_description'] ) ? $this->read_text( wp_unslash( $_POST['fg_description'] ) ) : '';
+		// One line of text is enough for a place name, so the line breaks are taken
+		// out here instead of reaching the public page, where they would show up as
+		// empty rows in a table cell.
+		//
+		// Both values are read whether or not the post carries them, because the
+		// form on the screen writes the whole duty — but only what the post really
+		// carries is passed on further down. A field that is missing from the post
+		// is a field the editor did not see, not a field somebody emptied: a tab
+		// that was open across the update to 1.25.5 has this form without these
+		// two inputs, and a save from it must not take the meeting point off the
+		// page. Clearing still works, because the browser sends an emptied field as
+		// an empty string and that is carried on as one. This is the same rule the
+		// repository states for itself: what was not submitted keeps the stored
+		// value.
+		$treffpunkt      = isset( $_POST['fg_meeting_point'] ) && ! is_array( $_POST['fg_meeting_point'] ) ? str_replace( "\n", ' ', $this->read_text( wp_unslash( $_POST['fg_meeting_point'] ) ) ) : '';
+		$treffpunkt_link = isset( $_POST['fg_meeting_point_url'] ) && ! is_array( $_POST['fg_meeting_point_url'] ) ? str_replace( "\n", ' ', $this->read_text( wp_unslash( $_POST['fg_meeting_point_url'] ) ) ) : '';
+		$getragen        = array();
+		// Written out as a map and not as a list of the two names: a list has the
+		// numbers 0 and 1 as its keys, and asking for $feld as a key then yields
+		// the number and not the field. That mistake sends nothing on, and the
+		// save reports success.
+		foreach ( array( 'fg_meeting_point' => 'meeting_point', 'fg_meeting_point_url' => 'meeting_point_url' ) as $feld => $name ) {
+			if ( isset( $_POST[ $feld ] ) && ! is_array( $_POST[ $feld ] ) ) {
+				$getragen[ $name ] = true;
+			}
+		}
 
 		if ( '' === $title ) {
 			FG_Admin::store_notice( __( 'Bitte einen Titel für den Arbeitsdienst eingeben.', 'arbeitsdienste' ), 'error' );
@@ -833,13 +875,29 @@ final class FG_Admin_Events {
 		// to come from the form. Nothing is cut off silently here either: the
 		// field is named and the save is refused, so what the club typed is
 		// either stored whole or not at all.
-		foreach ( $this->text_fields_over_limit( $group, $text ) as $too_long ) {
+		foreach ( $this->text_fields_over_limit( $group, $text, $treffpunkt, $treffpunkt_link ) as $too_long ) {
 			FG_Admin::store_notice(
 				sprintf(
 					/* translators: 1: field label, 2: number of characters allowed. */
 					__( '%1$s ist zu lang, es sind höchstens %2$s Zeichen erlaubt. Es wurde nichts gespeichert.', 'arbeitsdienste' ),
 					$too_long['label'],
 					$too_long['limit']
+				),
+				'error'
+			);
+			$this->redirect_back( $event_id );
+		}
+
+		// A web address that does not look like one is refused here and not in the
+		// repository, because here the message can name the field. From there a
+		// refusal is one line for the whole record, and an editor who was told
+		// "the duty could not be saved" would look at the date.
+		if ( '' !== $treffpunkt_link && ! preg_match( '~^(https?://|mailto:|tel:|/|#)~i', $treffpunkt_link ) ) {
+			FG_Admin::store_notice(
+				sprintf(
+					/* translators: %s: field label. */
+					__( '%s ist keine Webadresse. Sie muss mit https:// oder http:// beginnen. Es wurde nichts gespeichert.', 'arbeitsdienste' ),
+					__( 'Link zum Treffpunkt', 'arbeitsdienste' )
 				),
 				'error'
 			);
@@ -856,9 +914,17 @@ final class FG_Admin_Events {
 			'is_active'      => $active,
 			'group_name'     => $group,
 			'demand'         => $demand,
-			'duration_hours' => $duration,
-			'description'    => $text,
+			'duration_hours'    => $duration,
+			'description'       => $text,
 		);
+		// Only the fields the post carries. See the reading of the two values
+		// above: a field that was not sent is not an emptied field.
+		if ( isset( $getragen['meeting_point'] ) ) {
+			$fields['meeting_point'] = $treffpunkt;
+		}
+		if ( isset( $getragen['meeting_point_url'] ) ) {
+			$fields['meeting_point_url'] = $treffpunkt_link;
+		}
 
 		if ( $event_id ) {
 			if ( ! $this->repository->update_event( $event_id, $fields ) ) {
@@ -885,9 +951,11 @@ final class FG_Admin_Events {
 	 *
 	 * @param string $group Submitted group text.
 	 * @param string $text  Submitted description.
+	 * @param string $point Submitted meeting point.
+	 * @param string $link  Submitted web address of the meeting point.
 	 * @return array List of fields to complain about, empty when all of them fit.
 	 */
-	private function text_fields_over_limit( $group, $text ) {
+	private function text_fields_over_limit( $group, $text, $point = '', $link = '' ) {
 		$felder = array(
 			array(
 				'label' => __( 'Gruppe', 'arbeitsdienste' ),
@@ -898,6 +966,21 @@ final class FG_Admin_Events {
 				'label' => __( 'Beschreibung', 'arbeitsdienste' ),
 				'wert'  => $text,
 				'limit' => FG_Schema::DESCRIPTION_MAX,
+			),
+			// The two values are read out of the parameters, not out of the names
+			// the calling method uses: those are undefined here, and PHP says so
+			// loudly — after the output has begun, which breaks the redirect that
+			// carries the editor back to the form. Every save of a duty failed that
+			// way until it was found.
+			array(
+				'label' => __( 'Treffpunkt', 'arbeitsdienste' ),
+				'wert'  => $point,
+				'limit' => FG_Schema::MEETING_POINT_MAX,
+			),
+			array(
+				'label' => __( 'Link zum Treffpunkt', 'arbeitsdienste' ),
+				'wert'  => $link,
+				'limit' => FG_Schema::MEETING_POINT_URL_MAX,
 			),
 		);
 

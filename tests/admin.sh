@@ -479,7 +479,7 @@ has "registration column exists" "$events" ">Teilnehmer<"
 has "free places column exists" "$events" ">Freie Plätze<"
 has "edit link exists" "$events" "event=$EVENT_ID"
 hasnt "no trash column" "$events" ">Papierkorb<"
-# The four fields are optional, so the list has to be able to say "nothing
+# The optional fields are six now, so the list has to be able to say "nothing
 # stated" without inventing a number for it. That is checked further down, on
 # a record of this run: the club keeps its own entries on its own duties, and
 # those carry real numbers. Reading a cell of a foreign record would only prove
@@ -633,12 +633,17 @@ if [ "$(s event "$NEW_ID" description)" = "Bitte festes Schuhwerk mitbringen.
 Handschuhe sind vorhanden." ]; then ok "description stored with its line break"; else bad "description stored with its line break" "$(s event "$NEW_ID" description)"; fi
 clean "$saved" "work duty create"
 
-echo "[5a] the four fields come back into the form"
+echo "[5a] the optional fields come back into the form"
 back=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$NEW_ID")
 has "group is filled in" "$back" 'value="Gartenpflege Nord"'
 has "demand is filled in" "$back" 'value="8"'
 has "duration is filled in" "$back" 'value="4"'
 has "description is filled in" "$back" "Bitte festes Schuhwerk mitbringen."
+# The meeting point is the fifth and the sixth optional field, and both come
+# back. A field that is not offered in the form cannot be filled in, so this is
+# also the claim that it exists at all.
+has "the meeting point comes back" "$back" 'name="fg_meeting_point"'
+has "and the web address of the meeting point" "$back" 'name="fg_meeting_point_url"'
 # Saving the form again must not change the text, and the check is made the way
 # a browser makes it: the text is read out of the form, sent back unchanged with
 # the line breaks the way a browser sends them, and the table is read again. The
@@ -681,7 +686,7 @@ if [ "$(s event "$NEW_ID" title)" = "Neuer Dienst aus dem Admin" ] && [ "$(s eve
 else
 	bad "and the other fields are still the ones of the form" "$(s event "$NEW_ID" title) / $(s event "$NEW_ID" demand)"
 fi
-clean "$back" "form after the four fields"
+clean "$back" "form after the optional fields"
 
 echo "[5b] editing the new work duty"
 editform=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$NEW_ID")
@@ -1792,7 +1797,7 @@ if [ "$(s member-by-no "0701" id)" = "missing" ]; then bad "the second member is
 if [ "$(s member-by-no "0701" email)" = "$(s member-by-no "0700" email)" ]; then ok "and both rows carry the same address"; else bad "and both rows carry the same address" "$(s member-by-no "0701" email) / $(s member-by-no "0700" email)"; fi
 clean "$mail" "member with a shared address"
 
-# The four fields are required, and the form marks them as such; a request that
+# Four of the fields are required, and the form marks them as such; a request that
 # leaves one out anyway has to be refused on the server, not only in the
 # browser.
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-leer.html" -X POST "$BASE/wp-admin/admin-post.php" \
@@ -1841,7 +1846,193 @@ hasnt "and it is not the vague message" "$lang" "Das Mitglied konnte nicht angel
 if [ "$(s member-by-no "0705" id)" = "missing" ]; then ok "and no member was written for it"; else bad "and no member was written for it" "$(s member-by-no "0705" id)"; fi
 clean "$lang" "member with an address longer than the column"
 
-# The four fields come back into the form, and a change is stored.
+
+# --- the meeting point of a duty: two fields, one fact
+#
+# The text and the web address are two fields, and the reason is written in the
+# form itself: an address without a name is not shown, because a link with an
+# empty wording leads nowhere. Everything below is measured on a duty of this run.
+TREFF_TEXT="📍Parkplatz Westbad, Nürnberg"
+TREFF_URL="https://www.openstreetmap.org/?mlat=49.4&mlon=11.0#map=16/49.4/11.0"
+TREFF_DIENST=$(s make-event "Treffpunkt des Dienstes" "$(date -d '+76 days' +%Y-%m-%d)" 2 "11:00")
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$TREFF_DIENST")
+TNONCE=$(val /dev/stdin fg_event_nonce <<< "$seite")
+# The browser is told the same length the columns have, and the two fields are
+# asked for as what they are: one a text, one an address.
+if [ "$(printf '%s' "$seite" | feld fg_meeting_point "['type=\"text\"', 'maxlength=\"100\"']")" = "ok" ]; then
+	ok "the form has a text field fg_meeting_point of 100 characters"
+else
+	bad "the form has a text field fg_meeting_point of 100 characters" "$(printf '%s' "$seite" | feld fg_meeting_point "['type=\"text\"', 'maxlength=\"100\"']")"
+fi
+if [ "$(printf '%s' "$seite" | feld fg_meeting_point_url "['type=\"url\"', 'maxlength=\"500\"']")" = "ok" ]; then
+	ok "and an address field fg_meeting_point_url of 500 characters"
+else
+	bad "and an address field fg_meeting_point_url of 500 characters" "$(printf '%s' "$seite" | feld fg_meeting_point_url "['type=\"url\"', 'maxlength=\"500\"']")"
+fi
+has "and the address field says that it takes no postal address" "$seite" "Hier gehört keine Postadresse hinein"
+hasnt "and neither field is marked as required" "$seite" 'name="fg_meeting_point" class="regular-text" maxlength="100" required'
+
+# The third value is the title, so a save that does not touch the meeting point
+# can still be told apart from one that does.
+speichere_treffpunkt() {
+	curl -sk -b "$JAR" -L -o "$DIR/treffpunkt.html" -X POST "$BASE/wp-admin/admin-post.php" \
+		--data-urlencode "action=fg_save_event" \
+		--data-urlencode "fg_event_id=$TREFF_DIENST" \
+		--data-urlencode "fg_event_nonce=$TNONCE" \
+		--data-urlencode "fg_title=${3:-Treffpunkt des Dienstes}" \
+		--data-urlencode "fg_event_date=$(date -d '+76 days' +%Y-%m-%d)" \
+		--data-urlencode "fg_event_time=11:00" \
+		--data-urlencode "fg_event_active=1" \
+		--data-urlencode "fg_meeting_point=$1" \
+		--data-urlencode "fg_meeting_point_url=$2"
+}
+speichere_treffpunkt "$TREFF_TEXT" "$TREFF_URL"
+if [ "$(s event "$TREFF_DIENST" meeting_point)" = "$TREFF_TEXT" ]; then
+	ok "a meeting point typed into the form is stored"
+else
+	bad "a meeting point typed into the form is stored" "$(s event "$TREFF_DIENST" meeting_point)"
+fi
+if [ "$(s event "$TREFF_DIENST" meeting_point_url)" = "$TREFF_URL" ]; then
+	ok "and so is the web address of it"
+else
+	bad "and so is the web address of it" "$(s event "$TREFF_DIENST" meeting_point_url)"
+fi
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$TREFF_DIENST")
+if [ "$(val /dev/stdin fg_meeting_point <<< "$seite")" = "$TREFF_TEXT" ]; then
+	ok "and both come back into the form"
+else
+	bad "and both come back into the form" "$(val /dev/stdin fg_meeting_point <<< "$seite")"
+fi
+
+# The save above carried both fields, so nothing here proves what a save does
+# that does NOT carry them. That is the path a tab takes that was open across the
+# update: the form it holds has no such inputs, and the meeting point must survive
+# a save from it. Written the other way round, a save that clears the two fields
+# must clear them — and both are the same rule, which is why they are checked
+# next to each other instead of being split over two sections.
+curl -sk -b "$JAR" -L -o "$DIR/treffpunkt2.html" -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_event" \
+	--data-urlencode "fg_event_id=$TREFF_DIENST" \
+	--data-urlencode "fg_event_nonce=$TNONCE" \
+	--data-urlencode "fg_title=Treffpunkt des Dienstes, neu benannt" \
+	--data-urlencode "fg_event_date=$(date -d '+76 days' +%Y-%m-%d)" \
+	--data-urlencode "fg_event_time=11:00" \
+	--data-urlencode "fg_event_active=1"
+if [ "$(s event "$TREFF_DIENST" title)" = "Treffpunkt des Dienstes, neu benannt" ]; then
+	ok "a second save that only renames the duty takes effect"
+else
+	bad "a second save that only renames the duty takes effect" "$(s event "$TREFF_DIENST" title)"
+fi
+if [ "$(s event "$TREFF_DIENST" meeting_point)" = "$TREFF_TEXT" ]; then
+	ok "and a save that does not carry the field does not throw the meeting point away"
+else
+	bad "and a save that does not carry the field does not throw the meeting point away" "$(s event "$TREFF_DIENST" meeting_point)"
+fi
+if [ "$(s event "$TREFF_DIENST" meeting_point_url)" = "$TREFF_URL" ]; then
+	ok "and neither the web address of it"
+else
+	bad "and neither the web address of it" "$(s event "$TREFF_DIENST" meeting_point_url)"
+fi
+
+# The same save, with both fields carried and empty. A club that renames a duty in
+# the browser sends them, so this is what happens on the way to an old meeting
+# point that has to go — and it must go, not stay for ever.
+speichere_treffpunkt "" "" "Treffpunkt des Dienstes ohne Ort"
+if [ -z "$(s event "$TREFF_DIENST" meeting_point)" ] && [ -z "$(s event "$TREFF_DIENST" meeting_point_url)" ]; then
+	ok "a save that carries both fields empty clears the meeting point"
+else
+	bad "a save that carries both fields empty clears the meeting point" "$(s event "$TREFF_DIENST" meeting_point) / $(s event "$TREFF_DIENST" meeting_point_url)"
+fi
+
+# And back again: a duty that has had a meeting point can get a new one. The list
+# of fields the repository carries into an update is written out by hand there,
+# and a name missing from it makes every change to that field a no-op — silently,
+# because the save reports success. That is why this direction is checked too and
+# not only the one above.
+speichere_treffpunkt "$TREFF_TEXT" "$TREFF_URL" "Treffpunkt des Dienstes mit neuem Ort"
+if [ "$(s event "$TREFF_DIENST" meeting_point)" = "$TREFF_TEXT" ] && [ "$(s event "$TREFF_DIENST" meeting_point_url)" = "$TREFF_URL" ]; then
+	ok "and a duty can be given a meeting point again"
+else
+	bad "and a duty can be given a meeting point again" "$(s event "$TREFF_DIENST" meeting_point) / $(s event "$TREFF_DIENST" meeting_point_url)"
+fi
+
+# A value that is too long is refused by name, like the other text fields.
+speichere_treffpunkt "$(python3 -c "print('ä' * 101)")" ""
+has "a meeting point that is too long is refused" "$(cat "$DIR/treffpunkt.html")" "Treffpunkt ist zu lang"
+has "and the message names the limit" "$(cat "$DIR/treffpunkt.html")" "höchstens 100 Zeichen"
+# "Nothing was written" means what it says: the meeting point from the save
+# before is still there, character for character. Written as an empty field it
+# would be true right after this section cleared it, and would then prove nothing
+# at all about a save that was refused.
+if [ "$(s event "$TREFF_DIENST" meeting_point)" = "$TREFF_TEXT" ]; then
+	ok "and nothing was written: the meeting point of the save before is still there"
+else
+	bad "and nothing was written: the meeting point of the save before is still there" "$(s event "$TREFF_DIENST" meeting_point)"
+fi
+
+# An address has to look like one. Without that check a club that typed the
+# street into this field gets a value that esc_url() hands to the browser as is —
+# a link from the address bar of its own page, pointing at nothing. The message
+# has to name the field, because "the duty could not be saved" sends an editor
+# looking at the date.
+speichere_treffpunkt "$TREFF_TEXT" "Parkplatz Westbad"
+has "an address that is no address is refused" "$(cat "$DIR/treffpunkt.html")" "keine Webadresse"
+has "and the message names the field" "$(cat "$DIR/treffpunkt.html")" "Link zum Treffpunkt"
+if [ "$(s event "$TREFF_DIENST" meeting_point)" = "$TREFF_TEXT" ]; then
+	ok "and the text beside it was not written either: the save was refused as a whole"
+else
+	bad "and the text beside it was not written either: the save was refused as a whole" "$(s event "$TREFF_DIENST" meeting_point)"
+fi
+s delete-event "$TREFF_DIENST" > /dev/null
+
+# A duty without a meeting point must leave nothing behind in the message. The two
+# placeholders stand in a paragraph of their own in the supplied wording, and a
+# paragraph without a line is not written — that is what keeps a duty without a
+# meeting point from sending a line that says "Treffpunkt:" and nothing behind it.
+# Nothing that goes out over HTTP can show this: the only duty here that has no
+# meeting point refuses every signup, and a message needs a member that was on the
+# duty. So the message is put into the log for a duty of this section, which has
+# none.
+# The title says "ohne Ort" and NOT "ohne Treffpunkt": a search for the word
+# "Treffpunkt" below goes over the whole message, and a title that carries the
+# word answers it — the check would be green about a message that names a meeting
+# point it does not have, and it would be red about the right behaviour only as
+# long as the fixture happens not to contain its own needle.
+LEER_DIENST=$(s make-event "Dienst ohne Ort" "$(date -d '+83 days' +%Y-%m-%d)" 2 "12:00")
+if [ -z "$(s event "$LEER_DIENST" meeting_point)" ]; then
+	ok "the duty for the message really has no meeting point"
+else
+	bad "the duty for the message really has no meeting point" "$(s event "$LEER_DIENST" meeting_point)"
+fi
+# A member of its own for the message, and gone again below: the numbers of the
+# other sections are read by checks of their own, and this section takes none.
+TRAGEND_NR=0771
+s delete-member "$(s member-by-no "$TRAGEND_NR" id)" > /dev/null 2>&1
+s make-member "$TRAGEND_NR" treffpunkt@example.org Anton Berger > /dev/null
+if [ "$(s duty-removed-mail "$TRAGEND_NR" "$LEER_DIENST")" = "sent" ]; then
+	ok "a removal message is written for a duty without a meeting point"
+else
+	bad "a removal message is written for a duty without a meeting point" "$(s duty-removed-mail "$TRAGEND_NR" "$LEER_DIENST")"
+fi
+LEER_MAIL=$(s mail-bodies 1)
+hasnt "and it names no meeting point" "$LEER_MAIL" "Treffpunkt"
+hasnt "and it carries no empty link" "$LEER_MAIL" '<a href=""></a>'
+hasnt "and it leaves no empty paragraph" "$LEER_MAIL" "<p></p>"
+# Two empty paragraphs in a row are the visible trace of two empty placeholders in a
+# row, and they read as a hole in the middle of the text.
+struct "$LEER_MAIL" "and no two empty paragraphs follow each other" "
+import re, sys
+h = sys.stdin.read()
+sys.exit(1 if re.search(r'<p[^>]*>\s*</p>\s*<p[^>]*>\s*</p>', h) else 0)
+" "the message has two empty paragraphs in a row"
+# The sentence around them is still there, so the claim above cannot pass on a mail
+# that is empty altogether.
+has "and the duty is still named in it" "$LEER_MAIL" "Dienst ohne Ort"
+has "and so is the sentence that follows the placeholders" "$LEER_MAIL" "Falls du das nicht selbst veranlasst hast"
+s delete-event "$LEER_DIENST" > /dev/null
+s delete-member "$(s member-by-no "$TRAGEND_NR" id)" > /dev/null
+
+# The optional fields come back into the form, and a change is stored.
 edit=$(curl -sk -b "$JAR" "$MEMBERS&member=$NEU_ID")
 has "the form is filled with the number" "$edit" 'value="0700"'
 has "the form is filled with the address" "$edit" 'value="neu@example.org"'
@@ -2886,18 +3077,21 @@ form=$(curl -sk -b "$JAR" "$MAILS&mail=duty_signup")
 clean "$form" "mail form"
 has "the form opens the requested message" "$form" "Anmeldung zu einem Arbeitsdienst"
 
-# Every placeholder of this message has to be on the page with its meaning. The
-# count is the plugin's own, so a placeholder that exists and is not offered
-# shows up as a difference, and one that is offered and not understood shows up
-# in the other direction.
-angeboten=$(printf '%s' "$form" | grep -o 'data-placeholder="{{[A-Za-z]*}}"' | sort -u | grep -c .)
-erklaert=$(printf '%s' "$form" | grep -o '<code>{{[A-Za-z]*}}</code>' | sort -u | grep -c .)
-if [ "$angeboten" -eq 8 ] && [ "$erklaert" -eq 8 ]; then
-	ok "every placeholder of the message is offered and explained ($angeboten)"
+# Every placeholder of this message has to be on the page with its meaning. All
+# three lists are compared as sets, and the expected one is read from the message
+# itself instead of being written here as a number: a number in this file is right
+# until the message grows, and then the check fails while saying nothing about
+# WHICH placeholder is missing — which is the only thing worth knowing here. That
+# has happened here already: the number stood at 8 while the message carried 10.
+erwartet=$(s mail-placeholders duty_signup | LC_ALL=C sort)
+angeboten=$(printf '%s' "$form" | grep -o 'data-placeholder="{{[A-Za-z]*}}"' | sed 's/.*{{\(.*\)}}.*/\1/' | LC_ALL=C sort -u)
+erklaert=$(printf '%s' "$form" | grep -o '<code>{{[A-Za-z]*}}</code>' | sed 's/.*{{\(.*\)}}.*/\1/' | LC_ALL=C sort -u)
+if [ "$angeboten" = "$erwartet" ] && [ "$erklaert" = "$erwartet" ]; then
+	ok "every placeholder of the message is offered and explained ($(printf '%s\n' "$erwartet" | grep -c .))"
 else
-	bad "every placeholder of the message is offered and explained" "offered=$angeboten explained=$erklaert of 8"
+	bad "every placeholder of the message is offered and explained" "offered: $(printf '%s' "$angeboten" | tr '\n' ' ') | explained: $(printf '%s' "$erklaert" | tr '\n' ' ') | of the message: $(printf '%s' "$erwartet" | tr '\n' ' ')"
 fi
-for PLATZHALTER in '{{Anrede}}' '{{Vorname}}' '{{Name}}' '{{Arbeitsdienst}}' '{{Arbeitsdienstdetails}}' '{{Datum}}' '{{Uhrzeit}}' '{{Abmeldelink}}'; do
+for PLATZHALTER in '{{Anrede}}' '{{Vorname}}' '{{Name}}' '{{Arbeitsdienst}}' '{{Arbeitsdienstdetails}}' '{{Datum}}' '{{Uhrzeit}}' '{{Abmeldelink}}' '{{Treffpunkt}}' '{{Beschreibung}}'; do
 	has "the form offers $PLATZHALTER" "$form" ">$PLATZHALTER<"
 done
 

@@ -582,7 +582,7 @@ import re, sys
 h = sys.stdin.read()
 entries = len(re.findall(r'<article class=\"fg-ride\">', h))
 # The middle of the sentence, without the verb in front of it: the verb is
-# "werden" since the note names two values, and a check that carried the whole
+# 'werden' since the note names two values, and a check that carried the whole
 # sentence would have to be rewritten with every wording of it.
 notes = h.count('nur an das Mitglied gesendet, das die Fahrgemeinschaft angeboten hat')
 # The count alone proves nothing about the wording: it is the same sentence as
@@ -997,6 +997,52 @@ if [ "$erwartet" -gt 0 ] && [ "$karten" = "$erwartet" ]; then
 else
 	bad "every due duty has exactly one card" "$karten cards for $erwartet duties"
 fi
+# --- the claims in this file and in admin.sh are cut short by a stray quote
+#
+# A python block here is a string in double quotes, so ONE unescaped quote in a
+# comment cuts the string in two: The shell hands `struct` only the part in front
+# of it, that part is a program that reads the input and ends, and the claim goes
+# green without having looked at anything. It is the worst kind of claim, because
+# it is also the kind nobody looks at a second time. Two of them were here.
+#
+# The signs are read from the two files themselves: No comment inside a block may
+# carry a bare quote, and every block has to END in a sys.exit(), because a
+# truncated block cannot end in one.
+#
+# The quote itself is built with chr(34) and never written down: A backslash next
+# to a quote inside a double-quoted shell string ends that string, which is the
+# very thing this claim is about. A claim about the disease that carries the
+# disease is a claim about nothing.
+struct "" "no claim in this file or in admin.sh is cut short by a stray quote" "
+import io, re, sys
+
+Q = chr(34)
+B = chr(92) + Q
+schaden = []
+for pfad in ('$DIR/http.sh', '$DIR/admin.sh'):
+    zeilen = io.open(pfad, encoding='utf-8').read().split(chr(10))
+    n = 0
+    while n < len(zeilen):
+        if zeilen[n].startswith('struct '):
+            m = n + 1
+            while m < len(zeilen) and not re.match(r'^' + Q + chr(92) + 's+' + Q, zeilen[m]):
+                m += 1
+            for k in range(n + 1, m):
+                z = zeilen[k]
+                if re.match(r'^' + chr(92) + 's*#', z) and Q in z and B not in z:
+                    schaden.append('%s:%d has a bare quote in a comment' % (pfad, k + 1))
+            letzte = [z for z in zeilen[n + 1:m] if z.strip() and not re.match(r'^' + chr(92) + 's*#', z)]
+            if not letzte or 'sys.exit(' not in letzte[-1]:
+                schaden.append('%s:%d does not end in sys.exit()' % (pfad, n + 1))
+            n = m
+        n += 1
+
+if schaden:
+    print(chr(10).join(schaden), file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "a claim is cut short, or one ends without sys.exit()"
+
 struct "$list" "every card holds a table of details" "
 import re, sys
 h = sys.stdin.read()
@@ -1029,6 +1075,130 @@ text = re.sub(r'<[^>]+>', '', zelle.group(1)).strip()
 sys.exit(0 if text == '''$erwartetes_datum''' and ', den ' in text else 1)
 " "the date row of the first card is not \"Wochentag, den <Datum>\" of that duty"
 fi
+
+# The meeting point of the first duty. The card of the main duty carries one, and
+# the claims about it are made on the FIRST card only: a check that looks for the
+# row anywhere on the page is answered by any duty of the fixture, and would stay
+# green if the row moved to the wrong duty or were drawn for the wrong one.
+struct "$list" "the first card has a meeting point row, and it is a link" "
+import re, sys
+h = sys.stdin.read()
+karte = re.search(r'<article class=\"fg-event-card\".*?</article>', h, re.S)
+if not karte:
+    sys.exit(1)
+karte = karte.group(0)
+zelle = re.search(r'<th scope=\"row\">Treffpunkt</th>\s*<td[^>]*>(.*?)</td>', karte, re.S)
+if not zelle:
+    print('the first card has no Treffpunkt row', file=sys.stderr)
+    sys.exit(1)
+inhalt = zelle.group(1)
+anker = re.search(r'<a href=\"([^\"]*)\"[^>]*>(.*?)</a>', inhalt, re.S)
+if not anker:
+    print('the value of the row is no link: %r' % inhalt, file=sys.stderr)
+    sys.exit(1)
+text = re.sub(r'<[^>]+>', '', anker.group(2)).strip()
+if text != '📍Parkplatz Westbad, Nürnberg':
+    print('the wording of the link is %r' % text, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0 if anker.group(1) else 1)
+" "the meeting point row of the first card is a link with the text of the duty as its wording"
+
+# The address is written out through esc_url(), so the "&" of the stored value
+# comes back as the entity &#038; and the "#" keeps its place. Two things are
+# claimed here, because one of them is worth nothing without the other: the second
+# parameter and the anchor part are still there, and the raw ampersand is gone.
+# A check that looked for the stored address character for character would fail
+# on a page that is entirely correct, and a check that only looked for the bare
+# host would pass on a page where everything behind it was lost.
+struct "$list" "the address of the meeting point is written out encoded" "
+import re, sys
+h = sys.stdin.read()
+karte = re.search(r'<article class=\"fg-event-card\".*?</article>', h, re.S).group(0)
+zelle = re.search(r'<th scope=\"row\">Treffpunkt</th>\s*<td[^>]*>(.*?)</td>', karte, re.S).group(1)
+href = re.search(r'<a href=\"([^\"]*)\"', zelle).group(1)
+fehlt = [t for t in ('mlat=49.4', '&#038;mlon=11.0', 'map=16/49.4/11.0') if t not in href]
+if fehlt:
+    print('the address reads %r and lacks %s' % (href, ', '.join(fehlt)), file=sys.stderr)
+    sys.exit(1)
+if '&mlon' in href:
+    print('the address still carries the raw ampersand: %r' % href, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the address of the meeting point loses neither the second parameter nor the anchor part"
+
+# The pin belongs to the text, so it is a character on this page and the club
+# decides about it. The mail turns it into a picture (WordPress does that), which
+# is why the two places are checked separately and neither of them expects the
+# other.
+struct "$list" "the pin of the meeting point is a character of the text" "
+import re, sys
+h = sys.stdin.read()
+karte = re.search(r'<article class=\"fg-event-card\".*?</article>', h, re.S).group(0)
+zelle = re.search(r'<th scope=\"row\">Treffpunkt</th>\s*<td[^>]*>(.*?)</td>', karte, re.S).group(1)
+if '📍' not in zelle:
+    print('no pin in %r' % zelle, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the pin of the meeting point is a character on the public page, not a picture"
+
+# The row of the meeting point comes before the description: a line somebody can
+# act on in front of the long text. The order is checked as an order of the two
+# labels, because "both rows are there" says nothing about where they stand.
+struct "$list" "the meeting point stands in front of the description" "
+import re, sys
+h = sys.stdin.read()
+karte = re.search(r'<article class=\"fg-event-card\".*?</article>', h, re.S).group(0)
+treff = karte.find('<th scope=\"row\">Treffpunkt</th>')
+besch = karte.find('<th scope=\"row\">Beschreibung</th>')
+if besch < 0:
+    print('the first card has no description row', file=sys.stderr)
+    sys.exit(1)
+sys.exit(0 if 0 <= treff < besch else 1)
+" "the row of the meeting point does not come behind the description"
+
+# The description keeps its line break, and the line break is the only markup the
+# card adds: a description typed with <b> in it must reach the page as those five
+# characters, because the text is escaped before anything else happens to it.
+struct "$list" "the description of the first duty keeps its line break" "
+import re, sys
+h = sys.stdin.read()
+karte = re.search(r'<article class=\"fg-event-card\".*?</article>', h, re.S).group(0)
+zelle = re.search(r'<th scope=\"row\">Beschreibung</th>\s*<td[^>]*>(.*?)</td>', karte, re.S)
+if not zelle:
+    sys.exit(1)
+inhalt = zelle.group(1)
+if '<br' not in inhalt:
+    print('the two lines are in one block: %r' % inhalt, file=sys.stderr)
+    sys.exit(1)
+zeilen = [re.sub(r'<[^>]+>', '', t).strip() for t in re.split(r'<br\s*/?>', inhalt)]
+sys.exit(0 if zeilen == ['Bitte festes Schuhwerk mitbringen.', 'Handschuhe sind vorhanden.'] else 1)
+" "the description of the first duty is not the two lines in one block"
+
+# A web address without a text is stored and shown nowhere. The stored value is
+# looked up first, so this claim cannot pass because the fixture forgot to save
+# it: a check about a row that is missing answers "missing" just as happily when
+# the value was never there.
+NO_TEXT_URL=$(s event "$(jq no_demand_event_id)" meeting_point_url)
+if [ "$NO_TEXT_URL" = "https://www.openstreetmap.org/?mlat=49.1#map=16/49.1/11.0" ]; then
+	ok "the duty without a text of its own really has the address stored"
+else
+	bad "the duty without a text of its own really has the address stored" "$NO_TEXT_URL"
+fi
+struct "$list" "no card shows a meeting point of a duty that has none" "
+import re, sys
+h = sys.stdin.read()
+# The card is picked out by its id, because the class carries an id beside it
+# and a pattern of 'class then immediately the title' finds nothing on a page
+# where the two are one attribute apart.
+karte = re.search(r'<article class=\"fg-event-card\" id=\"fg-dienst-[0-9a-f]+\">\s*<h3 class=\"fg-event-title\">Arbeitsdienst ohne Bedarf</h3>.*?</article>', h, re.S)
+if not karte:
+    print('the card of the duty without a demand is not on the page', file=sys.stderr)
+    sys.exit(1)
+if 'Treffpunkt' in karte.group(0):
+    print('the card shows a meeting point row for a duty that has no text for one', file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the card of a duty with an address but no text still shows no meeting point row"
 # Every card that has a place to give away carries exactly one signup form, and
 # every card that is closed carries none. A form on a full duty would be a
 # button that is guaranteed to fail, and no form on a duty that has a place
@@ -1577,6 +1747,53 @@ else
 	bad "and the text block opens with the greeting" "$recorded_greeting"
 fi
 hasnt "and no record number of the member" "$MAIL_BODY" "member_id"
+# The meeting point of the duty goes into the mail as a link, and the wording of
+# that link is what the club wrote on the duty. The pin is part of that text, and
+# WordPress turns a pin into a picture on its way out — on the public page it
+# stays a character. Both are claimed here as they are, because a check that
+# looked for the two characters of the pin in the mail would go red on a mail
+# that is right.
+struct "$MAIL_BODY" "the mail carries the meeting point as a link with the text of the duty" "
+import re, sys
+h = sys.stdin.read()
+anker = re.search(r'<a href=\"([^\"]*openstreetmap[^\"]*)\"[^>]*>(.*?)</a>', h, re.S)
+if not anker:
+    print('no anchor of the meeting point in the mail', file=sys.stderr)
+    sys.exit(1)
+if '&#038;mlon=11.0' not in anker.group(1):
+    print('the address in the mail reads %r' % anker.group(1), file=sys.stderr)
+    sys.exit(1)
+# The wording of the link is what the club wrote, and the pin in it is a picture
+# by the time it leaves WordPress. So the pin is looked for as the alt text of an
+# image and not as the character it was written as: a check that looked for the
+# character inside the anchor goes red on a mail that is entirely right.
+inhalt = anker.group(2)
+if 'alt=\"📍\"' not in inhalt:
+    print('the pin is not in the link: %r' % inhalt, file=sys.stderr)
+    sys.exit(1)
+text = re.sub(r'<[^>]+>', '', inhalt).strip()
+sys.exit(0 if text == 'Parkplatz Westbad, Nürnberg' else 1)
+" "the meeting point in the mail is a link with the text of the duty, the pin as a picture"
+has "the description of the duty goes into the mail" "$MAIL_BODY" "Handschuhe sind vorhanden."
+# The description is a paragraph of its own and keeps its line break, so the mail
+# and the public page read alike. Two claims, because they are two things: both
+# lines stand in ONE paragraph, and the break between them stands in it.
+struct "$MAIL_BODY" "the description in the mail is one paragraph of two lines" "
+import re, sys
+h = sys.stdin.read()
+absatz = re.search(r'<p[^>]*>((?:(?!</p>).)*Schuhwerk(?:(?!</p>).)*)</p>', h, re.S)
+if not absatz:
+    print('no paragraph of the description in the mail', file=sys.stderr)
+    sys.exit(1)
+inhalt = absatz.group(1)
+if not re.search(r'<br\s*/?>', inhalt):
+    print('the two lines are in one block: %r' % inhalt, file=sys.stderr)
+    sys.exit(1)
+# The break adds no text of its own, so the two sentences follow each other
+# directly. Written with a space, this claim would be red on every correct mail.
+text = re.sub(r'<[^>]+>', '', inhalt).strip()
+sys.exit(0 if text == 'Bitte festes Schuhwerk mitbringen.Handschuhe sind vorhanden.' else 1)
+" "the description in the mail carries both of its lines and the break between them"
 # The link stands in the html as an attribute of an anchor, so the search ends at
 # the closing quote, and an ampersand in an address is `&#038;` there. The
 # entity is turned back into the character afterwards, so that the address which
@@ -1710,6 +1927,24 @@ hasnt "the body does not sign the mail a second time" "$MAIL_BODY" "Die Verwaltu
 # and a link to the wrong page is a question in the club's postbox. The sentence
 # stays.
 hasnt "and it carries no link to the list of duties" "$MAIL_BODY" "fg_duty_action=view"
+# The same two things as in the signup mail, because this mail is that one with
+# another sentence in front of it, and a value that appears in one of the two
+# messages and not in the other is a sign of a value that was only carried by one
+# code path.
+struct "$MAIL_BODY" "the removal mail carries the meeting point as a link" "
+import re, sys
+h = sys.stdin.read()
+anker = re.search(r'<a href=\"([^\"]*openstreetmap[^\"]*)\"[^>]*>(.*?)</a>', h, re.S)
+if not anker:
+    print('no anchor of the meeting point in the removal mail', file=sys.stderr)
+    sys.exit(1)
+inhalt = anker.group(2)
+if 'alt=\"📍\"' not in inhalt:
+    print('the pin is not in the link: %r' % inhalt, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0 if re.sub(r'<[^>]+>', '', inhalt).strip() == 'Parkplatz Westbad, Nürnberg' else 1)
+" "the meeting point in the removal mail is a link with the text of the duty"
+has "and the description of the duty goes into it as well" "$MAIL_BODY" "Handschuhe sind vorhanden."
 # The mail is a notice, not the way out: the member is already out, and a mail
 # that could not be delivered must not put it back on the duty. The delivery of
 # this one is deliberately made to fail further down, in the section that measures

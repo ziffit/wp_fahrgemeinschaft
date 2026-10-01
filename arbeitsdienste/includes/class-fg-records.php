@@ -102,6 +102,25 @@ final class FG_Event {
 	 * @var string
 	 */
 	public $description = '';
+
+	/**
+	 * Where to meet, as the club writes it, pin included or not.
+	 *
+	 * @var string
+	 */
+	public $meeting_point = '';
+
+	/**
+	 * Web address of the meeting point, empty when there is none.
+	 *
+	 * Only drawn as a link while the text is there: a link whose wording is empty
+	 * leads nowhere and says nothing, so an address without a name is not shown at
+	 * all. The rule is enforced in one place — the store hands both out, the
+	 * renderer and the mailer ask for them together.
+	 *
+	 * @var string
+	 */
+	public $meeting_point_url = '';
 }
 
 /**

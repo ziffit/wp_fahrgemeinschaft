@@ -200,7 +200,7 @@ final class FG_Repository {
 	 * Reference, UUID and creation time are filled in here so no caller can
 	 * create an event that is unreachable or has no identity.
 	 *
-	 * @param array $fields Event fields: title, event_date, event_time, is_active, and optionally group_name, demand, duration_hours, description.
+	 * @param array $fields Event fields: title, event_date, event_time, is_active, and optionally group_name, demand, duration_hours, description, meeting_point, meeting_point_url.
 	 * @return int New event ID, 0 on failure.
 	 */
 	public function insert_event( array $fields ) {
@@ -240,7 +240,7 @@ final class FG_Repository {
 	 * Update an existing event.
 	 *
 	 * @param int   $event_id Event ID.
-	 * @param array $fields   Event fields: title, event_date, event_time, is_active, and optionally group_name, demand, duration_hours, description.
+	 * @param array $fields   Event fields: title, event_date, event_time, is_active, and optionally group_name, demand, duration_hours, description, meeting_point, meeting_point_url.
 	 * @return bool
 	 */
 	public function update_event( $event_id, array $fields ) {
@@ -258,18 +258,30 @@ final class FG_Repository {
 			return false;
 		}
 
-		// The four optional fields are read the same way for a new and for an
-		// existing record, so a value can never pass a check on one path and
-		// not on the other. What was not submitted keeps the stored value.
+		// The optional fields are read the same way for a new and for an existing
+		// record, so a value can never pass a check on one path and not on the
+		// other. What was not submitted keeps the stored value.
+		//
+		// The list below is the whole set of optional fields, and a field that is
+		// missing from it is not carried into the update — the row would keep the
+		// value it had, which is the one way a save can quietly throw a value away.
+		// It is written out and not derived, because the alternative is a list of
+		// all fields with a second list of the ones that may be absent, and the
+		// two lists are what drift apart.
 		$details = $this->read_event_details(
 			array_merge(
 				array(
-					'group_name'     => $event->group_name,
-					'description'    => $event->description,
-					'demand'         => (string) $event->demand,
-					'duration_hours' => (string) $event->duration_hours,
+					'group_name'        => $event->group_name,
+					'description'       => $event->description,
+					'demand'            => (string) $event->demand,
+					'duration_hours'    => (string) $event->duration_hours,
+					'meeting_point'     => $event->meeting_point,
+					'meeting_point_url' => $event->meeting_point_url,
 				),
-				array_intersect_key( $fields, array_flip( array( 'group_name', 'description', 'demand', 'duration_hours' ) ) )
+				array_intersect_key(
+					$fields,
+					array_flip( array( 'group_name', 'description', 'demand', 'duration_hours', 'meeting_point', 'meeting_point_url' ) )
+				)
 			)
 		);
 
@@ -1732,6 +1744,8 @@ final class FG_Repository {
 		$description = isset( $fields['description'] ) ? (string) $fields['description'] : '';
 		$demand      = $this->read_count( isset( $fields['demand'] ) ? $fields['demand'] : '' );
 		$duration    = $this->read_count( isset( $fields['duration_hours'] ) ? $fields['duration_hours'] : '' );
+		$treffpunkt  = isset( $fields['meeting_point'] ) ? trim( (string) $fields['meeting_point'] ) : '';
+		$link        = isset( $fields['meeting_point_url'] ) ? trim( (string) $fields['meeting_point_url'] ) : '';
 
 		if ( null === $demand || null === $duration ) {
 			return null;
@@ -1745,11 +1759,30 @@ final class FG_Repository {
 			return null;
 		}
 
+		if ( $this->string_length( $treffpunkt ) > FG_Schema::MEETING_POINT_MAX ) {
+			return null;
+		}
+
+		if ( $this->string_length( $link ) > FG_Schema::MEETING_POINT_URL_MAX ) {
+			return null;
+		}
+
+		// A web address has to look like one. Without this check a club that types
+		// the street into the link field stores a value that esc_url() hands to
+		// the browser unchanged — a relative link from the address bar of the
+		// club's own page, pointing at nothing. The refusal says which field it is,
+		// because "the address of the duty" is a sentence with two addresses in it.
+		if ( '' !== $link && ! preg_match( '~^(https?://|mailto:|tel:|/|#)~i', $link ) ) {
+			return null;
+		}
+
 		return array(
-			'group_name'     => $group,
-			'demand'         => $demand,
-			'duration_hours' => $duration,
-			'description'    => $description,
+			'group_name'        => $group,
+			'demand'            => $demand,
+			'duration_hours'    => $duration,
+			'description'       => $description,
+			'meeting_point'     => $treffpunkt,
+			'meeting_point_url' => $link,
 		);
 	}
 

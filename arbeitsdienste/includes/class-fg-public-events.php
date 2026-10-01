@@ -174,6 +174,18 @@ final class FG_Public_Events {
 			);
 		}
 
+		// The meeting point, before the description: a short line somebody can act
+		// on, in front of the long text. Three cases, and the third is the reason the
+		// first two are here at all — an address without a name is not shown, because
+		// a link with an empty wording says nothing and leads nowhere.
+		if ( '' !== $event->meeting_point ) {
+			$rows[] = array(
+				'label' => __( 'Treffpunkt', 'arbeitsdienste' ),
+				'wert'  => $event->meeting_point,
+				'link'  => $event->meeting_point_url,
+			);
+		}
+
 		if ( '' !== $event->description ) {
 			$rows[] = array(
 				'label'         => __( 'Beschreibung', 'arbeitsdienste' ),
@@ -189,8 +201,18 @@ final class FG_Public_Events {
 					<?php foreach ( $rows as $row ) : ?>
 						<tr>
 							<th scope="row"><?php echo esc_html( $row['label'] ); ?></th>
-							<?php // The description is the one field that may carry more than one line. The text is escaped first, so no markup from the admin reaches the page. ?>
-							<td<?php echo ! empty( $row['klasse'] ) ? ' class="' . esc_attr( $row['klasse'] ) . '"' : ''; ?>><?php echo ! empty( $row['zeilenumbruch'] ) ? nl2br( esc_html( $row['wert'] ) ) : esc_html( $row['wert'] ); ?></td>
+							<?php // The description is the one field that may carry more than one line. The text is escaped first, so no markup from the admin reaches the page. The meeting point is the one row whose value is a link: there the text is escaped and the address is run through esc_url(), and both end up inside one anchor. The pin is part of the text because the club typed it — the markup draws none, so a club that leaves it out has no pin. ?>
+							<td<?php echo ! empty( $row['klasse'] ) ? ' class="' . esc_attr( $row['klasse'] ) . '"' : ''; ?>>
+								<?php
+								if ( ! empty( $row['link'] ) ) :
+									?>
+									<a href="<?php echo esc_url( $row['link'] ); ?>"><?php echo esc_html( $row['wert'] ); ?></a>
+									<?php
+								else :
+									?>
+									<?php echo ! empty( $row['zeilenumbruch'] ) ? nl2br( esc_html( $row['wert'] ) ) : esc_html( $row['wert'] ); ?>
+								<?php endif; ?>
+							</td>
 						</tr>
 					<?php endforeach; ?>
 				</tbody>

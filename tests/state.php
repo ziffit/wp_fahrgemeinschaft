@@ -227,6 +227,11 @@ switch ( $command ) {
 			'demand',
 			'duration_hours',
 			'description',
+			// The same shape as the list in FG_Repository::update_event(): a field
+			// that is not named here answers 'unknown-field', and a check that
+			// reads that would be green about a field the tool cannot see at all.
+			'meeting_point',
+			'meeting_point_url',
 		);
 		$name = isset( $args[1] ) ? $args[1] : 'id';
 		fg_state_out( in_array( $name, $fields, true ) ? $event->{$name} : 'unknown-field' );
@@ -660,6 +665,27 @@ switch ( $command ) {
 		}
 		break;
 
+	// duty-removed-mail <member_no> <event_id>: put one removal message into the
+	// log for a duty of the caller's choosing, and nothing else. It exists for the
+	// one claim that needs a duty WITHOUT a meeting point: on such a duty the two
+	// placeholders of the message stand in a paragraph of their own, and a
+	// paragraph without a line is not written. Nothing that goes out over HTTP can
+	// show that, because a duty nobody can sign up for is the only duty here that
+	// has no meeting point, and the message needs a member that was on it.
+	case 'duty-removed-mail':
+		$repo  = new FG_Repository();
+		$mitgl = $repo->get_member_by_number( isset( $args[0] ) ? (string) $args[0] : '' );
+		$dienst = $repo->get_event( isset( $args[1] ) ? (int) $args[1] : 0 );
+
+		if ( ! $mitgl || ! $dienst ) {
+			fg_state_out( 'missing' );
+			break;
+		}
+
+		$mailer = new FG_Mailer( $repo );
+		fg_state_out( $mailer->send_duty_removed( $mitgl->id, $dienst->id ) ? 'sent' : 'refused' );
+		break;
+
 	// mail-fail on|off
 	//
 	// Let the next delivery fail. A notification that does not go out has to
@@ -824,6 +850,21 @@ switch ( $command ) {
 
 	case 'mail-text-subject':
 		fg_state_out( FG_Mail_Texts::stored( isset( $args[0] ) ? (string) $args[0] : '', 'subject' ) );
+		break;
+
+	// mail-placeholders <key>: the placeholders this version allows in this
+	// message, one per line, taken from the message itself. A check that counts
+	// the placeholders of a message needs this: a number written into the shell
+	// is correct until the message grows, and then it fails while saying nothing
+	// about which placeholder is missing.
+	case 'mail-placeholders':
+		$mail = FG_Mail_Texts::get( isset( $args[0] ) ? (string) $args[0] : '' );
+		$namen = array();
+		foreach ( isset( $mail['placeholders'] ) && is_array( $mail['placeholders'] ) ? $mail['placeholders'] : array() as $platzhalter => $erklaerung ) {
+			$namen[] = trim( (string) $platzhalter, '{}' );
+		}
+		sort( $namen );
+		fg_state_out( implode( "\n", $namen ) );
 		break;
 
 	// mail-text-set <key> <subject> <body>: write without the check of the

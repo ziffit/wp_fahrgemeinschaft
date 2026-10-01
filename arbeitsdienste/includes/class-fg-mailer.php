@@ -187,26 +187,18 @@ final class FG_Mailer {
 			return false;
 		}
 
-		$date = $this->repository->format_event_date_long( $event );
-		$time = $this->repository->format_event_time( $event );
-
 		// A duty without a time used to lose the whole line, because the line was
 		// only added when a time was there. A template cannot lose a line, so the
 		// line stands and says that there is no time. "Beginn:" on its own would
-		// read as a form that was not filled in.
-		$uhrzeit = '' === $time ? __( 'unbekannt', 'arbeitsdienste' ) : $time;
-
+		// read as a form that was not filled in. The meeting point and the
+		// description are the other way round, and for the same reason: each stands in
+		// a paragraph of its own, and a paragraph without a line is not written.
 		$mail = FG_Mail_Texts::compose(
 			FG_Mail_Texts::DUTY_SIGNUP,
 			array_merge(
 				$this->person_from_member( $member ),
-				array(
-					'Arbeitsdienst'        => (string) $event->title,
-					'Arbeitsdienstdetails' => trim( $event->title . ', ' . $date . ( '' === $time ? '' : ', ' . $time ), ', ' ),
-					'Datum'                => $date,
-					'Uhrzeit'              => $uhrzeit,
-					'Abmeldelink'          => (string) $unregister_url,
-				)
+				$this->duty_values( $event ),
+				array( 'Abmeldelink' => (string) $unregister_url )
 			)
 		);
 
@@ -262,17 +254,11 @@ final class FG_Mailer {
 			return false;
 		}
 
-		$date = $this->repository->format_event_date_long( $event );
-		$time = $this->repository->format_event_time( $event );
-
 		$mail = FG_Mail_Texts::compose(
 			FG_Mail_Texts::DUTY_REMOVED,
 			array_merge(
 				$this->person_from_member( $member ),
-				array(
-					'Arbeitsdienst'        => (string) $event->title,
-					'Arbeitsdienstdetails' => trim( $event->title . ', ' . $date . ( '' === $time ? '' : ', ' . $time ), ', ' ),
-				)
+				$this->duty_values( $event )
 			)
 		);
 
@@ -285,6 +271,42 @@ final class FG_Mailer {
 		// where the removal came from and count `mail_send_failed` themselves —
 		// the same place the contact mail and the signup mail are counted from.
 		return $this->send( $to, $mail['subject'], $mail['body'], null, $mail['links'] );
+	}
+
+	/**
+	 * The three values every message about a duty carries about the duty.
+	 *
+	 * One place, because the two messages about a duty are the same message with a
+	 * different sentence in front of it, and a rule that is written twice is a rule
+	 * that is followed twice as long and then only once.
+	 *
+	 * The address is handed over only while there is a name for it. That is the one
+	 * rule in this class about what a link may look like: a link whose wording is
+	 * empty leads nowhere and says nothing, so an address without a name is not
+	 * passed on at all. Everything downstream then does what it already did for the
+	 * other links of this plugin — mark_links() replaces the placeholder with the
+	 * wording when the address is empty.
+	 *
+	 * @param FG_Event $event Work service.
+	 * @return array<string, string> Values for {{Arbeitsdienst}}, {{Treffpunkt}} and friends.
+	 */
+	private function duty_values( FG_Event $event ) {
+		$date      = $this->repository->format_event_date_long( $event );
+		$time      = $this->repository->format_event_time( $event );
+		$treffpunkt = (string) $event->meeting_point;
+
+		return array(
+			'Arbeitsdienst'        => (string) $event->title,
+			'Arbeitsdienstdetails' => trim( $event->title . ', ' . $date . ( '' === $time ? '' : ', ' . $time ), ', ' ),
+			'Datum'                => $date,
+			'Uhrzeit'              => '' === $time ? __( 'unbekannt', 'arbeitsdienste' ) : $time,
+			'Treffpunkt'           => $treffpunkt,
+			// The address is empty when there is no name for it. A club that typed
+			// only the address then gets a message without the meeting point, and
+			// the public page shows no row — the same fact in both places.
+			'Treffpunktlink'       => '' === $treffpunkt ? '' : (string) $event->meeting_point_url,
+			'Beschreibung'         => (string) $event->description,
+		);
 	}
 
 	/**

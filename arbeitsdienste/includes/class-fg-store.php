@@ -49,6 +49,13 @@ final class FG_Store {
 		'demand',
 		'duration_hours',
 		'description',
+		// At the end of the list, and that is where the columns stand in the
+		// schema file too: dbDelta appends a missing column at the end, and a
+		// fresh installation and an upgrade have to come out in the same order.
+		// A name and an address are two columns and not one, because the address
+		// is nothing without the name — see FG_Event::$meeting_point_url.
+		'meeting_point',
+		'meeting_point_url',
 	);
 
 	/**
@@ -1590,6 +1597,8 @@ final class FG_Store {
 		$event->demand     = (int) $row['demand'];
 		$event->duration_hours = (int) $row['duration_hours'];
 		$event->description = (string) $row['description'];
+		$event->meeting_point = (string) $row['meeting_point'];
+		$event->meeting_point_url = (string) $row['meeting_point_url'];
 
 		return $event;
 	}

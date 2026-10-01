@@ -172,7 +172,16 @@ final class FG_Mail_Texts {
 				'label'        => __( 'Anmeldung zu einem Arbeitsdienst', 'arbeitsdienste' ),
 				'description'  => __( 'Geht an die Adresse des Mitglieds, sobald es sich für einen Arbeitsdienst eingetragen hat. Sie enthält den Abmeldelink.', 'arbeitsdienste' ),
 				'subject'      => 'Angemeldet: {{Arbeitsdienst}}',
-				'body'         => "{{Anrede}},\n\ndu bist für folgenden Arbeitsdienst angemeldet:\n\nArbeitsdienst: {{Arbeitsdienst}}\nDatum: {{Datum}}\nBeginn: {{Uhrzeit}}\n\nBitte prüfe, ob der Termin passt. Wenn nicht, meldest du dich mit diesem Link wieder ab:\n{{Abmeldelink}}\n\nDer Link führt zu einer Seite, auf der du das Löschen noch einmal bestätigen musst.\n\nWenn du dich für weitere Arbeitsdienste eintragen möchtest, findest du die Termine auf der Webseite.",
+				// The meeting point and the description each stand in their own
+				// paragraph and for one reason: a placeholder that stands alone in a
+				// paragraph of its own disappears when it has no value, because a block
+				// without a line is not written. Written as a line of its own after
+				// "Beginn:", a duty without a meeting point would leave the word
+				// "Treffpunkt:" standing there with nothing behind it — the one thing a
+				// line in a mail must not be, because it reads as a form nobody filled
+				// in. The same rule carries the description, which may carry several
+				// lines and becomes several paragraphs of its own.
+				'body'         => "{{Anrede}},\n\ndu bist für folgenden Arbeitsdienst angemeldet:\n\nArbeitsdienst: {{Arbeitsdienst}}\nDatum: {{Datum}}\nBeginn: {{Uhrzeit}}\n\n{{Treffpunkt}}\n\n{{Beschreibung}}\n\nBitte prüfe, ob der Termin passt. Wenn nicht, meldest du dich mit diesem Link wieder ab:\n{{Abmeldelink}}\n\nDer Link führt zu einer Seite, auf der du das Löschen noch einmal bestätigen musst.\n\nWenn du dich für weitere Arbeitsdienste eintragen möchtest, findest du die Termine auf der Webseite.",
 				'placeholders' => array(
 					'{{Anrede}}'           => __( 'Anrede mit Vor- und Nachnamen, zum Beispiel „Hallo Anton Berger“. Diese Mail geht an das Mitglied, das sich eingetragen hat, also steht hier immer ein Name.', 'arbeitsdienste' ),
 					'{{Vorname}}'          => __( 'Vorname des Mitglieds, um das es geht. Diese E-Mail geht an das Mitglied, das sich eingetragen hat, hier steht also immer einer.', 'arbeitsdienste' ),
@@ -182,9 +191,18 @@ final class FG_Mail_Texts {
 					'{{Datum}}'            => __( 'Das Datum des Arbeitsdienstes, ausgeschrieben, zum Beispiel „Samstag, den 12.06.2027“.', 'arbeitsdienste' ),
 					'{{Uhrzeit}}'          => __( 'Die Beginnzeit, zum Beispiel „08:00“. Steht „unbekannt“, wenn der Arbeitsdienst keine trägt.', 'arbeitsdienste' ),
 					'{{Abmeldelink}}'      => __( 'Link, mit dem sich das Mitglied wieder abmeldet. Ohne diesen Link kann es nicht zurück. Mit einem Doppelpunkt und eigenem Wortlaut dahinter wird daraus der Text des Links: {{Abmeldelink:Teilnahme am Arbeitsdienst abmelden}}}.', 'arbeitsdienste' ),
+					'{{Treffpunkt}}'        => __( 'Der Treffpunkt des Arbeitsdienstes, wie die Redaktion ihn geschrieben hat. Steht die Webadresse dazu, wird der Text ein Link; steht keine da, steht der Text allein in einer Zeile. Leer bei einem Dienst ohne Treffpunkt, und dann steht in der Nachricht keine Zeile.', 'arbeitsdienste' ),
+					'{{Beschreibung}}'      => __( 'Die Beschreibung des Arbeitsdienstes, mit ihren Zeilenumbrüchen. Leer bei einem Dienst ohne Beschreibung, und dann steht in der Nachricht kein Absatz. Sie steht öffentlich auf der Dienstseite; hier geht sie an jedes Mitglied dieses Dienstes.', 'arbeitsdienste' ),
 				),
 				'links'        => array(
 					'{{Abmeldelink}}' => __( 'Teilnahme am Arbeitsdienst abmelden', 'arbeitsdienste' ),
+					// The second form: the wording of this link is what the editor
+					// wrote on the duty, and the address is what stands in the field
+					// beside it. See links_of().
+					'{{Treffpunkt}}'  => array(
+						'url'   => 'Treffpunktlink',
+						'label' => 'Treffpunkt',
+					),
 				),
 				'sample'       => array(
 					'Anrede'               => 'Hallo Anton Berger',
@@ -195,6 +213,9 @@ final class FG_Mail_Texts {
 					'Datum'                => 'Samstag, den 12.06.2027',
 					'Uhrzeit'              => '08:00',
 					'Abmeldelink'          => 'https://example.org/?fg_duty_action=view&ref=5c0b7a91e2d34f68a1b4c7d09e3f28a6&token=d82f1b4c7a0e93f5618c4b2d7a0e9f35',
+					'Treffpunkt'           => '📍Parkplatz Westbad, Nürnberg',
+					'Treffpunktlink'       => 'https://www.openstreetmap.org/?mlat=49.4&mlon=11.0#map=16/49.4/11.0',
+					'Beschreibung'         => 'Bitte festes Schuhwerk mitbringen.\nHandschuhe sind vorhanden.',
 				),
 			),
 			self::DUTY_REMOVED    => array(
@@ -207,25 +228,36 @@ final class FG_Mail_Texts {
 				// field in. The sign-off of a message is the footer's business, and this
 				// text says only what the club would otherwise have to say in two
 				// places.
-				'body'         => "{{Anrede}},\n\ndu wurdest aus dem Arbeitsdienst {{Arbeitsdienst}} entfernt.\n\nFalls du das nicht selbst veranlasst hast, findest du weitere Informationen auf der Webseite der Arbeitsdienste.\n\nDanke",
+				'body'         => "{{Anrede}},\n\ndu wurdest aus dem Arbeitsdienst {{Arbeitsdienst}} entfernt.\n\n{{Treffpunkt}}\n\n{{Beschreibung}}\n\nFalls du das nicht selbst veranlasst hast, findest du weitere Informationen auf der Webseite der Arbeitsdienste.\n\nDanke",
 				'placeholders' => array(
 					'{{Anrede}}'                => __( 'Anrede mit Vor- und Nachnamen, zum Beispiel „Hallo Anton Berger“. Diese Mail geht an das Mitglied, das vom Dienst genommen wurde, also steht hier immer ein Name.', 'arbeitsdienste' ),
 					'{{Vorname}}'               => __( 'Vorname des Mitglieds, um das es geht. Diese E-Mail geht an das Mitglied, das vom Dienst genommen wurde, hier steht also immer einer.', 'arbeitsdienste' ),
 					'{{Name}}'                  => __( 'Nachname des Mitglieds, um das es geht. Diese E-Mail geht an das Mitglied, das vom Dienst genommen wurde, hier steht also immer einer.', 'arbeitsdienste' ),
 					'{{Arbeitsdienst}}'         => __( 'Titel des Arbeitsdienstes.', 'arbeitsdienste' ),
-					'{{Arbeitsdienstdetails}}'  => __( 'Titel, Datum und Beginn in einer Zeile, zum Beispiel „Flussaktion, Samstag, den 12.06.2027, 08:00“.', 'arbeitsdienste' ),
+					'{{Treffpunkt}}'       => __( 'Der Treffpunkt des Arbeitsdienstes, wie die Redaktion ihn geschrieben hat. Steht die Webadresse dazu, wird der Text ein Link; steht keine da, steht der Text allein in einer Zeile. Leer bei einem Dienst ohne Treffpunkt, und dann steht in der Nachricht keine Zeile.', 'arbeitsdienste' ),
+					'{{Beschreibung}}'     => __( 'Die Beschreibung des Arbeitsdienstes, mit ihren Zeilenumbrüchen. Leer bei einem Dienst ohne Beschreibung, und dann steht in der Nachricht kein Absatz. Sie steht öffentlich auf der Dienstseite; hier geht sie an das Mitglied, das gerade herausgenommen wurde.', 'arbeitsdienste' ),
 				),
-				// No link. The plugin does not know on which page a club puts the list
-				// of duties, and a link that points at the wrong page is a question the
-				// club then gets in its postbox. The sentence stays, the club writes the
-				// address itself if it wants one.
-				'links'        => array(),
+				// One link, and it is the one whose wording the club wrote on the
+				// duty. The other half of the draft — a link to the page with the
+				// list of duties — is not here: the plugin does not know on which page
+				// a club puts that list, and a link to the wrong page is a question the
+				// club then gets in its postbox. The sentence stays, the club writes
+				// the address itself if it wants one.
+				'links'        => array(
+					'{{Treffpunkt}}' => array(
+						'url'   => 'Treffpunktlink',
+						'label' => 'Treffpunkt',
+					),
+				),
 				'sample'       => array(
 					'Anrede'               => 'Hallo Anton Berger',
 					'Vorname'              => 'Anton',
 					'Name'                 => 'Berger',
 					'Arbeitsdienst'        => 'Flussaktion',
 					'Arbeitsdienstdetails' => 'Flussaktion, Samstag, den 12.06.2027, 08:00',
+					'Treffpunkt'           => '📍Parkplatz Westbad, Nürnberg',
+					'Treffpunktlink'       => 'https://www.openstreetmap.org/?mlat=49.4&mlon=11.0#map=16/49.4/11.0',
+					'Beschreibung'         => 'Bitte festes Schuhwerk mitbringen.\nHandschuhe sind vorhanden.',
 				),
 			),
 		);
@@ -423,7 +455,10 @@ final class FG_Mail_Texts {
 			$out[ $field ] = self::replace( $text, $erlaubt, $values, $links, 'subject' === $field );
 		}
 
-		$out['links'] = self::links_of( $links, $values );
+		// The list as it stands in the message and not the flattened one: link_labels()
+		// takes the braces off the names and turns the second form into a sentence,
+		// and links_of() needs both of those facts.
+		$out['links'] = self::links_of( self::raw_links( $mail ), $values );
 
 		return $out;
 	}
@@ -459,7 +494,7 @@ final class FG_Mail_Texts {
 			$out[ $field ] = self::replace( (string) $mail[ $field ], $mail['placeholders'], $mail['sample'], $links, 'subject' === $field );
 		}
 
-		$out['links'] = self::links_of( $links, $mail['sample'] );
+		$out['links'] = self::links_of( self::raw_links( $mail ), $mail['sample'] );
 
 		return $out;
 	}
@@ -590,8 +625,18 @@ final class FG_Mail_Texts {
 		$links = isset( $mail['links'] ) && is_array( $mail['links'] ) ? $mail['links'] : array();
 		$out   = array();
 
-		foreach ( $links as $platzhalter => $wortlaut ) {
-			$out[ trim( (string) $platzhalter, '{}' ) ] = (string) $wortlaut;
+		foreach ( $links as $platzhalter => $form ) {
+			// An entry in the second form has no wording of its own — the wording is
+			// the value of the duty — and the message about the allowed placeholders
+			// may not show an array to a person. The name of the value stands
+			// instead, because that is what an editor can go and look for.
+			$out[ trim( (string) $platzhalter, '{}' ) ] = is_array( $form )
+				? sprintf(
+					/* translators: %s: placeholder of the message. */
+					__( 'Wortlaut aus {{%s}}', 'arbeitsdienste' ),
+					(string) $form['label']
+				)
+				: (string) $form;
 		}
 
 		return $out;
@@ -608,13 +653,48 @@ final class FG_Mail_Texts {
 	 * @param array<string, string> $werte Values by name without braces.
 	 * @return array<string, array{url: string, label: string}>
 	 */
+	private static function raw_links( array $mail ) {
+		return isset( $mail['links'] ) && is_array( $mail['links'] ) ? $mail['links'] : array();
+	}
+
+	/**
+	 * Pair every link of a message with its address and its wording.
+	 *
+	 * @param array  $links  Links of the message, in either of the two forms.
+	 * @param array  $werte  Values of the message, addressed without braces.
+	 * @return array<string, array{url: string, label: string}>
+	 */
 	private static function links_of( array $links, array $werte ) {
 		$out = array();
 
-		foreach ( $links as $name => $wortlaut ) {
-			$out[ $name ] = array(
-				'url'   => isset( $werte[ $name ] ) ? (string) $werte[ $name ] : '',
-				'label' => (string) $wortlaut,
+		// The name goes out WITHOUT its braces, because that is what the keys of the
+		// list are everywhere else in this class and what FG_Mail_Templates::
+		// mark_links() builds its pattern from. A name that still carried them would
+		// look for {{{{Treffpunkt}}}} in the text and find nothing — which is what
+		// happened the first time, and the notice that it produced (a paragraph with
+		// the token standing in it) looked like a duty without a meeting point.
+		foreach ( $links as $name => $form ) {
+			$schluessel = trim( (string) $name, '{}' );
+
+			// Two forms, and the second one exists because of the meeting point.
+			// A fixed wording — "Teilnahme am Arbeitsdienst abmelden" — is the
+			// right thing for a link whose target is an act. It is the wrong thing
+			// for a link whose wording is what the club wrote on the duty: that
+			// wording changes with the duty, and a message that carries its own copy
+			// of it would say one thing while the public page says another. So an
+			// entry may name the values its address and its wording come from, and
+			// both are read where they are stored.
+			if ( is_array( $form ) ) {
+				$out[ $schluessel ] = array(
+					'url'   => isset( $werte[ $form['url'] ] ) ? (string) $werte[ $form['url'] ] : '',
+					'label' => isset( $werte[ $form['label'] ] ) ? (string) $werte[ $form['label'] ] : '',
+				);
+				continue;
+			}
+
+			$out[ $schluessel ] = array(
+				'url'   => isset( $werte[ $schluessel ] ) ? (string) $werte[ $schluessel ] : '',
+				'label' => (string) $form,
 			);
 		}
 

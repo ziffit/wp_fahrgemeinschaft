@@ -77,13 +77,21 @@ if ( $list_pages ) {
 
 $soon = current_datetime()->modify( '+9 days' )->format( 'Y-m-d' );
 
+// The main duty carries a meeting point with a web address and a description of
+// two lines. Both are on this duty and not on a duty of its own, because the
+// card of this one is the first card of the page and every claim about a card is
+// about the first card. The address holds a "&" and a "#", so a check that only
+// passes for a plain address proves nothing about how the address is written out.
 $event_id = $repo->insert_event(
 	array(
-		'title'      => 'Arbeitsdienst Laber',
-		'event_date' => $soon,
-		'event_time' => '08:00',
-		'demand'     => 4,
-		'is_active'  => true,
+		'title'         => 'Arbeitsdienst Laber',
+		'event_date'    => $soon,
+		'event_time'    => '08:00',
+		'demand'        => 4,
+		'is_active'     => true,
+		'description'   => "Bitte festes Schuhwerk mitbringen.\nHandschuhe sind vorhanden.",
+		'meeting_point' => '📍Parkplatz Westbad, Nürnberg',
+		'meeting_point_url' => 'https://www.openstreetmap.org/?mlat=49.4&mlon=11.0#map=16/49.4/11.0',
 	)
 );
 
@@ -141,12 +149,18 @@ if ( ! $voller_drin['id'] ) {
 	exit( 1 );
 }
 
+// This duty has a web address of a meeting point and NO text for it. Nothing
+// about it may show up: a link with an empty wording says nothing and leads
+// nowhere, and a row with nothing in it is a question the reader has to ask the
+// club. The claim about that is on the public page; here the address is stored
+// on purpose, so the check cannot pass because the value was never saved.
 $ohne_bedarf_id = $repo->insert_event(
 	array(
-		'title'      => 'Arbeitsdienst ohne Bedarf',
-		'event_date' => $soon,
-		'demand'     => 0,
-		'is_active'  => true,
+		'title'         => 'Arbeitsdienst ohne Bedarf',
+		'event_date'    => $soon,
+		'demand'        => 0,
+		'is_active'     => true,
+		'meeting_point_url' => 'https://www.openstreetmap.org/?mlat=49.1#map=16/49.1/11.0',
 	)
 );
 

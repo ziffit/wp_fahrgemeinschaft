@@ -4,21 +4,23 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 01.10.2026 — **öffentliches HTTP 253, Mail-Ebene 124, Admin-Ebene 663,
-0 Fehler**, gegen den Stand **Plugin 1.25.4, Schema 1.8.0**, dazu **dreiunddreißig von
-dreiunddreißig Gegenproben mit dem gestellten Fehlerbild rot**. HTTP und Mail sind
-unverändert: Diese Fassung berührt nichts, was ein Browser liest und nichts, was in einer
-E-Mail steht. Die Admin-Ebene ist um 2 höher: **Eine** falsche Behauptung aus 1.25.0 wurde
-ersetzt (die Teilnehmerliste suchte über eine ganze Seite nach einem Wort, das im
-Vornamen des Prüfmitglieds stand) und drei kamen dazu, die die Tabelle über den Namen ihrer
-Spalte lesen; eine Zeile Aufräumen stand doppelt und ist weg. **Die Regel für die
-Fassungsnummern hat sich geändert:** ab 1.25.1 nur noch Bugfix-Sprünge, `Z` steigt bei
-jeder Änderung. Die Mail-Ebene 124 ist die Summe aus 66 Prüfungen im
-Shell-Satz `mail.sh` und 58 im MIME-Satz `mail-mime.php`; `mail.sh` addiert beide selbst und
-gibt 124 aus. Die HTTP-Zahl ist um eine Prüfung höher als bei 1.20.0, und die Mail-Ebene um
-acht: sechs davon sind der neue Abschnitt `[5b]` (die sechs Formen eines Mail-Händlers), zwei
-sind die ersetzten Behauptungen über Inhaltstyp und Rumpf, und der Rest verteilt sich auf die
-Prüfungen, die an die HTML-Form der Nachricht angepasst wurden.
+Letzter Lauf: 01.10.2026 — **öffentliches HTTP 266, Mail-Ebene 124, Admin-Ebene 693,
+0 Fehler**, gegen den Stand **Plugin 1.25.5, Schema 1.9.0**, dazu **sieben von sieben
+Gegenproben mit dem gestellten Fehlerbild rot** (die 33 der Fassungen davor wurden in
+diesem Lauf nicht wiederholt). HTTP ist um 13 höher, die Admin-Ebene um 30; die
+Mail-Ebene ist unverändert, weil die beiden Nachrichten über einen Dienst über die
+öffentliche Seite und den Admin-Satz geprüft werden, nicht über `mail.sh` — dieselbe
+Sache zweimal zu fahren wäre eine Behauptung mehr und kein Wissen mehr. Die CLI-Suite
+wurde **nicht** gefahren: Sie löscht Arbeitsdienste, Fahrgemeinschaften und Mitglieder,
+und dafür ist die Zustimmung nötig; ihr Stand ist der von 1.25.4.
+
+Der Lauf hat drei Dinge zutage gefördert, die alle drei eigenen Fehler waren und keine
+Fehler des Plugins: eine Regel („ein Link nur mit Text“) an drei Stellen statt an einer,
+ein Werkzeug, das sich beim dritten Lauf selbst geleert hat, und — das ernste — **zwei
+Behauptungen in `http.sh`, die gar nichts geprüft haben**, weil ein unmaskiertes
+Anführungszeichen in einem Kommentar den Python-Block abgeschnitten hat. Eine davon
+stammt aus 1.20.0. Beide sind repariert, und eine neue Behauptung prüft jetzt beide
+Dateien auf genau diese Klasse von Schaden.
 
 **Die CLI-Suite ist bei diesem Lauf nicht gefahren worden.** Sie stand zuletzt mit **CLI 533**
 gegen den Stand **Plugin 1.16.0** (Commit `9883f85`) und ist damit die einzige der vier
@@ -2508,6 +2510,106 @@ Mail-Ebene ist unverändert: Diese Nachricht wird nicht über die eigene Skript 
 an ihren beiden Wegen entlang — sie aufzunehmen hieße, denselben Weg zweimal zu fahren. Schema
 unverändert bei 1.8.0: Die Tabelle der Vorlagen bekommt ihre Zeile erst, wenn jemand eine
 Nachricht speichert; bis dahin liefert `FG_Mail_Texts::get()` den mitgelieferten Wortlaut.
+
+## Fassung 1.25.5: der Treffpunkt eines Arbeitsdienstes (Schema 1.9.0)
+
+Aus dem Verein, mit zwei Feldern: **Treffpunkt** (Text, 100 Zeichen) und **Link zum
+Treffpunkt** (Text, 500 Zeichen). Dazu zwei Platzhalter in den beiden Nachrichten über
+einen Dienst — **Anmeldung** und **Entfernung**: `{{Beschreibung}}` und `{{Treffpunkt}}`.
+
+### Die eine Regel, an drei Stellen
+
+**Ein Link wird nur gezeichnet, wenn ein Text daneben steht.** Erstmals in einer Fassung,
+der eine ganze Regel zugrunde liegt, und die an drei Stellen je einzeln steht: Karte,
+Anmeldemail, Entfernungsmail. Steht im Datensatz eine Webadresse ohne Text, bleibt sie
+stehen und erscheint nirgends.
+
+Prüfungen dafür, alle an einem Dienst **dieses** Laufs:
+
+| Behauptung | Ebene |
+| --- | --- |
+| die erste Karte hat eine Zeile „Treffpunkt“, und sie ist ein Link | HTTP 266 |
+| die Adresse verliert weder den zweiten Parameter noch den `#`-Teil | HTTP 266 |
+| die Nadel ist auf der Seite ein Zeichen, kein Bild | HTTP 266 |
+| die Zeile steht **vor** der Beschreibung | HTTP 266 |
+| die Beschreibung behält ihren Zeilenumbruch und ist ein Absatz | HTTP 266 |
+| die Karte eines Dienstes mit Adresse ohne Text zeigt **keine** Zeile | HTTP 266 |
+| die Anmeldemail führt den Treffpunkt als Link mit dem Text des Dienstes | HTTP 266 |
+| die Entfernungsmail ebenso | HTTP 266 |
+| die Nachricht eines Dienstes **ohne** Treffpunkt nennt keinen und lässt keine leeren Absätze | Admin 693 |
+| ein zweites Speichern ohne die Felder wirft den Treffpunkt nicht weg | Admin 693 |
+| ein Speichern mit leeren Feldern leert ihn | Admin 693 |
+| ein Dienst kann wieder einen Treffpunkt bekommen | Admin 693 |
+| ein zu langer Treffpunkt wird mit Feldnamen und Grenze abgelehnt | Admin 693 |
+| eine Adresse, die keine ist, wird mit Feldnamen abgelehnt | Admin 693 |
+
+### Sieben Gegenproben, siebenmal rot
+
+Jede Gegenprobe baut **eine** Störung ein, fährt die Suite, die die Behauptung prüft, und
+verlangt, dass genau diese Behauptung rot wird. Grün wäre das schlechte Ergebnis.
+
+| # | Störung | Behauptung, die rot wird |
+| --- | --- | --- |
+| 1 | Positivliste des Speicherns ohne `meeting_point` | ein Dienst kann wieder einen Treffpunkt bekommen |
+| 2 | das Formular schickt beide Felder immer mit | ein Speichern ohne die Felder behält den Treffpunkt |
+| 3 | `{{Treffpunkt}}` als Zeile statt als Absatz | die Nachricht nennt keinen Treffpunkt |
+| 4 | die Karte zeichnet die Adresse auch ohne Text | keine Karte zeigt einen Treffpunkt ohne Text |
+| 5 | fester Wortlaut des Links statt des Textes vom Dienst | die Anmeldemail führt ihn mit dem Text des Dienstes |
+| 6 | `links_of()` kennt die zweite Form der Link-Liste nicht | dieselbe |
+| 7 | keine Längengrenze für den Treffpunkt | ein zu langer Treffpunkt wird abgelehnt |
+
+Die Gegenproben liegen nicht im Repository; sie werden bei Bedarf neu gebaut, weil sie
+von einem Werkzeug abhängen, das nicht mitgeliefert wird. Das Werkzeug hat sich in
+diesem Lauf dreimal selbst widerlegt, und alle drei Fehler waren von derselben Art:
+
+- **`printf` mit mehr Argumenten als `%s`.** Das Muster hatte zwei `%s`, übergeben wurden
+  drei Werte. `printf` arbeitet die Vorlage ein zweites Mal ab, und die Datei bekam pro
+  Gegenprobe zwei Zeilen — die zweite sah aus wie eine achte Gegenprobe ohne Wirkung.
+- **Ein Skript, das sich selbst leert.** Der Soll-Stand war mit `cp -r plugin "$SOLL/"`
+  eine Ebene zu tief kopiert; das folgende `rsync --delete` schob den Ordner in sich
+  selbst und löschte vorher den ganzen Baum des Plugins. Zur Rettung trug nur, dass der
+  Soll-Stand eine zweite Kopie war. Seitdem wird der Baum **vor** jedem `rsync --delete`
+  geprüft, und im Zweifel wird gar nichts gelöscht.
+- **Die Nadel aus dem Gedächtnis statt aus dem Protokoll.** Zwei der sieben Gegenproben
+  meldeten „ohne Wirkung“, weil die Nadel nicht dem Namen der Behauptung entsprach, sondern
+  ihrem Detailtext. `befund()` zeigt seitdem die rot gewordenen Zeilen des Laufs mit an.
+
+### Zwei Behauptungen, die nichts geprüft haben
+
+Der ernste Fund dieses Laufs, und er betraf nicht nur die neue Fassung: Ein Python-Block
+in `http.sh` ist eine Shell-Zeichenkette in doppelten Anführungszeichen. **Ein einziges
+unmaskiertes `"` in einem Kommentar schneidet die Zeichenklasse in zwei** — `struct`
+bekommt nur den Teil davor, und dieser Teil ist ein Programm, das die Eingabe liest und
+fertig ist. Die Behauptung ist grün, ohne etwas angesehen zu haben.
+
+Zwei solche Stellen gab es: eine in der neuen Prüfung des Treffpunkts (ein Kommentar mit
+„class then immediately the title“) und eine **von 1.20.0**, in der Prüfung auf den Hinweis
+über das Paar aus Nummer und Adresse. Beide sind repariert, und beide Behauptungen sind
+grün geblieben — sie prüfen jetzt tatsächlich etwas.
+
+Damit die Klasse nicht stumm zurückkommt, prüft eine Behauptung in `http.sh` **beide**
+Dateien auf beide Zeichen: kein Kommentar in einem Block mit einem bloßen `"`, und jeder
+Block **endet** in `sys.exit()`, denn ein abgeschnittener Block kann das nicht. Der
+Gegenlauf: ein bloßes `"` in einen Kommentar gesetzt, die Behauptung wird rot.
+
+### Der Fehler, den erst die Suite zeigte
+
+`text_fields_over_limit()` bekam zwei neue Parameter, im Array standen aber die Namen der
+aufrufenden Methode. PHP meldet das als „Undefined variable“ — **nachdem** die Ausgabe
+begonnen hat, und damit genau so, dass die Weiterleitung ins Formular nicht mehr
+funktioniert: **jedes** Speichern eines Dienstes schlug fehl und zeigte eine leere Seite.
+Die Suite fand es in der ersten Hälfte des Laufs.
+
+Dazu drei Schreibfehler derselben Familie, alle vom Muster „Liste, die bei vier Feldern
+stehen bleibt“: die Positivliste des Speicherns ohne `meeting_point`, eine Zuordnung
+`array( 'a', 'b' )` (deren Schlüssel sind 0 und 1, nicht die Feldnamen), und ein
+`$felder`, das `$fields` heißt und deshalb nirgends ankam.
+
+### Was der Lauf nicht leisten konnte
+
+Die **CLI-Suite** (`smoke.php`) wurde in diesem Lauf **nicht** gefahren: Sie löscht
+Arbeitsdienste, Fahrgemeinschaften und Mitglieder, und dafür ist die Zustimmung des
+Verfassers nötig. Ihr Stand ist der von 1.25.4.
 
 ## Mail-Auswertung
 

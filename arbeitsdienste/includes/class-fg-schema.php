@@ -20,7 +20,7 @@ final class FG_Schema {
 	 *
 	 * @var string
 	 */
-	const VERSION = '1.8.0';
+	const VERSION = '1.9.0';
 
 	/**
 	 * Option name holding the installed schema version.
@@ -55,6 +55,32 @@ final class FG_Schema {
 	 * @var int
 	 */
 	const GROUP_MAX = 100;
+
+	/**
+	 * Longest meeting point of a duty, in characters.
+	 *
+	 * A meeting point is a name somebody reads while standing somewhere:
+	 * "📍Parkplatz Westbad, Nürnberg". The pin belongs to the text, because the club
+	 * types it and may leave it out — the markup does not draw one. That way the
+	 * stored text is the thing the club meant, and the same text goes into the mail
+	 * without a second pin standing in front of it. 100 characters is the bound of
+	 * the group name too, and for the same reason: two words and a street.
+	 *
+	 * @var int
+	 */
+	const MEETING_POINT_MAX = 100;
+
+	/**
+	 * Longest web address of a meeting point, in characters.
+	 *
+	 * 500 and not 255, because the address of a map service is long before it is
+	 * short: "https://www.google.com/maps/search/?api=1&query=Parkplatz+Westbad" is
+	 * 72 characters, and a club that puts a second place into the query is over 255.
+	 * Checked and refused with a message rather than cut off in half.
+	 *
+	 * @var int
+	 */
+	const MEETING_POINT_URL_MAX = 500;
 
 	/**
 	 * Longest description, in characters.
@@ -297,6 +323,8 @@ final class FG_Schema {
 	demand int unsigned NOT NULL DEFAULT 0,
 	duration_hours int unsigned NOT NULL DEFAULT 0,
 	description text NULL,
+	meeting_point varchar(100) NOT NULL DEFAULT '',
+	meeting_point_url varchar(500) NOT NULL DEFAULT '',
 	PRIMARY KEY  (id),
 	UNIQUE KEY public_ref (public_ref),
 	KEY active_date (is_active,event_date)
