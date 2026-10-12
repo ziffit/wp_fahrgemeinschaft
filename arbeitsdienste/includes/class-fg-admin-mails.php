@@ -177,7 +177,22 @@ final class FG_Admin_Mails {
 						</tr>
 					</table>
 
-					<?php submit_button( __( 'Speichern', 'arbeitsdienste' ) ); ?>
+					<?php
+					// The button says what it does, because what it does is not "save".
+					// A button labelled "Speichern" whose first act is to send a mail
+					// would be a surprise with a delay, and the surprise lands on the
+					// person who can least use it: the editor, waiting for a form.
+					submit_button( __( 'Testversand und speichern', 'arbeitsdienste' ) );
+					?>
+					<p class="description">
+						<?php
+						printf(
+							/* translators: %s: address of the account that is logged in. */
+							esc_html__( 'Die Nachricht geht vorher an %s, an die Adresse dieses WordPress-Kontos, mit erfundenen Namen und einem erfundenen Arbeitsdienst — so wie in der Vorschau. Nur wenn sie zugestellt wurde, wird der Text gespeichert. Ist der Versand auf der Website kaputt, bleibt der alte Text stehen und dieser hier wird nicht gespeichert.', 'arbeitsdienste' ),
+							esc_html( (string) wp_get_current_user()->user_email )
+						);
+						?>
+					</p>
 				</form>
 
 				<?php if ( $mail['changed'] ) : ?>
@@ -284,7 +299,26 @@ final class FG_Admin_Mails {
 	}
 
 	/**
-	 * Store the wording of one message.
+	 * Write the wording of a message — but only after it has arrived.
+	 *
+	 * The order here is the whole feature and not an implementation detail: A club
+	 * changes the sentence in its signup mail, nobody reads the change (the preview
+	 * shows the HTML part on a screen, not a letter in a mailbox), and from then on
+	 * every member gets a text that no one has ever seen arrive. Since 1.25.9 the
+	 * wording goes out to the editor first, and it is stored only if that worked.
+	 *
+	 * Four gates in this order, and the order is worth a claim of its own because it
+	 * is the part that is easy to get wrong:
+	 *
+	 * 1. The wording is checked — empty subject, empty body, a placeholder this
+	 *    message does not know. Before anything is sent, because a message with an
+	 *    unknown placeholder cannot be sent at all.
+	 * 2. The recipient is the address of the account that is logged in. Not a member:
+	 *    the club is looking at its own sentence, and no address of a member has any
+	 *    business in this mailbox.
+	 * 3. The send. A false from it means "nothing was saved", and the typed wording
+	 *    stays on the screen so that nothing the editor wrote is lost.
+	 * 4. Only then the write.
 	 *
 	 * @return void
 	 */
@@ -295,7 +329,7 @@ final class FG_Admin_Mails {
 
 		check_admin_referer( 'fg_save_mail', 'fg_mail_nonce' );
 
-		$key    = isset( $_POST['mail'] ) ? sanitize_key( wp_unslash( $_POST['mail'] ) ) : '';
+		$key     = isset( $_POST['mail'] ) ? sanitize_key( wp_unslash( $_POST['mail'] ) ) : '';
 		$erlaubt = FG_Mail_Texts::keys();
 
 		if ( ! in_array( $key, $erlaubt, true ) ) {
@@ -306,6 +340,57 @@ final class FG_Admin_Mails {
 		$subject = $this->post_text( 'fg_mail_subject' );
 		$body    = $this->post_text( 'fg_mail_body' );
 
+		// 1) The wording, checked. The sentence of the check says "not saved", and
+		//    that is still what happens — it is now also true that nothing was sent.
+		$ungueltig = FG_Mail_Texts::validate( $key, $subject, $body );
+
+		if ( true !== $ungueltig ) {
+			$this->keep_typed( $key, $subject, $body );
+			FG_Admin::store_notice( $ungueltig, 'error' );
+			$this->redirect_back( $key );
+		}
+
+		// 2) The recipient: the account that is doing the work. An account without an
+		//    address has nobody to send to, and guessing one would put the text of a
+		//    club into the inbox of a member.
+		$empfaenger = (string) wp_get_current_user()->user_email;
+
+		if ( '' === trim( $empfaenger ) ) {
+			$this->keep_typed( $key, $subject, $body );
+			FG_Admin::store_notice(
+				__( 'Dein WordPress-Konto hat keine E-Mail-Adresse, und an wen der Testversand gehen sollte, weiß niemand. Es wurde nichts gespeichert.', 'arbeitsdienste' ),
+				'error'
+			);
+			$this->redirect_back( $key );
+		}
+
+		// 3) The send, out of the wording that is on the screen and not out of the
+		//    stored one, with the values of the preview. A test send out of the stored
+		//    wording would show the club the letter it already has.
+		$nachricht = FG_Mail_Texts::test_message( $key, $subject, $body );
+
+		if ( false === $nachricht ) {
+			$this->keep_typed( $key, $subject, $body );
+			FG_Admin::store_notice( __( 'Der Text nennt einen Platzhalter, den diese E-Mail nicht kennt. Es wurde nichts gespeichert.', 'arbeitsdienste' ), 'error' );
+			$this->redirect_back( $key );
+		}
+
+		$mailer = new FG_Mailer( new FG_Repository() );
+
+		if ( ! $mailer->send_test( $empfaenger, $nachricht ) ) {
+			$this->keep_typed( $key, $subject, $body );
+			FG_Admin::store_notice(
+				sprintf(
+					/* translators: %s: address of the account that is logged in. */
+					__( 'Die Testnachricht an %s ist nicht zugestellt worden, und deshalb wurde nichts gespeichert. Der eingetippte Text steht noch auf diesem Bildschirm. Prüfe den Versand auf der Website und versuche es dann noch einmal.', 'arbeitsdienste' ),
+					$empfaenger
+				),
+				'error'
+			);
+			$this->redirect_back( $key );
+		}
+
+		// 4) The write, and only now.
 		$ergebnis = FG_Mail_Texts::save( $key, $subject, $body );
 
 		if ( true !== $ergebnis ) {
@@ -320,7 +405,13 @@ final class FG_Admin_Mails {
 		// history and would otherwise keep saying that something is broken.
 		FG_Mail_Texts::clear_notices();
 
-		FG_Admin::store_notice( __( 'Der Text der E-Mail wurde gespeichert.', 'arbeitsdienste' ) );
+		FG_Admin::store_notice(
+			sprintf(
+				/* translators: %s: address of the account that is logged in. */
+				__( 'Die Testnachricht ist an %s gegangen, und der Text wurde gespeichert.', 'arbeitsdienste' ),
+				$empfaenger
+			)
+		);
 		$this->redirect_back( $key );
 	}
 

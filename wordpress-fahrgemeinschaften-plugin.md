@@ -1096,3 +1096,53 @@ wer es anheben will, braucht eine eigene Fähigkeit und eine Zeile im Theme.
 Die Prüfsumme des Aufrufs ist an den einen Dienst gebunden, und die Berechtigung wird **vor** der
 Prüfsumme geprüft — sonst bekäme ein Konto ohne Recht die Frage von WordPress statt des Satzes des
 Plugins, und die Behauptung, die das bewacht, wäre nicht zu erfüllen.
+
+## Umsetzungsstand: Der Testversand vor dem Speichern (1.25.9)
+
+Aus dem Verein, in vier Teilen: „Wenn ich den Text von einer E-Mail ändere, sollte ein Testversand
+ausgelöst werden. Ziel-Email: Email des eingeloggten Benutzers. Arbeitsdienst oder Fahrgemeinschaft
+Details, also Platzhalter können vom System vorgegeben sein, wie in der Vorschau. Erst wenn der
+Versand geklappt hat sollte gespeichert werden."
+
+### Eine Schaltfläche, und sie heißt nicht „Speichern“
+
+Die vier Sätze ergeben **eine** Regel mit **einer** Schaltfläche: **Testversand und speichern.**
+Kein zweiter Knopf neben dem Speichern — zwei Knöpfe bedeuten, dass man auch ohne Testversand
+speichern kann, und das ist genau das, was hier verhindert werden soll.
+
+Der Ablauf hat vier Stufen, und die **Reihenfolge** ist das Wesentliche:
+
+1. **Der Wortlaut wird geprüft** (leerer Betreff, leerer Text, unbekannter Platzhalter) — vor
+   allem anderen, denn eine Nachricht mit einem Platzhalter, den sie nicht kennt, lässt sich
+   überhaupt nicht zusammenstellen.
+2. **Der Empfänger ist die Adresse des angemeldeten Kontos.** Kein Mitglied, nicht das erste der
+   Liste: Der Verein liest seinen eigenen Satz, und die Adresse eines Mitglieds hat in diesem
+   Postfach nichts zu suchen.
+3. **Der Versand.** `false` heißt: nichts gespeichert, der getippte Text bleibt auf dem Bildschirm.
+4. **Erst dann das Schreiben.**
+
+Die Prüfung von Stufe 1 ist aus `FG_Mail_Texts::save()` **herausgezogen** und heißt jetzt
+`validate()`, weil zwei Aufrufer sie brauchen und eine Regel, die zweimal dasteht, ist eine Regel,
+die erst doppelt und dann halb befolgt wird.
+
+### Die Werte kommen aus derselben Schleife wie die Vorschau
+
+`compose()` (ein echter Versand), `preview()` (die Vorschau) und `test_message()` (der Testversand)
+unterscheiden sich in drei Dingen und stimmen in allem anderen überein: woher der Wortlaut kommt
+(gespeichert, gespeichert, **getippt**), welche Werte in die Platzhalter gehen (die echten, die
+erfundenen, die erfundenen) und ob ein unbekannter Platzhalter als **Zurückbehalten** vermerkt wird.
+Das dritte gehört zu einer Nachricht, die **gespeichert** ist: Ein Tippfehler auf einem Bildschirm
+ist kein Rückbau einer Datei, und ein Vermerk darüber wäre eine Fehlermeldung zu einem Wort, das
+niemand gespeichert hat. Die Schleife steht deshalb einmal da und wird dreimal gerufen.
+
+**Der Testversand geht durch dasselbe `send()`** wie eine Nachricht an ein Mitglied — also mit
+Layout, Logo, Fußzeile und Textteil. Ein Testversand, der einen anderen Brief zeigt als der echte,
+wäre keinen Pfenn wert, und genau das ist das einzige, was ein Testversand nicht sein darf.
+
+### Die Folge, die benannt gehört
+
+**Ist der Versand dauerhaft kaputt, kann der Verein seine Nachrichten gar nicht mehr ändern** —
+auch nicht auf eine, die mit dem Defekt nichts zu tun hat. Das ist der Preis der Regel, der Verein
+hat sie gewollt, und es steht deshalb im README und nicht nur hier. Umgekehrt gilt dieselbe Regel
+aus der anderen Richtung schon länger: Bei der Anmeldung wird die Anmeldung **zurückgenommen**, wenn
+die Mail nicht ankommt, weil der Abmeldelink in dieser Mail stand.

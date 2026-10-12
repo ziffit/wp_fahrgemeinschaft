@@ -356,34 +356,11 @@ final class FG_Mail_Texts {
 	public static function save( $key, $subject, $body ) {
 		global $wpdb;
 
-		$mail = self::get( $key );
-		if ( ! $mail ) {
-			return __( 'Diese E-Mail gibt es nicht.', 'arbeitsdienste' );
-		}
-
-		if ( '' === trim( $subject ) ) {
-			return __( 'Der Betreff darf nicht leer sein. Eine E-Mail ohne Betreff landet im Spam-Ordner.', 'arbeitsdienste' );
-		}
-
-		if ( '' === trim( $body ) ) {
-			return __( 'Der Text darf nicht leer sein.', 'arbeitsdienste' );
-		}
-
-		$erlaubt = array_keys( $mail['placeholders'] );
-		$links   = self::link_labels( $mail );
-
-		foreach ( array( 'Betreff' => $subject, 'Text' => $body ) as $feld => $text ) {
-			$unbekannt = self::unknown_placeholders( $text, $erlaubt, $links );
-
-			if ( $unbekannt ) {
-				return sprintf(
-					/* translators: 1: field name, 2: the placeholders that are not allowed, 3: the placeholders that are. */
-					__( 'Der %1$s wurde nicht gespeichert, weil er %2$s nennt. Für diese E-Mail sind nur diese Platzhalter möglich: %3$s', 'arbeitsdienste' ),
-					$feld,
-					implode( ', ', $unbekannt ),
-					implode( ', ', self::allowed_list( $erlaubt, $links ) )
-				);
-			}
+		// The check is its own method since 1.25.9, because the test send runs it
+		// before the wording is written and needs the same sentence. See validate().
+		$ungueltig = self::validate( $key, $subject, $body );
+		if ( true !== $ungueltig ) {
+			return $ungueltig;
 		}
 
 		$table = FG_Schema::mail_templates_table();
@@ -428,6 +405,92 @@ final class FG_Mail_Texts {
 	}
 
 	/**
+	 * Check a typed wording without storing it.
+	 *
+	 * Since 1.25.9 a wording is not written before it has arrived in the mailbox of
+	 * the editor, and the send needs this check to run first: A message that names a
+	 * placeholder it does not know cannot be sent at all, and the club should learn
+	 * that from this sentence and not from a failed test.
+	 *
+	 * It is the same check `save()` makes and in the same wording, and it is a
+	 * method of its own because two callers need it. A rule written down twice is a
+	 * rule followed twice as long and then only once.
+	 *
+	 * @param string $key     Message key.
+	 * @param string $subject Typed subject.
+	 * @param string $body    Typed body.
+	 * @return true|string True, or the sentence that says why not.
+	 */
+	public static function validate( $key, $subject, $body ) {
+		$mail = self::get( $key );
+
+		if ( ! $mail ) {
+			return __( 'Diese E-Mail gibt es nicht.', 'arbeitsdienste' );
+		}
+
+		if ( '' === trim( $subject ) ) {
+			return __( 'Der Betreff darf nicht leer sein. Eine E-Mail ohne Betreff landet im Spam-Ordner.', 'arbeitsdienste' );
+		}
+
+		if ( '' === trim( $body ) ) {
+			return __( 'Der Text darf nicht leer sein.', 'arbeitsdienste' );
+		}
+
+		$erlaubt = array_keys( $mail['placeholders'] );
+		$links   = self::link_labels( $mail );
+
+		foreach ( array( 'Betreff' => $subject, 'Text' => $body ) as $feld => $text ) {
+			$unbekannt = self::unknown_placeholders( $text, $erlaubt, $links );
+
+			if ( $unbekannt ) {
+				return sprintf(
+					/* translators: 1: field name, 2: the placeholders that are not allowed, 3: the placeholders that are. */
+					__( 'Der %1$s wurde nicht gespeichert, weil er %2$s nennt. Für diese E-Mail sind nur diese Platzhalter möglich: %3$s.', 'arbeitsdienste' ),
+					$feld,
+					implode( ', ', $unbekannt ),
+					implode( ', ', self::allowed_list( $erlaubt, $links ) )
+				);
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Build a message out of a wording that is not stored anywhere.
+	 *
+	 * The values are the ones the preview uses: made-up names, an invented duty, an
+	 * invented address. They are the right values here for the same reason the
+	 * preview uses them — the message goes to the editor, and the address of a
+	 * member of this club has no business in the mailbox of somebody who wanted to
+	 * read a sentence. For the same reason nothing is recorded as held back when a
+	 * placeholder is unknown: A text that was never stored cannot be held back, and
+	 * the record of a hold-back would be a fault report about a word the club never
+	 * wrote down.
+	 *
+	 * @param string $key     Message key.
+	 * @param string $subject Typed subject.
+	 * @param string $body    Typed body.
+	 * @return array{subject: string, body: string, links: array<string, array{url: string, label: string}>}|false
+	 */
+	public static function test_message( $key, $subject, $body ) {
+		$mail = self::get( $key );
+
+		if ( ! $mail ) {
+			return false;
+		}
+
+		return self::compose_text(
+			$key,
+			$mail,
+			$subject,
+			$body,
+			$mail['sample'],
+			false
+		);
+	}
+
+	/**
 	 * Build the message that goes out.
 	 *
 	 * @param string               $key    Message key.
@@ -437,30 +500,56 @@ final class FG_Mail_Texts {
 	 */
 	public static function compose( $key, array $values ) {
 		$mail = self::get( $key );
+
 		if ( ! $mail ) {
 			return false;
 		}
 
+		return self::compose_text( $key, $mail, $mail['subject'], $mail['body'], $values, true );
+	}
+
+	/**
+	 * Replace the placeholders of one message — the one loop for three callers.
+	 *
+	 * A real send, the preview and the test send differ in three things and agree in
+	 * everything else: where the wording comes from (stored, stored, typed), which
+	 * values go into the placeholders (the real ones, the invented ones, the invented
+	 * ones) and whether a placeholder that cannot be replaced is recorded as a
+	 * hold-back. That last one belongs to a message that IS stored, so the parameter
+	 * is there: A typed wording that names a placeholder it does not know is a typo
+	 * on a screen, not a version of a file that went missing.
+	 *
+	 * @param string $key              Message key, for the hold-back record.
+	 * @param array  $mail             The message, from self::get().
+	 * @param string $subject          Subject to use.
+	 * @param string $body             Body to use.
+	 * @param array  $values           Values for the placeholders.
+	 * @param bool   $zurueckhalten    Whether an unknown placeholder is recorded.
+	 * @return array{subject: string, body: string, links: array<string, array{url: string, label: string}>}|false
+	 */
+	private static function compose_text( $key, array $mail, $subject, $body, array $values, $zurueckhalten ) {
 		$erlaubt = $mail['placeholders'];
 		$links   = self::link_labels( $mail );
 		$out     = array();
 
-		foreach ( array( 'subject', 'body' ) as $field ) {
-			$text = (string) $mail[ $field ];
+		foreach ( array( 'subject', 'body' ) as $feld ) {
+			$text       = 'subject' === $feld ? (string) $subject : (string) $body;
 			$unerlaubt = self::unknown_placeholders( $text, array_keys( $erlaubt ), $links );
 
 			if ( $unerlaubt ) {
-				self::hold_back( $key, $unerlaubt, $field );
+				if ( $zurueckhalten ) {
+					self::hold_back( $key, $unerlaubt, $feld );
+				}
 
 				return false;
 			}
 
-			// A subject is one line of text, so a link placeholder is filled with
-			// the address there. In the body the token stays: the text part needs
-			// the address and the HTML part needs a link with a wording, and the
-			// two are written by FG_Mail_Templates once it knows which links this
-			// message carries.
-			$out[ $field ] = self::replace( $text, $erlaubt, $values, $links, 'subject' === $field );
+			// A subject is one line of text, so a link placeholder is filled with the
+			// address there. In the body the token stays: the text part needs the
+			// address and the HTML part needs a link with a wording, and the two are
+			// written by FG_Mail_Templates once it knows which links this message
+			// carries.
+			$out[ $feld ] = self::replace( $text, $erlaubt, $values, $links, 'subject' === $feld );
 		}
 
 		// The list as it stands in the message and not the flattened one: link_labels()
@@ -471,48 +560,18 @@ final class FG_Mail_Texts {
 		return $out;
 	}
 
-	/**
-	 * Build a message for the preview, with invented data.
-	 *
-	 * The names in the preview are not the last recipient. The preview is HTML
-	 * in the browser of somebody who is looking at the admin screen, and it
-	 * ends up in the page cache of the site, in the browser history and in a
-	 * screenshot in a bug report. Nobody's member data belongs there, so every
-	 * name in it is made up.
-	 *
-	 * @param string $key Message key.
-	 * @return array{subject: string, body: string, links: array<string, array{url: string, label: string}>}|null
-	 */
 	public static function preview( $key ) {
 		$mail = self::get( $key );
+
 		if ( ! $mail ) {
 			return null;
 		}
 
-		$links = self::link_labels( $mail );
-		$out   = array();
+		$out = self::compose_text( $key, $mail, $mail['subject'], $mail['body'], $mail['sample'], false );
 
-		foreach ( array( 'subject', 'body' ) as $field ) {
-			$unerlaubt = self::unknown_placeholders( (string) $mail[ $field ], array_keys( $mail['placeholders'] ), $links );
-
-			if ( $unerlaubt ) {
-				return null;
-			}
-
-			$out[ $field ] = self::replace( (string) $mail[ $field ], $mail['placeholders'], $mail['sample'], $links, 'subject' === $field );
-		}
-
-		$out['links'] = self::links_of( self::raw_links( $mail ), $mail['sample'] );
-
-		return $out;
+		return false === $out ? null : $out;
 	}
 
-	/**
-	 * The placeholders of a message, as a list of names without braces.
-	 *
-	 * @param string $key Message key.
-	 * @return string[]
-	 */
 	public static function placeholder_names( $key ) {
 		$mail = self::get( $key );
 

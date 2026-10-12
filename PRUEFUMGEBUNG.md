@@ -4,13 +4,17 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 12.10.2026 — **öffentliches HTTP 270, Mail-Ebene 124, Admin-Ebene 733,
-0 Fehler**, gegen den Stand **Plugin 1.25.8, Schema 1.9.0**, dazu **sechzehn von sechzehn
-Gegenproben mit dem gestellten Fehlerbild rot** (vier davon aus dieser Fassung; die 33 der
+Letzter Lauf: 12.10.2026 — **öffentliches HTTP 270, Mail-Ebene 124, Admin-Ebene 758,
+0 Fehler**, gegen den Stand **Plugin 1.25.9, Schema 1.9.0**, dazu **neunzehn von neunzehn
+Gegenproben mit dem gestellten Fehlerbild rot** (drei davon aus dieser Fassung; die 33 der
 Fassungen davor wurden in diesem Lauf nicht wiederholt). HTTP und Mail sind unverändert, die
-Admin-Ebene ist um 31 höher. Die CLI-Suite wurde **nicht** gefahren: Sie löscht Arbeitsdienste,
+Admin-Ebene ist um 25 höher. Die CLI-Suite wurde **nicht** gefahren: Sie löscht Arbeitsdienste,
 Fahrgemeinschaften und Mitglieder, und dafür ist die Zustimmung nötig; ihr Stand ist der von
 1.25.4.
+
+Der Lauf hat die Prüfungen einmal umgezogen: Das Werkzeug für die Gegenproben lag in `/tmp` und war
+zum zweiten Mal mit einem geleerten Verzeichnis weg — neunzehn Störungen, die nicht im Repository
+standen und nicht wiederherstellbar waren. Es liegt jetzt unter `tests/gegenproben/`.
 
 Der Lauf ging einer Frage nach — „ist der Endpunkt abgesichert?“ — und hat eine **Lücke in den
 Prüfungen** gezeigt, nicht im Plugin: Die Admin-Suite meldet sich als ein Administrator an, also
@@ -2880,6 +2884,83 @@ HTTP **270**, Mail 124, Admin **733**, 0 Fehler. HTTP und Mail sind unverändert
 berührt nichts, was ein Browser öffentlich liest, und nichts, was in einer E-Mail steht. Die
 Admin-Ebene ist um 31 höher: die Behauptungen des Exports, die des Rundlaufs, die des Formelwerts
 und die der Berechtigung. Die CLI-Suite wurde nicht gefahren.
+
+## Fassung 1.25.9: Der Testversand vor dem Speichern
+
+Aus dem Verein, in vier Teilen: „Wenn ich den Text von einer E-Mail ändere, sollte ein Testversand
+ausgelöst werden. Ziel-Email: Email des eingeloggten Benutzers. Arbeitsdienst oder Fahrgemeinschaft
+Details, also Platzhalter können vom System vorgegeben sein, wie in der Vorschau. Erst wenn der
+Versand geklappt hat sollte gespeichert werden."
+
+**Das Schema bleibt bei 1.9.0** und HTTP und Mail sind unverändert: Der Testversand entsteht im
+Adminbereich und geht an eine Adresse, die keine ist, die ein Browser liest.
+
+### Was der Handlauf zeigte, und was vier Behauptungen nicht gezeigt hätten
+
+| | vorher | jetzt |
+| --- | --- | --- |
+| Empfänger | — | die Adresse des **angemeldeten Kontos**, im Lauf `admin@example.org` |
+| verschickt wird | — | der **getippte** Wortlaut, mit den Werten der Vorschau |
+| gespeichert wird | sofort | **erst nach** dem Versand, und nur wenn er gelang |
+| bei Fehlschlag | — | alter Wortlaut bleibt, der getippte steht noch auf dem Bildschirm |
+
+Belegt an zwei Stellen, die getrennt geprüft werden: Der **Hinweistext** sagt „ist nicht zugestellt
+worden, und deshalb wurde nichts gespeichert“, und der **Datensatz** trägt danach noch den alten
+Betreff. Ein Hinweis, der etwas verspricht, während die Tabelle das Gegenteil hergibt, ist der Fall,
+um den es hier geht — und die Behauptung auf der Tabelle ist die echte.
+
+### Die Reihenfolge ist der Teil, der geprüft gehört
+
+Drei Gegenproben, und jede baut den Fehler, den man beim Umbau machen würde:
+
+| # | Störung | Behauptung, die rot wird |
+| --- | --- | --- |
+| 17 | erst speichern, dann schicken | der gespeicherte Wortlaut ist der von vorher |
+| 18 | der Testversand geht aus dem **gespeicherten** Wortlaut | der getippte Satz ist in der Nachricht |
+| 19 | der Testversand geht an eine **fremde** Adresse | die Nachricht ging an die Adresse des Kontos |
+
+Probe 18 ist die teuerste von allen, und sie ist es, weil sie sich **kaum sichtbar** macht: Der
+gespeicherte Wortlaut wird genauso zusammengestellt, der Platzhalter genauso gefüllt und die Anrede
+genauso eingesetzt — die Mail sieht vollkommen richtig aus und zeigt dem Verein den Brief, den er
+schon hatte. Ohne die Behauptung „der getippte Satz ist in der Nachricht“ wäre sie grün geblieben.
+
+Probe 19 ist die, die die Vorgabe des Verfassers überhaupt erst festhält: Das Ziel ist das
+angemeldete Konto, und in der Störung steht die Adresse eines Mitglieds.
+
+Und **eine** Behauptung prüft die Reihenfolge der Prüfung selbst: Ein Wortlaut mit einem unbekannten
+Platzhalter wird abgelehnt, **und es geht keine einzige Mail raus**. Eine Nachricht, die einen
+Platzhalter nicht kennt, lässt sich nicht zusammenstellen — ein Testversand, der trotzdem ging, hieße,
+der Verein bekäme einen Brief über den Platzhalter statt über den Satz, den er geschrieben hat.
+Dazu kommt, dass dabei **nichts als „Zurückbehalten“ vermerkt** wird: Ein Tippfehler auf einem
+Bildschirm ist kein Rückbau einer gespeicherten Datei.
+
+### Die Prüfung kam aus `save()` heraus
+
+Stufe 1 war vorher ein Teil von `FG_Mail_Texts::save()`. Sie musste **vor** dem Versand laufen, und
+ein zweiter Aufrufer derselben Regel ist Grund genug für eine eigene Methode — `validate()`, mit
+demselben Satz. `compose()`, `preview()` und `test_message()` laufen jetzt über **eine** Schleife mit
+zwei Schaltern: woher der Wortlaut kommt, und ob ein unbekannter Platzhalter vermerkt wird.
+
+Der Testversand geht durch das **private** `send()` des Mailers und damit durch Layout, Logo,
+Fußzeile und Textteil — dasselbe wie eine Nachricht an ein Mitglied. Kein Zähler bewegt sich: Die
+Zähler stehen dort, wo eine Nachricht an ein Mitglied entsteht, und das ist hier nicht der Fall.
+
+### Das Werkzeug ist in das Repository umgezogen
+
+Bis 1.25.8 lag es in `/tmp/opencode/fg/` und wurde **zweimal** von einem geleerten `/tmp`
+mitgenommen — jedes Mal mit dem Aufwand, neunzehn Störungen neu zu schreiben. Es liegt jetzt unter
+`tests/gegenproben/` und ist damit versioniert. Im Paket `arbeitsdienste.zip` ist es nicht
+enthalten: Dort liegt nur der Ordner `arbeitsdienste/`.
+
+Und ein Fehler, den das Werkzeug **selbst** verraten hat: Zwei der drei neuen Nadeln waren der
+**Detailtext** einer Behauptung statt ihres Namens. Ohne die Auskunft „die rot gewordenen Zeilen des
+Laufs dabei“ hätte der Lauf „17 von 19“ gemeldet und die beiden stillschweigend als gewirkt
+gezählt.
+
+### Läufe
+
+HTTP **270**, Mail 124, Admin **758**, 0 Fehler. Die Admin-Ebene ist um 25 höher: der Abschnitt
+`[13b]` mit dem Testversand und dem gescheiterten Versand. Die CLI-Suite wurde nicht gefahren.
 
 ## Mail-Auswertung
 

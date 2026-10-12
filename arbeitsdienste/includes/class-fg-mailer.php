@@ -347,6 +347,38 @@ final class FG_Mailer {
 	}
 
 	/**
+	 * Send a message that exists only as a wording on a screen.
+	 *
+	 * The test send of the admin area. Three things are worth naming, because they
+	 * are the reason this is a method and not a call to wp_mail() somewhere in the
+	 * admin screen:
+	 *
+	 * - **It goes out through send()** and therefore through the layout, the logo,
+	 *   the footer and the plain-text part — the same way a message to a member
+	 *   does. A test send that showed a different letter than the real one would be
+	 *   worth nothing, and that is the one thing a test send must not be.
+	 * - **The recipient is the editor.** Nothing here counts, nothing is recorded,
+	 *   and no counter of this plugin moves: The counters stand where a message to
+	 *   a member is written, and this is not such a message.
+	 * - **A false here is a refusal to store.** Since 1.25.9 the admin area writes a
+	 *   wording only after this returned true, so what wp_mail() answers is what the
+	 *   club gets to keep.
+	 *
+	 * @param string $to   Recipient.
+	 * @param array  $mail Composed message: subject, body and links.
+	 * @return bool Whether the message was handed over.
+	 */
+	public function send_test( $to, array $mail ) {
+		if ( ! isset( $mail['subject'], $mail['body'] ) ) {
+			return false;
+		}
+
+		$links = isset( $mail['links'] ) ? (array) $mail['links'] : array();
+
+		return $this->send( (string) $to, (string) $mail['subject'], (string) $mail['body'], null, $links );
+	}
+
+	/**
 	 * Send a message with a controlled sender.
 	 *
 	 * What goes into wp_mail() is the **HTML** of this plugin's layout, not the

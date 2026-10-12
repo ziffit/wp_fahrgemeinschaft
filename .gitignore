@@ -46,3 +46,6 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+# Vom Gegenproben-Lauf erzeugt: der Soll-Stand, die Logs, das Ergebnis.
+tests/gegenproben/.lauf/

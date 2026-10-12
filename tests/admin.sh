@@ -3765,7 +3765,173 @@ clean "$fremd_seite" "unknown message"
 hasnt "an unknown key opens no form" "$fremd_seite" 'name="fg_mail_body"'
 hasnt "an unknown key opens no reset" "$fremd_seite" "Auf Standard zurücksetzen"
 
-echo "[13b] the greeting of the messages"
+# --- the test send, and the save that depends on it
+echo "[13b] a changed wording is sent first and stored afterwards"
+# The whole feature in one block: a wording is written to the mailbox of the editor
+# first, and it is stored only if it arrived. Both directions are checked, because
+# either half alone can be broken: A save without a send is the old behaviour, and a
+# send without a save leaves the club guessing.
+NONCE=$(printf '%s' "$(curl -sk -b "$JAR" "$MAILS&mail=duty_signup")" | grep -o 'name="fg_mail_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+
+# The button says what it does. A button called "Speichern" whose first act is to
+# send a mail would be a surprise with a delay.
+formular=$(curl -sk -b "$JAR" "$MAILS&mail=duty_signup")
+has "the button says it sends before it stores" "$formular" "Testversand und speichern"
+hasnt "and it is not simply called Speichern" "$formular" 'value="Speichern"'
+has "the sentence names the address the send goes to" "$formular" "an admin@example.org"
+has "and says that the send decides about the saving" "$formular" "Nur wenn sie zugestellt wurde"
+has "and that the values are invented" "$formular" "mit erfundenen Namen"
+
+# --- the way it works
+VORHER_MAILS=$(s mail-count)
+s mail-text-reset duty_signup > /dev/null
+VORHER_BETREFF=$(s mail-text-subject duty_signup)
+curl -sk -b "$JAR" -L -o "$DIR/testversand.html" -d "action=fg_save_mail&mail=duty_signup&fg_mail_nonce=$NONCE" \
+	--data-urlencode "fg_mail_subject=Testversand: {{Arbeitsdienst}} am {{Datum}}" \
+	--data-urlencode "fg_mail_body=Hallo {{Vorname}},
+
+das ist der Satz, der im Postfach ankam.
+Arbeitsdienst: {{Arbeitsdienst}}
+Abmelden: {{Abmeldelink}}" "$BASE/wp-admin/admin-post.php"
+testversand=$(cat "$DIR/testversand.html")
+clean "$testversand" "a wording saved with a test send"
+
+has "the notice says the message went out" "$testversand" "Die Testnachricht ist an admin@example.org gegangen"
+has "and that the text was stored" "$testversand" "und der Text wurde gespeichert"
+
+# The recipient is the account that is logged in. The claim is made on the recorded
+# mail and not on the notice, because the notice is a sentence this plugin wrote
+# about itself, and a sentence can be wrong in a way the mail cannot.
+struct "$(s mail-recipients 1)" "the test message went to the address of the logged-in account" "
+import sys
+h = sys.stdin.read().split(chr(10))[0]
+if not h.startswith('admin@example.org'):
+    print('the newest recorded mail went to %r' % h, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the test message went somewhere else"
+
+# The placeholders in the SENT message are filled by the system, the same way as in
+# the preview. A test send that went out with "{{Arbeitsdienst}}" standing in it
+# would show the editor a text that no member will ever see.
+struct "$(s mail-bodies 1)" "the message that went out has its placeholders filled" "
+import re, sys
+h = sys.stdin.read()
+betreff = re.search(r'<title>(.*?)</title>', h, re.S)
+text = betreff.group(1) if betreff else ''
+if 'Testversand:' not in text:
+    print('the subject of the recorded mail reads %r' % text, file=sys.stderr)
+    sys.exit(1)
+if '{{' in text or '{{' in h:
+    print('the recorded mail still carries a placeholder', file=sys.stderr)
+    sys.exit(1)
+if 'Hallo Anton' not in h:
+    print('the greeting was not filled from the values of the preview', file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the sent message carries a placeholder, or no greeting at all"
+
+# The sentence that was typed is the one that went out. Without this claim a
+# send out of the STORED wording would pass everything above: its placeholders are
+# filled just the same and it greets with the same name, and the club would be
+# shown the letter it already had.
+struct "$(s mail-bodies 1)" "the sentence that was typed is in the message that went out" "
+import re, sys
+h = sys.stdin.read()
+if 'das ist der Satz, der im Postfach ankam' not in h:
+    print('the recorded message does not carry the typed sentence', file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the recorded message carries another wording than the one that was typed"
+
+# And it is stored, with the placeholder still in it: the stored wording is the# And it is stored, with the placeholder still in it: the stored wording is the
+# wording of the club, not the one letter that went out.
+if [ "$(s mail-text-rows duty_signup)" = "1" ]; then
+	ok "the wording stands in the table after the send"
+else
+	bad "the wording stands in the table after the send" "$(s mail-text-rows duty_signup) Zeilen"
+fi
+if [ "$(s mail-text-subject duty_signup)" = "Testversand: {{Arbeitsdienst}} am {{Datum}}" ]; then
+	ok "and it is stored with its placeholders, not with the values of the test"
+else
+	bad "and it is stored with its placeholders, not with the values of the test" "$(s mail-text-subject duty_signup)"
+fi
+if [ "$(s mail-count)" -ge "$((VORHER_MAILS + 1))" ]; then
+	ok "and the send is one message more than before"
+else
+	bad "and the send is one message more than before" "vorher $VORHER_MAILS, jetzt $(s mail-count)"
+fi
+
+# --- the way it fails: nothing is stored
+# The delivery is switched off from the outside, the way a broken mail server would.
+# This is the case the whole rule exists for, and it is the case a check on the
+# notice alone would not cover: A notice can promise that nothing was stored while
+# the store has the wording.
+s mail-text-reset duty_signup > /dev/null
+s mail-text-set duty_signup "Alter Betreff" "Alter Text" > /dev/null
+ALT_BETREFF=$(s mail-text-subject duty_signup)
+MAILS_VOR_FAILL=$(s mail-count)
+s mail-fail on > /dev/null
+trap 's mail-fail off > /dev/null 2>&1' EXIT
+NONCE=$(printf '%s' "$(curl -sk -b "$JAR" "$MAILS&mail=duty_signup")" | grep -o 'name="fg_mail_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+curl -sk -b "$JAR" -L -o "$DIR/testversand-fehlt.html" -d "action=fg_save_mail&mail=duty_signup&fg_mail_nonce=$NONCE" \
+	--data-urlencode "fg_mail_subject=Nicht zugestellt" \
+	--data-urlencode "fg_mail_body=Der Satz, der nicht ankommen sollte." "$BASE/wp-admin/admin-post.php"
+fehlgeschlagen=$(cat "$DIR/testversand-fehlt.html")
+clean "$fehlgeschlagen" "a wording whose test send failed"
+
+has "the notice says the message was not delivered" "$fehlgeschlagen" "ist nicht zugestellt worden"
+has "and that nothing was stored because of it" "$fehlgeschlagen" "deshalb wurde nichts gespeichert"
+has "and that the typed text is still there" "$fehlgeschlagen" "steht noch auf diesem Bildschirm"
+# The claim on the store, and it is the claim that matters.
+if [ "$(s mail-text-subject duty_signup)" = "$ALT_BETREFF" ]; then
+	ok "and the stored wording is the one from before"
+else
+	bad "and the stored wording is the one from before" "vorher '$ALT_BETREFF', jetzt '$(s mail-text-subject duty_signup)'"
+fi
+if [ "$(s mail-text-body duty_signup)" = "Alter Text" ]; then
+	ok "and so is the stored text"
+else
+	bad "and so is the stored text" "$(s mail-text-body duty_signup)"
+fi
+# What was typed is still on the screen. A refused save that also swallowed the
+# wording would cost the club the sentence it was in the middle of writing.
+if printf '%s' "$fehlgeschlagen" | grep -q 'Der Satz, der nicht ankommen sollte'; then
+	ok "and the typed text is still in the form"
+else
+	bad "and the typed text is still in the form" "der Bildschirm zeigt den Text nicht"
+fi
+s mail-fail off > /dev/null
+trap - EXIT
+
+# --- a wording that cannot be sent is refused BEFORE anything goes out
+# The order is the claim here: A message naming a placeholder it does not know
+# cannot be composed at all, and a test send that went out anyway would mean the
+# club receives a letter about a placeholder instead of the sentence it wrote.
+s mail-text-reset duty_signup > /dev/null
+NONCE=$(printf '%s' "$(curl -sk -b "$JAR" "$MAILS&mail=duty_signup")" | grep -o 'name="fg_mail_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+MAILS_VOR_PLATZHALTER=$(s mail-count)
+curl -sk -b "$JAR" -L -o "$DIR/testversand-platzhalter.html" -d "action=fg_save_mail&mail=duty_signup&fg_mail_nonce=$NONCE" \
+	--data-urlencode "fg_mail_subject=Mit {{Unsinn}}" \
+	--data-urlencode "fg_mail_body=Hallo {{Vorname}}, {{Unsinn}}" "$BASE/wp-admin/admin-post.php"
+platzhalter=$(cat "$DIR/testversand-platzhalter.html")
+clean "$platzhalter" "a wording with a placeholder that does not exist"
+has "a placeholder that does not exist is refused by name" "$platzhalter" "nennt"
+if [ "$(s mail-count)" = "$MAILS_VOR_PLATZHALTER" ]; then
+	ok "and nothing went out for it ($MAILS_VOR_PLATZHALTER Mails vorher wie nachher)"
+else
+	bad "and nothing went out for it" "vorher $MAILS_VOR_PLATZHALTER, jetzt $(s mail-count)"
+fi
+# A wording that was never stored cannot be held back either. The box of held-back
+# messages is for a stored text that a newer version no longer knows; a typo on a
+# screen would put a fault report about it there, and nobody would know what to fix.
+if [ "$(s mail-text-notices)" = "0" ]; then
+	ok "and nothing was recorded as held back"
+else
+	bad "and nothing was recorded as held back" "$(s mail-text-notices) Einträge"
+fi
+
+echo "[13c] the greeting of the messages"
 # Both sides of a contact request are members since schema 1.4.0, so both
 # greetings carry the two names of a member and the case of an address that
 # belongs to nobody is gone from this path. What took its place is the member who left the club
@@ -3826,7 +3992,7 @@ fi
 # mail.
 s mail-text-body duty_signup | grep -q '^{{Anrede}},' && ok "the default text of the signup mail begins with the greeting" || bad "the default text of the signup mail begins with the greeting" "$(s mail-text-body duty_signup | head -1)"
 
-echo "[13c] a stored text with a placeholder this version does not know"
+echo "[13d] a stored text with a placeholder this version does not know"
 # A club can edit with a newer version and then go back to an older one. The
 # text in the table then names a placeholder this version has no value for, and
 # the message must not go out half-empty. The row is written directly, because
