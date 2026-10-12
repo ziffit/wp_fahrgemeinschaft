@@ -47,6 +47,7 @@ final class FG_Admin_Events {
 		add_action( 'admin_post_fg_save_event', array( $this, 'save' ) );
 		add_action( 'admin_post_fg_assign_participant', array( $this, 'assign_participant' ) );
 		add_action( 'admin_post_fg_notify_participant', array( $this, 'notify_participant' ) );
+		add_action( 'admin_post_fg_export_registrations', array( $this, 'export_registrations' ) );
 	}
 
 	/**
@@ -463,6 +464,63 @@ final class FG_Admin_Events {
 	}
 
 	/**
+	 * The registration list of one work service as a file, and nothing else.
+	 *
+	 * Three gates stand in front of the data, and all three are about the same
+	 * thing: The file carries every e-mail address of the members in this duty.
+	 * The screen it is reached from asks for `edit_posts`, the call asks for the
+	 * nonce of this duty, and a duty that does not exist gets the screen back with
+	 * a notice instead of a file. The nonce is bound to the duty, so a link copied
+	 * out of the address bar of one duty does not open the list of another.
+	 *
+	 * @return void
+	 */
+	public function export_registrations() {
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			// With 403 and not with the default of wp_die(), which is 500: A refusal
+			// is not a broken server, and a 500 lands in the error log of the club
+			// and in every place that counts errors as something to look at. The
+			// other three handlers of this class still answer 500 here — the same
+			// one-line pattern, older, and not touched by this version.
+			wp_die(
+				esc_html__( 'Du hast keine Berechtigung für diesen Bereich.', 'arbeitsdienste' ),
+				'',
+				array( 'response' => 403 )
+			);
+		}
+
+		$event_id = isset( $_GET['event'] ) && ! is_array( $_GET['event'] )
+			? absint( wp_unslash( $_GET['event'] ) )
+			: 0;
+
+		check_admin_referer( 'fg_export_' . $event_id, 'fg_export_nonce' );
+
+		$event = $event_id ? $this->repository->get_event( $event_id ) : null;
+		if ( ! $event ) {
+			FG_Admin::store_notice( __( 'Arbeitsdienst nicht gefunden. Es wurde nichts heruntergeladen.', 'arbeitsdienste' ), 'error' );
+			$this->redirect_back( 0 );
+		}
+
+		$csv = FG_Csv::registrations( $event, $this->repository->get_event_registrations( $event->id ) );
+
+		// The name of the file says what it is and which day it was made, and it
+		// says neither with the title of the duty: A title is typed by a person and
+		// can carry umlauts, spaces and quotation marks, and all three make trouble
+		// in a file name. The reference of the duty stands in its place — 32 hex
+		// characters, unique, and harmless.
+		$datei = sprintf( 'arbeitsdienste-%s-%s.csv', $event->event_date, substr( (string) $event->public_ref, 0, 8 ) );
+
+		nocache_headers();
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="' . $datei . '"' );
+		header( 'X-Content-Type-Options: nosniff' );
+		header( 'Content-Length: ' . strlen( $csv ) );
+
+		echo $csv; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSV text, escaped field by field in FG_Csv.
+		exit;
+	}
+
+	/**
 	 * Render the members registered for one work service.
 	 *
 	 * This list is the answer to the question the duty asks: how many people it
@@ -476,11 +534,57 @@ final class FG_Admin_Events {
 	 * @param array    $registrations Rows from the repository.
 	 * @return void
 	 */
+	/**
+	 * The address that hands out the registration list of one duty.
+	 *
+	 * A link, and not a form with a button: The list is a GET, it changes nothing
+	 * and it is the same address every time. The nonce is bound to the duty, so a
+	 * link that was copied out of the address bar of one duty does not open the
+	 * list of another — and it stands in front of a file with every e-mail address
+	 * this club has for the people in this duty.
+	 *
+	 * @param FG_Event $event Work service.
+	 * @return string
+	 */
+	private function export_url( FG_Event $event ) {
+		return wp_nonce_url(
+			add_query_arg(
+				array(
+					'action' => 'fg_export_registrations',
+					'event'  => (int) $event->id,
+				),
+				admin_url( 'admin-post.php' )
+			),
+			'fg_export_' . (int) $event->id,
+			'fg_export_nonce'
+		);
+	}
+
 	private function render_registrations( FG_Event $event, array $registrations ) {
 		$count        = count( $registrations );
 		$ueber_bedarf = (int) $event->demand > 0 && $count > (int) $event->demand;
 		?>
-		<h2><?php esc_html_e( 'Angemeldete Mitglieder', 'arbeitsdienste' ); ?></h2>
+		<h2>
+			<?php esc_html_e( 'Angemeldete Mitglieder', 'arbeitsdienste' ); ?>
+			<a
+				class="button button-secondary fg-csv-export"
+				href="<?php echo esc_url( $this->export_url( $event ) ); ?>"
+			>
+				<?php esc_html_e( 'Als CSV herunterladen', 'arbeitsdienste' ); ?>
+			</a>
+		</h2>
+		<p class="description">
+			<?php
+			// What the file carries and what it does not, on the screen that offers
+			// it. The two omitted columns are the pair that cancels a registration,
+			// and a club that wonders where they went deserves the answer here and
+			// not only in a file of documentation.
+			esc_html_e(
+				'Jede Zeile ist eine Anmeldung mit den Daten des Mitglieds und dem, wann und von wem sie eingetragen wurde. Die Spalten, mit denen sich eine Anmeldung zurücknehmen lässt, stehen nicht in der Datei: Wer sie hätte, könnte jedes Mitglied aus seinem Dienst entfernen. Der Name der Datei nennt den Dienst über seine Referenz, nicht über seinen Titel.',
+				'arbeitsdienste'
+			);
+			?>
+		</p>
 		<?php if ( 0 === (int) $event->demand ) : ?>
 			<p class="description">
 				<?php esc_html_e( 'Für diesen Arbeitsdienst ist kein Bedarf eingetragen. Deshalb steht unter der öffentlichen Seite keine Anmeldung zur Verfügung. Vom Redakteur eingetragene Mitglieder stehen trotzdem in dieser Liste.', 'arbeitsdienste' ); ?>

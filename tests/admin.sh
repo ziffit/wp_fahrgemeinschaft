@@ -923,6 +923,276 @@ hasnt "the form offers no field for the registered members" "$people" 'name="fg_
 hasnt "and no field for a list of addresses under another name" "$people" 'name="fg_participants"'
 clean "$people" "work duty with its registration list"
 
+# --- the registration list as a file
+echo "[5e1] the registration list of the duty as a CSV file"
+# Four members, and between them every way a value can break a CSV file. This is
+# the whole section: A name is typed by a person, and a person can type a
+# semicolon, two quotation marks or a line break into a surname, and a work group
+# can begin with an equals sign. A file that loses one of those is not "a bit
+# broken" — it is a list in which one member occupies two rows and every column
+# after it is shifted, and it looks plausible while it is wrong.
+CSV_DIENST=$(s make-event "CSV Datei" "$(date -d '+68 days' +%Y-%m-%d)" 9 "09:00")
+UMBRUCH=$(printf 'Zeile eins\nZeile zwei')
+CSV_SOLL="0951|Müller; Anna
+0952|Sagt \"Hallo\"
+0953|$UMBRUCH
+0954|Normal"
+# The work group of the fourth member is a formula. It is not there to prove that
+# this plugin cares about formulas — it is there to keep the decision visible: A
+# file with such a value in it runs code on the machine of whoever opens it.
+FORMEL='=HYPERLINK("http://example.org")'
+neu 0951 csv1@example.org Anna 'Müller; Anna'
+neu 0952 csv2@example.org Bernd 'Sagt "Hallo"'
+neu 0953 csv3@example.org Celine "$UMBRUCH"
+neu 0954 csv4@example.org Dora Normal "$FORMEL"
+for nr in 0951 0952 0953 0954; do
+	s drop-registration "$CSV_DIENST" "$nr" > /dev/null 2>&1
+	s register "$CSV_DIENST" "$nr" "$(s member-by-no $nr email)" > /dev/null
+done
+
+# The link is read out of the page and not assembled here. A test that builds the
+# address itself proves only that the address it built is the address it sent, and
+# this address stands in front of a file with four e-mail addresses in it.
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$CSV_DIENST")
+has "the page offers the list as a file" "$seite" "Als CSV herunterladen"
+has "and says which columns are not in it" "$seite" "nicht in der Datei"
+CSV_URL=$(printf '%s' "$seite" | tr '\n' ' ' | grep -o 'fg-csv-export"[^>]*href="[^"]*"' | grep -o 'href="[^"]*"' | sed 's/href="//;s/"$//;s/&#038;/\&/g')
+if [ -n "$CSV_URL" ]; then
+	ok "the link carries the address of the export"
+else
+	bad "the link carries the address of the export" "kein href am Knopf"
+fi
+# The nonce stands in the link, and it is bound to THIS duty: A link copied out of
+# the address bar of one duty must not open the list of another.
+if printf '%s' "$CSV_URL" | grep -q 'fg_export_nonce=[a-z0-9]\{10\}'; then
+	ok "and a nonce"
+else
+	bad "and a nonce" "$CSV_URL"
+fi
+
+CSV_KOPF=$(curl -sk -b "$JAR" -D "$DIR/export-kopf.txt" "$CSV_URL" -o "$DIR/export.csv")
+has "the answer is a file, not a page" "$(cat "$DIR/export-kopf.txt")" "Content-Type: text/csv; charset=utf-8"
+has "and it is an attachment" "$(cat "$DIR/export-kopf.txt")" 'Content-Disposition: attachment; filename="arbeitsdienste-'
+has "and no program may guess something else out of it" "$(cat "$DIR/export-kopf.txt")" "X-Content-Type-Options: nosniff"
+clean "$DIR/export.csv" "the registration list as a file"
+
+# --- what is in the file
+struct "$(cat "$DIR/export.csv")" "every row of the list comes back out of the file unchanged" "
+import csv, io, sys
+h = io.open('$DIR/export.csv', encoding='utf-8-sig').read()
+zeilen = list(csv.reader(io.StringIO(h), delimiter=';'))
+soll = {
+    '0951': ('Anna', 'Müller; Anna'),
+    '0952': ('Bernd', 'Sagt \"Hallo\"'),
+    '0953': ('Celine', 'Zeile eins\nZeile zwei'),
+    '0954': ('Dora', 'Normal'),
+}
+if len(zeilen) != 5:
+    print('the file has %d lines for 4 members' % len(zeilen), file=sys.stderr)
+    sys.exit(1)
+if len(zeilen[0]) != 12:
+    print('the header has %d columns, not 12' % len(zeilen[0]), file=sys.stderr)
+    sys.exit(1)
+for z in zeilen[1:]:
+    if len(z) != 12:
+        print('a row has %d columns: %r' % (len(z), z), file=sys.stderr)
+        sys.exit(1)
+    if z[3] not in soll:
+        print('a row names member %s' % z[3], file=sys.stderr)
+        sys.exit(1)
+    vorname, nachname = soll[z[3]]
+    if z[4] != vorname or z[5] != nachname:
+        print('member %s: read back %r / %r' % (z[3], z[4], z[5]), file=sys.stderr)
+        sys.exit(1)
+sys.exit(0)
+" "a row lost its columns, or a name came back changed"
+
+# The wording of a duty and the column names are in the interface language, and a
+# club that opens the file sees them. The header names the duty, so a file that
+# ends up in a club's mailbox says on its first line what it is about.
+struct "$(cat "$DIR/export.csv")" "the header names the duty and the columns" "
+import csv, io, sys
+h = io.open('$DIR/export.csv', encoding='utf-8-sig').read()
+kopf = list(csv.reader(io.StringIO(h), delimiter=';'))[0]
+erwartet = ['Arbeitsdienst', 'Datum', 'Beginn', 'Mitgliedsnummer', 'Vorname', 'Nachname',
+            'E-Mail-Adresse', 'Arbeitsgruppe', 'Angemeldet am', 'Eingetragen von',
+            'E-Mails', 'Herkunftsseite']
+if kopf != erwartet:
+    print('the header reads %r' % kopf, file=sys.stderr)
+    sys.exit(1)
+zeilen = list(csv.reader(io.StringIO(h), delimiter=';'))
+if zeilen[1][0] != 'CSV Datei':
+    print('the first column of the first row reads %r' % zeilen[1][0], file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "the header names the columns, and the first column names the duty"
+
+# The mark at the front. Without it Excel of an older version reads "Müller" as
+# "MÃ¼ller", and the club concludes that the export is broken rather than that the
+# program guessed the encoding.
+if [ "$(head -c 3 "$DIR/export.csv" | od -An -tx1 | tr -d ' \n')" = "efbbbf" ]; then
+	ok "the file begins with the mark that names the encoding"
+else
+	bad "the file begins with the mark that names the encoding" "$(head -c 6 "$DIR/export.csv" | od -An -tx1 | tr -d ' \n')"
+fi
+
+# The four values that decide whether the file can be opened safely somewhere
+struct "$(cat "$DIR/export.csv")" "a value that a spreadsheet would take for a formula is marked as text" "
+import csv, io, sys
+h = io.open('$DIR/export.csv', encoding='utf-8-sig').read()
+zeilen = list(csv.reader(io.StringIO(h), delimiter=';'))
+gefunden = [z for z in zeilen[1:] if z[3] == '0954']
+if not gefunden:
+    sys.exit(1)
+wert = gefunden[0][7]
+if not wert.startswith(\"'\"):
+    print('the work group is written as %r, without the mark' % wert, file=sys.stderr)
+    sys.exit(1)
+sys.exit(0 if wert[1:] == '=HYPERLINK(\"http://example.org\")' else 1)
+" "the formula in a work group is not marked as text"
+
+# --- what is NOT in the file, and that is the point of one claim
+# `unregister_hash` is the stored form of the token that cancels a registration,
+# and the removal link deletes exactly the row whose stored hash matches. A file
+# with that column is a list of links, and anyone who has it can take every
+# person in it out of every duty they are in. The check is made over the whole
+# file and not over one column, because a column that is not there cannot be
+# missed by a check that looks at the header alone — it can still be in the file.
+if grep -qE '[0-9a-f]{64}' "$DIR/export.csv"; then
+	bad "the file carries no token that could cancel a registration" "eine 64-stellige Zeichenfolge steht in der Datei"
+else
+	ok "the file carries no token that could cancel a registration"
+fi
+if grep -qi 'unregister' "$DIR/export.csv"; then
+	bad "and no column of the token pair is named" "unregister steht in der Datei"
+else
+	ok "and no column of the token pair is named"
+fi
+
+# --- the gates in front of the file
+# A wrong nonce: the same refusal as everywhere else in this admin area, and no
+# file. The claim is made on the answer, because a page with a notice in it would
+# otherwise be read as a file with a warning in it.
+falsch_nonce=$(printf '%s' "$CSV_URL" | sed 's/fg_export_nonce=[a-z0-9]*/fg_export_nonce=abcdefghij/')
+out=$(curl -sk -b "$JAR" -o "$DIR/export-ohne.csv" -w '%{http_code}' "$falsch_nonce")
+if [ "$out" = "403" ] || [ "$out" = "302" ]; then
+	ok "a wrong nonce does not hand out the file ($out)"
+else
+	bad "a wrong nonce does not hand out the file" "$out"
+fi
+if head -c 40 "$DIR/export-ohne.csv" | grep -q 'Arbeitsdienst;Datum'; then
+	bad "and the refused answer is not the file" "die Datei kam trotzdem"
+else
+	ok "and the refused answer is not the file"
+fi
+# An anonymous request. What is asserted is not a status code but the answer
+# itself: WordPress refuses the call before the plugin is reached, and which
+# refusal it is (400 here) belongs to WordPress and not to this section. The claim
+# is that no file comes out — and it is made on the content type, because a
+# refusal that still answers 200 with a file attached would pass every check on
+# a status code.
+out=$(curl -sk -D "$DIR/export-anon.txt" -o /dev/null -w '%{http_code}' "$CSV_URL")
+if grep -qi '^content-type:.*text/csv' "$DIR/export-anon.txt"; then
+	bad "an anonymous request does not hand out the file" "die Antwort ist text/csv ($out)"
+else
+	ok "an anonymous request does not hand out the file (no text/csv, status $out)"
+fi
+# The nonce of one duty does not open the list of another duty. This is the claim
+# that makes the binding worth having: Without it the address bar of any duty page
+# would be a key to every other duty of the club.
+FREMDE_URL=$(printf '%s' "$seite" | tr '\n' ' ' | grep -o 'fg-csv-export"[^>]*href="[^"]*"' | grep -o 'href="[^"]*"' | sed 's/href="//;s/"$//;s/&#038;/\&/g')
+out=$(curl -sk -b "$JAR" -o "$DIR/export-fremd.csv" -w '%{http_code}' "$(printf '%s' "$FREMDE_URL" | sed "s/event=$CSV_DIENST/event=$NEW_ID/")")
+if head -c 40 "$DIR/export-fremd.csv" | grep -q 'Arbeitsdienst;Datum'; then
+	bad "the nonce of one duty does not open the list of another" "die fremde Liste kam heraus"
+else
+	ok "the nonce of one duty does not open the list of another"
+fi
+clean "$DIR/export-ohne.csv" "a refused export"
+clean "$DIR/export-fremd.csv" "an export with a foreign nonce"
+
+# A duty that does not exist answers with the screen and a notice, not with an
+# empty file: An empty file that says nothing is indistinguishable from a duty
+# without members, and the club concludes that nobody signed up.
+# A duty that does not exist any more. The link has to be a REAL one, with the
+# nonce of that duty: A made-up address would be refused by the nonce check and
+# would prove nothing about the case. So a duty is built, its link is read, the
+# duty is deleted and the link is called — which is what happens when a club
+# deletes a duty while somebody has its page open.
+GELOESCHT=$(s make-event "Dienst geloescht" "$(date -d '+67 days' +%Y-%m-%d)" 2 "09:00")
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$GELOESCHT")
+GELOESCHT_URL=$(printf '%s' "$seite" | tr '\n' ' ' | grep -o 'fg-csv-export"[^>]*href="[^"]*"' | grep -o 'href="[^"]*"' | sed 's/href="//;s/"$//;s/&#038;/\&/g')
+s delete-event "$GELOESCHT" > /dev/null
+# With -L: The answer is a redirect to the screen, and the notice stands on the
+# screen it goes to. Without following it the body is empty, and a check for the
+# sentence in it would be red about a message that is there.
+curl -sk -b "$JAR" -L -o "$DIR/export-fehlt.csv" "$GELOESCHT_URL"
+if head -c 40 "$DIR/export-fehlt.csv" | grep -q 'Arbeitsdienst;Datum'; then
+	bad "a duty that was deleted hands out no file" "es kam eine Datei"
+else
+	ok "a duty that was deleted hands out no file"
+fi
+has "and says that nothing was downloaded" "$(cat "$DIR/export-fehlt.csv")" "Es wurde nichts heruntergeladen"
+clean "$DIR/export-fehlt.csv" "an export for a duty that does not exist"
+
+# --- who may not have the file
+# The admin suite logs in as one administrator, and a suite that only ever
+# measures the permitted path says nothing about the refusal. So this block
+# makes a WordPress account that may NOT do this and calls the very address the
+# administrator got.
+#
+# Two claims and not one, because the two say different things:
+# - No file comes out. That is the gate.
+# - The answer is the sentence OF THE PLUGIN and not the nonce question of
+#   WordPress. That is the ORDER: the capability is checked before the nonce, so a
+#   user without the permission is refused by the plugin — and a check that only
+#   looked for "no file" would be green even if the refusal had come from
+#   somewhere else entirely.
+ABO_NR=0905
+ABO_LOGIN=fgabo
+ABO_PASS='Probe1234!'
+s delete-user "$ABO_LOGIN" > /dev/null 2>&1
+if [ "$(s make-user "$ABO_LOGIN" abo@example.org subscriber "$ABO_PASS")" = "error" ]; then
+	bad "the account without permission could be made" "$(s make-user "$ABO_LOGIN" abo@example.org subscriber "$ABO_PASS")"
+else
+	ok "the account without permission could be made"
+fi
+ABO_JAR="$DIR/abo.txt"
+rm -f "$ABO_JAR"
+curl -sk -c "$ABO_JAR" -d "log=$ABO_LOGIN&pwd=$ABO_PASS&wp-submit=Anmelden&redirect_to=$BASE/wp-admin/&testcookie=1" "$BASE/wp-login.php" > /dev/null
+if grep -q 'wordpress_logged_in' "$ABO_JAR"; then
+	ok "and can log in"
+else
+	bad "and can log in" "kein Anmeldecookie"
+fi
+# The subscriber may not see the duty page either, so the link is taken from the
+# administrator's page and simply handed to the other account.
+abo=$(curl -sk -b "$ABO_JAR" -D "$DIR/abo-kopf.txt" -L -o "$DIR/abo-antwort.txt" -w '%{http_code}' "$CSV_URL")
+if grep -qi '^content-type:.*text/csv' "$DIR/abo-kopf.txt"; then
+	bad "an account without the permission gets no file" "die Antwort ist text/csv ($abo)"
+else
+	ok "an account without the permission gets no file (no text/csv, status $abo)"
+fi
+if head -c 40 "$DIR/abo-antwort.txt" | grep -q 'Arbeitsdienst;Datum'; then
+	bad "and the refusal is not the file" "die Datei kam trotzdem"
+else
+	ok "and the refusal is not the file"
+fi
+has "and it is the sentence of the plugin" "$(cat "$DIR/abo-antwort.txt")" "Du hast keine Berechtigung für diesen Bereich"
+hasnt "and not the nonce question of WordPress" "$(cat "$DIR/abo-antwort.txt")" "expired"
+if [ "$abo" = "403" ]; then
+	ok "and the answer says 403, not that the server broke ($abo)"
+else
+	bad "and the answer says 403, not that the server broke" "$abo"
+fi
+clean "$DIR/abo-antwort.txt" "the export refused to an account without permission"
+s delete-user "$ABO_LOGIN" > /dev/null
+
+for nr in 0951 0952 0953 0954; do
+	s drop-registration "$CSV_DIENST" "$nr" > /dev/null 2>&1
+	s delete-member "$(s member-by-no $nr id)" > /dev/null 2>&1
+done
+s delete-event "$CSV_DIENST" > /dev/null
+
 # --- a member is entered from the duty page, with a search and a counter
 echo "[5g] entering a member from the duty page"
 ZUWEISUNG=$(s make-event "Zuweisung" "$(date -d '+70 days' +%Y-%m-%d)" 2 "10:00")

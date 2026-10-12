@@ -448,6 +448,47 @@ switch ( $command ) {
 		}
 		break;
 
+	// make-user <login> <email> <role> <password>: a WordPress account, so that a
+	// claim can ask what happens for a user who may NOT do something. The admin
+	// suite logs in as one administrator and can therefore only ever measure the
+	// permitted path; a capability check that nobody tests looks exactly like a
+	// capability check that is not there.
+	case 'make-user':
+		$login = isset( $args[0] ) ? (string) $args[0] : '';
+		$rolle = isset( $args[2] ) && '' !== $args[2] ? (string) $args[2] : 'subscriber';
+		$vorhanden = get_user_by( 'login', $login );
+
+		if ( $vorhanden ) {
+			$vorhanden->set_role( $rolle );
+			fg_state_out( (int) $vorhanden->ID );
+			break;
+		}
+
+		$neu = wp_insert_user(
+			array(
+				'user_login' => $login,
+				'user_email' => isset( $args[1] ) ? (string) $args[1] : '',
+				'user_pass'  => isset( $args[3] ) ? (string) $args[3] : '',
+				'role'       => $rolle,
+			)
+		);
+		fg_state_out( is_wp_error( $neu ) ? 'error: ' . $neu->get_error_message() : (int) $neu );
+		break;
+
+	// delete-user <login>: gone again, so a claim that needs an account leaves
+	// none behind. A user of the test installation is not a record of the club.
+	case 'delete-user':
+		$user = get_user_by( 'login', isset( $args[0] ) ? (string) $args[0] : '' );
+
+		if ( ! $user ) {
+			fg_state_out( 'missing' );
+			break;
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/user.php';
+		fg_state_out( wp_delete_user( (int) $user->ID ) ? 'deleted' : 'refused' );
+		break;
+
 	// make-ride <event_id> <mode> <origin> <member_no>
 	//
 	// A ride belongs to a member since schema 1.4.0, so the name is looked up

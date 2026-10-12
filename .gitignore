@@ -9,6 +9,14 @@ tests/fixture.json
 tests/*.html
 # tests/mitglieder.csv   wird vom Importabschnitt des Admin-Testlaufs erzeugt
 tests/mitglieder.csv
+# Der CSV-Abschnitt des Admin-Testlaufs legt die geholte Datei und die Antworten
+# der abgelehnten Aufrufe ab. Die geholte Datei enthält echte E-Mail-Adressen der
+# Probe-Mitglieder — sie gehören in kein Repository, und schon gar nicht in eines.
+tests/export*.csv
+tests/export*.txt
+# tests/abo*.txt         Anmeldegefäß und Antworten eines WordPress-Kontos ohne
+#                        Berechtigung (wordpress_logged_in_... eines Abonnenten)
+tests/abo*.txt
 
 # Lieferfertiges Paket, wird aus dem Quellbaum erzeugt, nicht eingecheckt.
 # Bauen mit:
@@ -26,7 +34,7 @@ tests/mitglieder.csv
 #   PY
 #   Die Reihenfolge der Einträge ist für WordPress ohne Bedeutung. Maßgeblich
 #   ist, dass genau die Dateien des Plugin-Quellbaums enthalten sind, Stand
-#   28.09.2026: 24 Dateien, davon 22 PHP. Der Wurzelordner im Paket heißt
+#   12.10.2026: 25 Dateien, davon 23 PHP. Der Wurzelordner im Paket heißt
 #   arbeitsdienste, denn er bestimmt den Ordnernamen nach dem Entpacken und
 #   damit den Aktivierungs-Haken.
 arbeitsdienste.zip

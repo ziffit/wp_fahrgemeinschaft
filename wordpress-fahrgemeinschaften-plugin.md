@@ -1040,3 +1040,59 @@ gespeicherten Wert nicht mitnehmen. Die beiden Feldnamen stehen zusätzlich von 
 Positivliste von `FG_Repository::update_event()`, in `$event_columns` von `FG_Store` und in der
 Feldliste des Prüfwerkzeugs. Ein Name, der in einer dieser Listen fehlt, macht jedes Speichern
 dieses Feldes wirkungslos — lautlos, weil das Speichern Erfolg meldet.
+
+## Umsetzungsstand: Die Teilnehmerliste als Datei (1.25.8)
+
+Über der Liste der angemeldeten Mitglieder steht eine Schaltfläche **Als CSV herunterladen**.
+Der Wunsch kam als Satz aus dem Verein: „den aktuellen Stand der eingetragenen Mitglieder mit
+allen Daten, die in der Tabelle sind". Drei Dinge daran waren zu entscheiden, und keines davon
+ist eine Formatfrage.
+
+### Die zwölf Spalten, und die zwei, die nicht darin sind
+
+Der Kopf nennt den Dienst, Datum und Beginn, dann die Daten des Mitglieds und die Angaben der
+Anmeldung: Mitgliedsnummer, Vorname, Nachname, E-Mail-Adresse, Arbeitsgruppe, Angemeldet am,
+Eingetragen von, E-Mails und die Herkunftsseite.
+
+**Nicht darin: die Spalten, mit denen sich eine Anmeldung zurücknehmen lässt.** Der Token steht
+seit Schema 1.7.0 in einer eigenen Tabelle und ist über den Datensatz nicht erreichbar; der
+Abmeldelink löscht genau die Zeile, deren gespeicherter Hash zum mitgeschickten Token passt. Wer
+ihn in eine Datei schreibt, schreibt damit eine Liste von Links, mit der sich jede Person aus
+jedem Dienst nehmen lässt. `id`, `event_id` und `member_id` fehlen aus einem einfachen Grund:
+Sie sind Nummern aus zwei Tabellen und außerhalb dieser Installation ohne Aussage.
+
+### Das Semikolon, und warum nicht `fputcsv()`
+
+Ein deutsches Excel öffnet eine Datei mit Semikolon. `fputcsv()` maskiert aber nur beim Komma —
+und die Daten des Vereins enthalten Semikolons. Dieselben Daten mit Komma als Trenner liest ein
+englisches Excel ohne Nachfrage; das hieße hier: Ein Dialog, den der Verein anklicken muss, um
+die eigene Liste zu sehen. Also Semikolon, und die Maskierung von Hand:
+
+- Feld mit Trenner, Anführungszeichen, Zeilenumbruch oder Randleerzeichen → in Anführungszeichen,
+  darin jedes Anführungszeichen verdoppelt.
+- Feld mit `=`, `+`, `-` oder `@` am Anfang → führendes Apostroph. Excel und LibreOffice führen
+  den Inhalt solcher Zellen aus, und die Datei landet beim Verein.
+- UTF-8-Kennzeichnung am Anfang, sonst liest ein älteres Excel „Müller“ als „MÃ¼ller“.
+
+**„Eingetragen von“ schreibt zwei feste Werte** und nicht die Wörter der Oberfläche: Eine Datei,
+deren Wortlaut mit der Sprache der Installation wechselt, lässt sich nicht mit einer älteren
+vergleichen. Die Wörter bleiben auf dem Bildschirm.
+
+### `edit_posts`, gemessen und nicht geraten
+
+Der Endpunkt prüft dieselbe Fähigkeit wie der ganze Adminbereich. Drei Konten, gemessen:
+
+| Konto | Seite | Datei |
+| --- | --- | --- |
+| Administrator | sichtbar | ja |
+| Autor | sichtbar | **ja** |
+| Abonnent | verborgen | nein |
+
+Ein Autor darf es also — dieselbe Stufe wie überall, dieselben Daten wie auf dem Bildschirm. Der
+Export fügt keine Berechtigung hinzu, er macht nur aus „ich sehe die Liste“ ein „ich nehme sie
+mit“. Enger gefasst wurde bewusst nicht: Der Verein soll den Bereich selbst verwalten können;
+wer es anheben will, braucht eine eigene Fähigkeit und eine Zeile im Theme.
+
+Die Prüfsumme des Aufrufs ist an den einen Dienst gebunden, und die Berechtigung wird **vor** der
+Prüfsumme geprüft — sonst bekäme ein Konto ohne Recht die Frage von WordPress statt des Satzes des
+Plugins, und die Behauptung, die das bewacht, wäre nicht zu erfüllen.

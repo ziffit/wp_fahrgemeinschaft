@@ -4,13 +4,20 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 12.10.2026 — **öffentliches HTTP 270, Mail-Ebene 124, Admin-Ebene 702,
-0 Fehler**, gegen den Stand **Plugin 1.25.7, Schema 1.9.0**, dazu **zwölf von zwölf
-Gegenproben mit dem gestellten Fehlerbild rot** (zwei davon aus dieser Fassung; die 33 der
-Fassungen davor wurden in diesem Lauf nicht wiederholt). HTTP und Mail sind unverändert,
-die Admin-Ebene ist um 9 höher. Die CLI-Suite wurde **nicht** gefahren: Sie löscht
-Arbeitsdienste, Fahrgemeinschaften und Mitglieder, und dafür ist die Zustimmung nötig; ihr
-Stand ist der von 1.25.4.
+Letzter Lauf: 12.10.2026 — **öffentliches HTTP 270, Mail-Ebene 124, Admin-Ebene 733,
+0 Fehler**, gegen den Stand **Plugin 1.25.8, Schema 1.9.0**, dazu **sechzehn von sechzehn
+Gegenproben mit dem gestellten Fehlerbild rot** (vier davon aus dieser Fassung; die 33 der
+Fassungen davor wurden in diesem Lauf nicht wiederholt). HTTP und Mail sind unverändert, die
+Admin-Ebene ist um 31 höher. Die CLI-Suite wurde **nicht** gefahren: Sie löscht Arbeitsdienste,
+Fahrgemeinschaften und Mitglieder, und dafür ist die Zustimmung nötig; ihr Stand ist der von
+1.25.4.
+
+Der Lauf ging einer Frage nach — „ist der Endpunkt abgesichert?“ — und hat eine **Lücke in den
+Prüfungen** gezeigt, nicht im Plugin: Die Admin-Suite meldet sich als ein Administrator an, also
+konnte sie die Berechtigungsprüfung gar nicht messen. Sie kann jetzt ein Konto anlegen. Und die
+Messung selbst hat eine Grenze sichtbar gemacht, die im README festgehalten ist: **`edit_posts`
+gilt auch für Autor und Beiträger.** Der Export fügt keine Berechtigung hinzu, aber er macht aus
+„ich sehe die Liste“ ein „ich nehme sie mit“.
 
 Der Lauf ging einer Frage nach — „wie lange kann ich mich anmelden?“ — und hat zwei Dinge
 gezeigt, die nicht im Plugin liegen. Fünf Ablehnungs-Behauptungen im Admin-Satz hätten nach der
@@ -2786,6 +2793,93 @@ HTTP **270**, Mail 124, Admin **702**, 0 Fehler. HTTP und Mail sind unverändert
 Fassung berührt nichts, was ein Browser liest, und nichts, was in einer E-Mail steht. Die
 Admin-Ebene ist um 9 höher: zwei Behauptungen über die Beschriftung, eine über das Pflichtfeld
 und sechs über die Ablehnung. Die CLI-Suite wurde nicht gefahren.
+
+## Fassung 1.25.8: die Teilnehmerliste als Datei
+
+Aus dem Verein, mit einem Satz: „Können wir einen CSV-Export für Arbeitsdienste machen? Den aktuellen
+Stand der eingetragenen Mitglieder mit allen Daten, die in der Tabelle sind." Das Schema bleibt bei
+1.9.0; es kommen keine Spalten dazu, es werden welche **ausgegeben**.
+
+### Zwei Dinge standen nicht im Wunsch und mussten entschieden werden
+
+**Was nicht hinein darf: die Spalten, mit denen sich eine Anmeldung zurücknehmen lässt.** Der
+Token steht seit Schema 1.7.0 in einer eigenen Tabelle; der Abmeldelink löscht genau die Zeile,
+deren gespeicherter Hash zum Token passt. Eine Datei mit dieser Spalte ist eine Liste von Links,
+und jeder, der sie hat, kann jede Person aus jedem Dienst nehmen. `id`, `event_id` und `member_id`
+fallen aus einem anderen Grund: Sie sind Nummern aus zwei Tabellen und außerhalb dieser
+Installation ohne Aussage.
+
+**Was der Export an Berechtigung braucht: `edit_posts`, und damit mehr als „nur der Admin“.**
+Auf die Nachfrage des Verfassers hin mit drei echten Konten gemessen — Administrator und **Autor**
+kommen an die Datei, ein Abonnent nicht. Der Autor darf es deshalb, weil er dieselbe Stufe überall
+im Plugin hat und dieselben Daten auf der Dienstseite ohnehin sieht. Der Export fügt keine
+Berechtigung hinzu, er macht aus „ich sehe die Liste“ ein „ich nehme sie mit“. **Enger gefasst
+wurde auf ausdrücklichen Wunsch nicht**; der Grund steht in der Datei.
+
+### Der Handlauf fand den Fehler, den vier Behauptungen nicht gefunden hätten
+
+`$zeilen = array( self::kopf( $event ) );` — der Kopf war als **Array** in die Zeilenliste gelegt
+statt als Zeile, `implode()` schrieb das Wort „Array“ in die Datei, wo ein Spaltenname hingehört,
+und die Warnung danach machte alle HTTP-Kopfzeilen unbrauchbar. Der Export war damit eine Seite mit
+Warnungen und ohne Datei.
+
+### Zwei eigene Fehler in den Behauptungen
+
+- **Der Statuscode.** Die Behauptung „ein anonymer Aufruf bekommt keine Datei“ prüfte 302 oder 403
+  — die Antwort von WordPress ist aber **400**, und die ist nicht von diesem Plugin. Geprüft wird
+  jetzt der **Inhaltstyp**: Eine Ablehnung, die trotzdem 200 mit angehängter Datei gäbe, würde an
+  jeder Statuscode-Prüfung vorbeikommen.
+- **Der gelöschte Dienst.** Der Hinweis „Es wurde nichts heruntergeladen“ stand nicht im Rumpf,
+  weil die Ablehnung **umleitet** und der Hinweis auf dem Bildschirm steht, zu dem umgeleitet wird.
+  Die Behauptung folgt der Weiterleitung jetzt mit `-L`. Und sie benutzt einen **echten** Link mit
+  der Prüfsumme dieses Dienstes: Eine ausgedachte Adresse würde an der Prüfsumme scheitern und
+  nichts über den Fall beweisen, um den es geht — ein gelöschter Dienst bei offenem Link.
+
+### Die Berechtigungsprüfung hatte keine Behauptung, und das kam von der Frage
+
+Die Admin-Suite meldet sich als **ein** Administrator an und kann damit nur den erlaubten Weg
+messen. Eine Berechtigungsprüfung, die niemand prüft, sieht genau aus wie eine, die es nicht gibt.
+`tests/state.php` kann jetzt ein WordPress-Konto anlegen und wieder löschen, und die Suite
+versucht es mit einem Abonnenten.
+
+Dafür sind es **zwei** Behauptungen, und die zweite ist die eigentliche:
+
+| Behauptung | |
+| --- | --- |
+| ein Konto ohne Berechtigung bekommt keine Datei | die Schranke |
+| die Antwort ist der Satz des Plugins, nicht die Prüfsummen-Frage von WordPress | die **Reihenfolge** |
+
+Die erste bleibt grün, wenn nur die Prüfsumme fehlt — denn dann wird der Aufruf auch abgewiesen,
+eben an einer anderen Stelle. Die zweite wird genau dann rot. Deshalb ist sie die Nadel der
+Gegenprobe 16.
+
+Und als Nebenbefund: Die Ablehnung antwortete mit **500**. Eine Ablehnung ist kein kaputter Server,
+und eine 500 landet im Fehlerprotokoll des Vereins und überall dort, wo Fehler gezählt werden. Der
+Export antwortet jetzt mit 403. **Die drei anderen Handlungen derselben Klasse tun es noch nicht**
+— dieselbe Einzeiler-Zeile, älter, und von dieser Fassung nicht angefasst.
+
+### Vier Gegenproben, alle vier rot
+
+| # | Störung | Behauptung, die rot wird |
+| --- | --- | --- |
+| 13 | die Datei maskiert ihre Felder nicht | jede Zeile kommt unverändert zurück |
+| 14 | das Zeichen für einen Formelwert fehlt | der Wert steht als Text drin |
+| 15 | die Datei holt sich den Abbruch-Token dazu | die Datei trägt kein Token |
+| 16 | die Berechtigung wird nicht geprüft | die Antwort ist der Satz des Plugins |
+
+Probe 15 ist die aufwendigste, und das ist richtig so: Der Token ist über den Datensatz nicht
+erreichbar, eine Störung, die ihn in die Datei schreibt, braucht also eine eigene Abfrage — genau
+so, wie es ein unbedachter Einbauer machen würde.
+
+Zusammen mit den zwölf der drei Fassungen davor: **sechzehn von sechzehn** rot mit dem gestellten
+Fehlerbild.
+
+### Läufe
+
+HTTP **270**, Mail 124, Admin **733**, 0 Fehler. HTTP und Mail sind unverändert — der Export
+berührt nichts, was ein Browser öffentlich liest, und nichts, was in einer E-Mail steht. Die
+Admin-Ebene ist um 31 höher: die Behauptungen des Exports, die des Rundlaufs, die des Formelwerts
+und die der Berechtigung. Die CLI-Suite wurde nicht gefahren.
 
 ## Mail-Auswertung
 
