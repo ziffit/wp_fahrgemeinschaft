@@ -207,10 +207,10 @@ final class FG_Admin_Events {
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="fg-time"><?php esc_html_e( 'Beginn (Uhrzeit, optional)', 'arbeitsdienste' ); ?></label></th>
+						<th scope="row"><label for="fg-time"><?php esc_html_e( 'Beginn (Uhrzeit)', 'arbeitsdienste' ); ?></label></th>
 						<td>
-							<input type="time" id="fg-time" name="fg_event_time" value="<?php echo esc_attr( $time ); ?>">
-							<span class="description"><?php esc_html_e( 'Ohne Uhrzeit gilt der ganze Tag. Mit Uhrzeit endet die Anmeldung zu Fahrgemeinschaften mit diesem Zeitpunkt, weil der Dienst dann beginnt.', 'arbeitsdienste' ); ?></span>
+							<input type="time" id="fg-time" name="fg_event_time" value="<?php echo esc_attr( $time ); ?>" required>
+							<span class="description"><?php esc_html_e( 'Zu dieser Uhrzeit beginnt der Dienst, und zu dieser Uhrzeit endet die Anmeldung — für diesen Arbeitsdienst und für die Fahrgemeinschaften zu ihm.', 'arbeitsdienste' ); ?></span>
 						</td>
 					</tr>
 					<tr>
@@ -866,8 +866,20 @@ final class FG_Admin_Events {
 			$this->redirect_back( $event_id );
 		}
 
-		if ( '' !== $raw_time && ! FG_Repository::is_valid_time( $raw_time ) ) {
-			FG_Admin::store_notice( __( 'Die Uhrzeit wurde nicht gespeichert, weil sie ungültig ist.', 'arbeitsdienste' ), 'error' );
+		// Since 1.25.7 the start time is a required field, and the server says so
+		// as well as the browser: A post does not have to come from this form, and
+		// a duty without a start time would be one whose registration window is
+		// open until midnight without anyone having decided that. The message says
+		// that nothing was written, like the one for the date beside it — the old
+		// wording ("the time was not saved") described a save that no longer
+		// exists, because an unusable time now refuses the whole record.
+		if ( '' === $raw_time ) {
+			FG_Admin::store_notice( __( 'Bitte eine Startzeit eingeben. Es wurde nichts gespeichert.', 'arbeitsdienste' ), 'error' );
+			$this->redirect_back( $event_id );
+		}
+
+		if ( ! FG_Repository::is_valid_time( $raw_time ) ) {
+			FG_Admin::store_notice( __( 'Die Startzeit ist keine gültige Uhrzeit. Es wurde nichts gespeichert.', 'arbeitsdienste' ), 'error' );
 			$this->redirect_back( $event_id );
 		}
 

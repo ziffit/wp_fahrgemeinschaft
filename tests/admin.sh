@@ -506,9 +506,21 @@ has "group field present" "$screen" 'name="fg_group_name"'
 has "demand field present" "$screen" 'name="fg_demand"'
 has "duration field present" "$screen" 'name="fg_duration_hours"'
 has "description field present" "$screen" 'name="fg_description"'
-# The time is the point where the duty starts, so the field says so.
-has "the time field is named as the start" "$screen" "Beginn (Uhrzeit, optional)"
-has "the start is explained" "$screen" "weil der Dienst dann beginnt"
+# The time is the point where the duty starts, so the field says so. It says
+# nothing about being optional any more: Since 1.25.7 the start time is required,
+# and a label that still said "optional" would promise the club a duty without one
+# that the server then refuses.
+has "the time field is named as the start" "$screen" "Beginn (Uhrzeit)"
+hasnt "and it is not offered as optional any more" "$screen" "Beginn (Uhrzeit, optional)"
+has "the start is explained" "$screen" "Zu dieser Uhrzeit beginnt der Dienst"
+# The required attribute is asked for AT this field and not somewhere on the page:
+# "required" stands on four other fields of this form, and a check that only looked
+# for the word would be answered by any of them.
+if [ "$(printf '%s' "$screen" | feld fg_event_time "['type=\"time\"', 'required']")" = "ok" ]; then
+	ok "the form has a required time field fg_event_time"
+else
+	bad "the form has a required time field fg_event_time" "$(printf '%s' "$screen" | feld fg_event_time "['type=\"time\"', 'required']")"
+fi
 # A browser stops a long text in the field; a post does not have to.
 has "the group field carries its limit" "$screen" 'maxlength="100"'
 has "the description field carries its limit" "$screen" 'maxlength="500"'
@@ -700,7 +712,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/edited.html" -w '%{url_effective}
 	--data-urlencode "fg_event_nonce=$ENONCE" \
 	--data-urlencode "fg_title=Geänderter Dienst" \
 	--data-urlencode "fg_event_date=2027-03-05" \
-	--data-urlencode "fg_event_time=" \
+	--data-urlencode "fg_event_time=09:15" \
 	--data-urlencode "fg_group_name=Winterdienst Süd" \
 	--data-urlencode "fg_demand=1" \
 	--data-urlencode "fg_duration_hours=" \
@@ -710,7 +722,10 @@ edited=$(cat "$DIR/edited.html")
 has "save confirms the change" "$edited" "Der Arbeitsdienst wurde gespeichert."
 if [ "$(s event "$NEW_ID" title)" = "Geänderter Dienst" ]; then ok "title stored"; else bad "title stored" "$(s event "$NEW_ID" title)"; fi
 if [ "$(s event "$NEW_ID" event_date)" = "2027-03-05" ]; then ok "changed date stored"; else bad "changed date stored" "$(s event "$NEW_ID" event_date)"; fi
-if [ "$(s event "$NEW_ID" event_time)" = "" ]; then ok "cleared time stored as empty"; else bad "cleared time stored as empty" "$(s event "$NEW_ID" event_time)"; fi
+# The start time is a required field since 1.25.7, so this save carries one and the
+# claim says that it was stored. Until then the save cleared the time and the claim
+# said exactly that — and clearing it is what the next block now refuses.
+if [ "$(s event "$NEW_ID" event_time)" = "09:15" ]; then ok "changed time stored"; else bad "changed time stored" "$(s event "$NEW_ID" event_time)"; fi
 if [ "$(s event "$NEW_ID" group_name)" = "Winterdienst Süd" ]; then ok "changed group stored"; else bad "changed group stored" "$(s event "$NEW_ID" group_name)"; fi
 if [ "$(s event "$NEW_ID" demand)" = "1" ]; then ok "changed demand stored"; else bad "changed demand stored" "$(s event "$NEW_ID" demand)"; fi
 # An emptied field means the club no longer states a duration, and the stored
@@ -718,6 +733,42 @@ if [ "$(s event "$NEW_ID" demand)" = "1" ]; then ok "changed demand stored"; els
 if [ "$(s event "$NEW_ID" duration_hours)" = "0" ]; then ok "cleared duration stored as no statement"; else bad "cleared duration stored as no statement" "$(s event "$NEW_ID" duration_hours)"; fi
 if [ "$(s event "$NEW_ID" description)" = "Neu: nur noch drei Personen gebraucht." ]; then ok "changed description stored"; else bad "changed description stored" "$(s event "$NEW_ID" description)"; fi
 clean "$edited" "work duty edit"
+
+echo "[5b1] a duty cannot be saved without a start time"
+# A browser stops at the field. A post does not have to come from the form, and a
+# duty whose registration window runs to midnight because nobody typed a time is
+# not something a club asked for. So the server refuses it too — and the claim is
+# made on the record, not on the message: A page can say "nothing was saved" while
+# the record behind it has lost three other fields of the save.
+out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/ohne-beginn.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+	--data-urlencode "action=fg_save_event" \
+	--data-urlencode "fg_event_id=$NEW_ID" \
+	--data-urlencode "fg_event_nonce=$ENONCE" \
+	--data-urlencode "fg_title=Titel trotz fehlender Startzeit" \
+	--data-urlencode "fg_event_date=2027-03-06" \
+	--data-urlencode "fg_event_time=" \
+	--data-urlencode "fg_group_name=Süd" \
+	--data-urlencode "fg_demand=4")
+ohne_beginn=$(cat "$DIR/ohne-beginn.html")
+has "a duty without a start time is refused by name" "$ohne_beginn" "Bitte eine Startzeit eingeben"
+has "and the message says that nothing was written" "$ohne_beginn" "Es wurde nichts gespeichert."
+hasnt "and it is not the message of a successful save" "$ohne_beginn" "Der Arbeitsdienst wurde gespeichert."
+if [ "$(s event "$NEW_ID" title)" = "Geänderter Dienst" ]; then
+	ok "and the title of the refused save is not in the record"
+else
+	bad "and the title of the refused save is not in the record" "$(s event "$NEW_ID" title)"
+fi
+if [ "$(s event "$NEW_ID" event_time)" = "09:15" ]; then
+	ok "and the start time of the record is the one of the last save that worked"
+else
+	bad "and the start time of the record is the one of the last save that worked" "$(s event "$NEW_ID" event_time)"
+fi
+if [ "$(s event "$NEW_ID" event_date)" = "2027-03-05" ]; then
+	ok "and the date is unchanged as well"
+else
+	bad "and the date is unchanged as well" "$(s event "$NEW_ID" event_date)"
+fi
+clean "$ohne_beginn" "work duty save without a start time"
 
 echo "[5c1] a value the store does not accept is refused, and nothing changes"
 LANG_GRUPPE=$(python3 -c "print('ä' * 101)")
@@ -727,6 +778,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/toolong.html" -w '%{url_effective
 	--data-urlencode "fg_event_nonce=$ENONCE" \
 	--data-urlencode "fg_title=Geänderter Dienst" \
 	--data-urlencode "fg_event_date=2027-03-05" \
+	--data-urlencode "fg_event_time=07:30" \
 	--data-urlencode "fg_group_name=$LANG_GRUPPE" \
 	--data-urlencode "fg_demand=2" \
 	)
@@ -745,6 +797,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/toolong2.html" -w '%{url_effectiv
 	--data-urlencode "fg_event_nonce=$ENONCE" \
 	--data-urlencode "fg_title=Geänderter Dienst" \
 	--data-urlencode "fg_event_date=2027-03-05" \
+	--data-urlencode "fg_event_time=07:30" \
 	--data-urlencode "fg_description=$LANG_TEXT" \
 	)
 toolong2=$(cat "$DIR/toolong2.html")
@@ -760,6 +813,7 @@ for raw in -3 2.5 acht 1e3; do
 		--data-urlencode "fg_event_nonce=$ENONCE" \
 		--data-urlencode "fg_title=Geänderter Dienst" \
 		--data-urlencode "fg_event_date=2027-03-05" \
+		--data-urlencode "fg_event_time=07:30" \
 		--data-urlencode "fg_demand=$raw" \
 		)
 	count_bad=$(cat "$DIR/count.html")
@@ -776,6 +830,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/exact.html" -w '%{url_effective}'
 	--data-urlencode "fg_event_nonce=$ENONCE" \
 	--data-urlencode "fg_title=Geänderter Dienst" \
 	--data-urlencode "fg_event_date=2027-03-05" \
+	--data-urlencode "fg_event_time=07:30" \
 	--data-urlencode "fg_group_name=$(python3 -c "print('ä' * 100)")" \
 	--data-urlencode "fg_demand=0" \
 	--data-urlencode "fg_description=$(python3 -c "print('ö' * 500)")" \
@@ -824,6 +879,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/plain.html" -w '%{url_effective}'
 	--data-urlencode "fg_event_nonce=$ENONCE" \
 	--data-urlencode "fg_title=Geänderter Dienst" \
 	--data-urlencode "fg_event_date=2027-03-05" \
+	--data-urlencode "fg_event_time=07:30" \
 	--data-urlencode "fg_group_name=Gruppe < Nord" \
 	--data-urlencode "fg_description=Motive < 2 m, <b>fett</b>" \
 	)

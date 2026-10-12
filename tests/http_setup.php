@@ -149,7 +149,15 @@ if ( ! $voller_drin['id'] ) {
 	exit( 1 );
 }
 
-// This duty has a web address of a meeting point and NO text for it. Nothing
+// This duty has NO START TIME, and that is deliberate: Since 1.25.7 the form asks
+// for one and the server refuses a save without it, so a duty like this one can
+// only come from before that version. It stands here on purpose, because the
+// rule in FG_Repository::is_event_active() that keeps such a duty open until the
+// end of its date is exactly the rule that would be missing if every duty in the
+// fixture carried a time — and a rule that nothing exercises is a rule that is
+// one version away from being deleted as dead code.
+//
+// This duty also has a web address of a meeting point and NO text for it. Nothing
 // about it may show up: a link with an empty wording says nothing and leads
 // nowhere, and a row with nothing in it is a question the reader has to ask the
 // club. The claim about that is on the public page; here the address is stored

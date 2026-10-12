@@ -364,7 +364,8 @@ final class FG_Repository {
 	/**
 	 * Determine whether an event may be shown publicly right now.
 	 *
-	 * An optional time is the public cut-off. Without a time the event stays
+	 * The time is the public cut-off, and since 1.25.7 the form requires it. A duty
+	 * without a time — one from before that version, or one written by code — stays
 	 * available until the end of its date.
 	 *
 	 * @param FG_Event|int $event Event or event ID.
@@ -388,6 +389,12 @@ final class FG_Repository {
 			return true;
 		}
 
+		// A duty without a start time stays open until the end of its date. Since
+		// 1.25.7 the form does not let that happen any more — the start time is a
+		// required field there — but this branch is not dead code: A duty created
+		// before that version has no time, and without this branch it would leave
+		// the public page the moment the club installed the update. A duty that
+		// nobody can see any more is a duty whose participants are gone.
 		if ( '' === $event->event_time ) {
 			return true;
 		}

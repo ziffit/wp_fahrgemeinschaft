@@ -997,6 +997,40 @@ in der E-Mail macht WordPress aus ihr ein Bild — dieselbe Angabe, zwei Darstel
 müssen das getrennt erwarten; eine Prüfung, die in der Mail nach den zwei Zeichen der Nadel sucht,
 ist rot bei einer richtigen Mail.
 
+### Die Startzeit wird Pflicht (seit 1.25.7)
+
+Die Frist, bis zu der sich zu einem Dienst anmelden lässt, war und ist der **Beginn** des
+Dienstes: `FG_Repository::is_event_active()` lässt einen Dienst mit Uhrzeit offen, solange
+jetzt ≤ der Beginn ist, und einen ohne Uhrzeit bis zum Ende seines Tages. Seit 1.25.7 fragt
+das Formular die Uhrzeit ab, und der Server weist eine Speicherung ohne sie ab.
+
+Der Grund ist nicht Ordnungsliebe. Ein leeres Feld ist kein Fehler, also hätte ein Dienst
+ohne Uhrzeit ein Anmeldefenster, das niemand beschlossen hat: sein ganzer Tag. Bei einem
+Dienst, der um 08:00 beginnt und um 16:00 vorbei ist, wäre das ein Unterschied von acht
+Stunden — und niemand sähe ihn, weil nirgends eine Zeile von ihm spricht.
+
+**Der Server sagt es noch einmal, mit demselben Satz wie beim Datum.** Ein Antrag muss nicht
+aus dem Formular kommen. Die Meldung lautet deshalb „Bitte eine Startzeit eingeben. Es wurde
+nichts gespeichert." und nicht mehr „Die Uhrzeit wurde nicht gespeichert, weil sie ungültig
+ist." — jener Satz beschrieb eine Speicherung, die es nicht mehr gibt: Ein unbrauchbarer
+Beginn weist seit dieser Fassung den **ganzen** Datensatz ab, wie ein ungültiges Datum.
+
+**Zwei Dinge bleiben bewusst unverändert**, und beide sind Rückwärtskompatibilität:
+
+- `FG_Repository::insert_event()` / `update_event()` nehmen eine leere Uhrzeit weiterhin an.
+  Die Schicht bedient auch die Prüfwerkzeuge und die CLI-Suite, die Dienste ohne Uhrzeit
+  brauchen; die Pflicht steht im Formular und im Server, der sie bedient.
+- `is_event_active()` behandelt eine leere Uhrzeit als „bis zum Ende des Tages“. Jeder Dienst,
+  der vor dieser Fassung ohne Uhrzeit angelegt wurde, ist sonst beim ersten Aufruf nach der
+  Aktualisierung von der öffentlichen Seite verschwunden — und mit ihm die Anmeldungen aller,
+  die mitgekommen sind. Ein alter Datensatz wird nicht nachgebessert, er bleibt sichtbar und
+  an seinem Tag anmeldbar; wer ihn im Adminbereich öffnet, trägt beim Speichern eine Uhrzeit
+  ein.
+
+Damit die Regel für diesen Zweig nicht als toter Code aussieht, trägt die HTTP-Fixture seit
+dieser Fassung **einen** Dienst ganz ohne Uhrzeit — mit einem Kommentar, der sagt, dass er
+genau dafür da ist.
+
 ### Für das Speichern gilt dieselbe Regel wie darunter im Repository
 
 **Nicht mitgeschickt heißt behalten, mitgeschickt und leer heißt gelöscht.** Der Browser schickt

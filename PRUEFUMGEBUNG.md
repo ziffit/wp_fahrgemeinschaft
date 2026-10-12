@@ -4,13 +4,20 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 01.10.2026 — **öffentliches HTTP 270, Mail-Ebene 124, Admin-Ebene 693,
-0 Fehler**, gegen den Stand **Plugin 1.25.6, Schema 1.9.0**, dazu **zehn von zehn
-Gegenproben mit dem gestellten Fehlerbild rot** (drei davon aus dieser Fassung; die 33 der
-Fassungen davor wurden in diesem Lauf nicht wiederholt). HTTP ist um 4 höher als bei 1.25.5,
-Mail und Admin sind unverändert. Die CLI-Suite wurde **nicht** gefahren: Sie löscht
+Letzter Lauf: 12.10.2026 — **öffentliches HTTP 270, Mail-Ebene 124, Admin-Ebene 702,
+0 Fehler**, gegen den Stand **Plugin 1.25.7, Schema 1.9.0**, dazu **zwölf von zwölf
+Gegenproben mit dem gestellten Fehlerbild rot** (zwei davon aus dieser Fassung; die 33 der
+Fassungen davor wurden in diesem Lauf nicht wiederholt). HTTP und Mail sind unverändert,
+die Admin-Ebene ist um 9 höher. Die CLI-Suite wurde **nicht** gefahren: Sie löscht
 Arbeitsdienste, Fahrgemeinschaften und Mitglieder, und dafür ist die Zustimmung nötig; ihr
 Stand ist der von 1.25.4.
+
+Der Lauf ging einer Frage nach — „wie lange kann ich mich anmelden?“ — und hat zwei Dinge
+gezeigt, die nicht im Plugin liegen. Fünf Ablehnungs-Behauptungen im Admin-Satz hätten nach der
+neuen Prüfung die **falsche** Meldung bekommen und wären grün geblieben, ohne das zu prüfen,
+was sie behaupten; sie tragen jetzt eine gültige Uhrzeit. Und in einer Datei, die `/bin/sh`
+liest, hat ein nicht maskiertes `"` beim Schreiben die Behauptung so verändert, dass sie wie
+ein echter Befund aussah.
 
 Der Lauf hat zwei Dinge zutage gefördert, die keine Fehler des Plugins sind: Ein
 unmaskiertes Anführungszeichen hat zum **dritten Mal** einen Python-Block abgeschnitten,
@@ -2696,6 +2703,89 @@ Code gelesen); der Blockanfang ist jetzt die `import`-Zeile.
 HTTP **270**, Mail 124, Admin **693**, 0 Fehler. HTTP ist um 4 höher: die vier Behauptungen
 dieser Fassung. Mail unverändert, Admin unverändert — an beiden hat diese Fassung nichts
 geändert. Die CLI-Suite wurde nicht gefahren.
+
+## Fassung 1.25.7: die Startzeit wird zum Pflichtfeld
+
+Aus dem Verein, mit einem Satz: „Obwohl ich die Startzeit vielleicht als Pflichtfeld sehen
+würde." Hintergrund ist die Prüfung der Anmeldefrist aus demselben Tag: Die Frist ist der
+Beginn des Dienstes, und ein Dienst **ohne** Uhrzeit hatte damit ein Anmeldefenster bis
+23:59 Uhr seines Tages, das niemand beschlossen hatte. Bei einem Dienst von 08:00 bis 16:00
+sind das acht Stunden Unterschied, und niemand sähe sie, weil nirgends eine Zeile davon
+spricht.
+
+**Das Schema bleibt bei 1.9.0.** An den Spalten ändert sich nichts; ein leeres Feld ist kein
+Fehler, und die Pflicht steht im Formular und im Server, der es bedient.
+
+### Was der Server jetzt sagt
+
+| vorher | jetzt |
+| --- | --- |
+| „Die Uhrzeit wurde nicht gespeichert, weil sie ungültig ist." (nur bei einer **ungültigen**) | „Bitte eine Startzeit eingeben. Es wurde nichts gespeichert." (auch bei einer **leeren**) |
+| — | „Die Startzeit ist keine gültige Uhrzeit. Es wurde nichts gespeichert." |
+
+Der erste Satz beschrieb eine Speicherung, die es nicht mehr gibt: Ein unbrauchbarer Beginn
+weist seit dieser Fassung den **ganzen** Datensatz ab, wie ein ungültiges Datum. Zwei
+verschiedene Fehler, zwei verschiedene Sätze — nach derselben Überlegung, aus der schon die
+zwei Sätze für „voll“ und „kein Bedarf“ entstanden sind.
+
+### Fünf Speicherungen im Admin-Satz mussten eine Uhrzeit bekommen
+
+Die Falle, die dieser Lauf bereithielt: Fünf Ablehnungs-Behauptungen erwarteten eine
+**bestimmte andere** Meldung (zu lange Gruppe, zu lange Beschreibung, Bedarf ohne Zahl). Ohne
+Uhrzeit im Antrag hätte zuerst die neue Prüfung geantwortet — und die Behauptung wäre grün
+geblieben, ohne das geprüft zu haben, was sie behauptet. Deshalb tragen diese fünf Speicherungen
+jetzt eine gültige Uhrzeit. Zwei weitere bleiben **ohne** Uhrzeit, und zwar mit Absicht: die
+falsche Prüfsumme und die Anmeldung ohne Berechtigung. Beide werden vorher abgewiesen — am
+Feld `fg_event_nonce` bzw. an der Berechtigung — und dürfen nicht von einem Feld abhängen, das
+sie gar nicht erreichen.
+
+### Eine Behauptung hat das Gegenteil behauptet
+
+`[5b]` speicherte bis eben **ohne** Uhrzeit und behauptete: „cleared time stored as empty“.
+Das war der Behauptungssatz für genau das, was diese Fassung verbietet. Sie wurde ersetzt
+durch „changed time stored“ (mit Uhrzeit) und einen neuen Abschnitt `[5b1]`, der das Verbot
+prüft: abgelehnt, Feld im Satz, **und nichts am Datensatz geändert** — an drei Feldern einzeln,
+weil eine Seite „nichts gespeichert“ sagen kann, während der Datensatz drei andere Felder
+verloren hat.
+
+### Was absichtlich unverändert bleibt
+
+`FG_Repository` nimmt eine leere Uhrzeit weiterhin an, und `is_event_active()` behandelt sie
+als „bis zum Ende des Tages“. Der zweite Zweig ist kein toter Code: Jeder Dienst, der vor
+dieser Fassung ohne Uhrzeit angelegt wurde, verschwände sonst beim ersten Aufruf nach der
+Aktualisierung von der öffentlichen Seite — und mit ihm alle Anmeldungen, die mitgekommen
+sind. Damit dieser Zweig nicht weggeräumt wird, weil er einmal unerreichbar aussah, trägt die
+HTTP-Fixture seit dieser Fassung **einen** Dienst ganz ohne Uhrzeit, mit einem Kommentar, der
+genau das sagt.
+
+### Zwei Gegenproben, und der Rücklauf des Werkzeugs
+
+| # | Störung | Behauptung, die rot wird |
+| --- | --- | --- |
+| 11 | das Formular lässt das `required` weg | das Formular hat ein Pflichtfeld `fg_event_time` |
+| 12 | der Server nimmt eine leere Startzeit wieder hin | ein Dienst ohne Startzeit wird mit Namen abgelehnt |
+
+Zusammen mit den zehn der beiden Fassungen davor: **zwölf von zwölf** rot mit dem gestellten
+Fehlerbild.
+
+Der Lauf hat außerdem gezeigt, dass das Gegenproben-Werkzeug nach einem `/tmp`, das geleert
+worden war, **vollständig neu gebaut** werden musste — vorher lagen die Störungen in zwölf
+einzelnen Dateien. Sie stehen jetzt in **einer** Python-Datei mit der Nummer als Argument.
+Der Wiederaufbau eines Werkzeugs, das man nur am Ende eines Laufs braucht, gehört nicht in
+zwölf Schritten.
+
+Und eine eigene Falle beim Schreiben: In `tests/admin.sh` entstand die Zeile
+`feld fg_event_time "['type="time"', 'required']"` — die inneren Anführungszeichen schlossen
+den äußeren String, bash entfernte sie, und gesucht wurde nach `type=time`. Die Behauptung
+war rot und **sah nach echtem Befund aus**. In einer Datei, die/bash liest, muss ein `"` als
+`\"` geschrieben werden.
+
+### Läufe
+
+HTTP **270**, Mail 124, Admin **702**, 0 Fehler. HTTP und Mail sind unverändert — diese
+Fassung berührt nichts, was ein Browser liest, und nichts, was in einer E-Mail steht. Die
+Admin-Ebene ist um 9 höher: zwei Behauptungen über die Beschriftung, eine über das Pflichtfeld
+und sechs über die Ablehnung. Die CLI-Suite wurde nicht gefahren.
 
 ## Mail-Auswertung
 
