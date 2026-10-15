@@ -180,12 +180,25 @@ def stoerung_19(s):
     return s.replace(alt, neu, 1), None, 'class-fg-admin-mails.php'
 
 
+def stoerung_20(s):
+    # Die Angabe der Stellenzahl fehlt in EINEM der drei Formulare — hier im
+    # Anmeldeformular des Arbeitsdienstes, waehrend die beiden anderen sie tragen.
+    # Das ist der Fehler, den man beim Umbau macht, wenn man nur an die eine Seite
+    # denkt: Zwei Formulare sagen "4-stellig", das dritte nicht, und niemand
+    # vergleicht sie. Die Behauptung zaehlt alle drei und nennt das fehlende.
+    alt = "<?php esc_html_e( 'Mitgliedsnummer (4-stellig)', 'arbeitsdienste' ); ?>"
+    neu = "<?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?>"
+    if s.count(alt) != 1:
+        raise SystemExit('die Stoerung 20 passt nicht (%d Treffer)' % s.count(alt))
+    return alt, neu, 'class-fg-public-events.php'
+
 STOERUNGEN = {
     '1': stoerung_01, '2': stoerung_02, '3': stoerung_03, '4': stoerung_04,
     '5': stoerung_05, '6': stoerung_06, '7': stoerung_07, '8': stoerung_08,
     '9': stoerung_09, '10': stoerung_10, '11': stoerung_11, '12': stoerung_12,
     '13': stoerung_13, '14': stoerung_14, '15': stoerung_15, '16': stoerung_16,
     '17': stoerung_17, '18': stoerung_18, '19': stoerung_19,
+    '20': stoerung_20,
 }
 
 if __name__ == '__main__':

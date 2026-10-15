@@ -669,6 +669,38 @@ has "the area field carries its examples" "$body" "Abfahrtsort, Stadtteil, z. B.
 hasnt "no address field of the form invites more than the column holds" "$body" 'maxlength="254"'
 has "the address of the form stops at the width of the column" "$body" 'name="fg_member_email" maxlength="190"'
 has "the member number of the form stops at the width of the column" "$body" 'name="fg_member_no" maxlength="40"'
+# --- the label says how many digits the number has (since 1.25.10)
+# The club's numbers are four digits and begin with a zero (0042), and a member
+# who only knows their number as "42" has no way of knowing that. The label says
+# it, and it says it in all three forms that ask for a number: one form that names
+# the length and two that do not is the more confusing state, not the tidier one.
+# The three do not stand on one page — the offer form and the contact forms on the
+# rides page, the signup form of the duty on the list page — so all three are read
+# from two pages and looked for one by one.
+LISTE=$(curl -sk "$BASE/?page_id=$(jq list_page_id)")
+struct "$(printf '%s\n%s' "$body" "$LISTE")" "all three forms say how many digits the number has" "
+import re, sys
+h = sys.stdin.read()
+formen = {
+    'dem Anmeldeformular des Arbeitsdienstes': r'for=\"fg-member-no-[^\"]*\"[^>]*>Mitgliedsnummer \(4-stellig\)',
+    'dem Angebotformular': r'for=\"fg-ride-member-no\"[^>]*>Mitgliedsnummer \(4-stellig\)',
+    'dem Kontaktformular': r'for=\"fg-contact-no-[^\"]*\"[^>]*>Mitgliedsnummer \(4-stellig\)',
+}
+fehlend = [n for n, m in formen.items() if not re.search(m, h)]
+if fehlend:
+    print('ohne die Angabe: %s' % ', '.join(fehlend), file=sys.stderr)
+    sys.exit(1)
+sys.exit(0)
+" "at least one of the three forms does not say how many digits the number has"
+
+# The wording is a wording and nothing else. It says four digits, and the club's
+# numbers may be five or six next year — a check that held members to the label
+# would then throw away members who are quite correct, so the three claims below
+# pin that no such check was put in. The label may be wrong in a year; the server
+# may not refuse a number because of it.
+hasnt "and no pattern was put on a field of the form" "$body" 'pattern='
+hasnt "and no minimum length was put on one either" "$body" 'minlength='
+has "and the number keeps the width the column has" "$body" 'name="fg_member_no" maxlength="40"'
 # The button has to name what the press does. Until version 1.15.0 it said
 # "Eintragung vormerken" and told the visitor their entry was not in the list
 # yet; since then it is in the list the moment the page comes back, and a button

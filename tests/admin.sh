@@ -3365,6 +3365,18 @@ echo "[13] the wording of the messages"
 ANREDE=$(s make-event "Anrede der Mails" "$(date -d '+40 days' +%Y-%m-%d)" 6 "09:00")
 MAILS="$BASE/wp-admin/admin.php?page=fahrgemeinschaften-mails"
 
+# The state this section starts from, and it is made here instead of assumed.
+# Further down the section says "all five are untouched" and counts the rows, and
+# that is only true if nobody changed a wording on this installation beforehand.
+# It was an assumption, and it turned out to be a wrong one: a wording had been
+# saved by hand on the test site, and the next run then failed on two claims that
+# had nothing to do with that hand. A leftover row is a state that nobody
+# established, and a claim that reads it without having written it reads the past
+# and not the code — which is the one thing a check must not do.
+for SCHLUESSEL in ride_published contact_creator contact_requester duty_signup duty_removed; do
+	s mail-text-reset "$SCHLUESSEL" > /dev/null
+done
+
 list=$(curl -sk -b "$JAR" "$MAILS")
 clean "$list" "E-Mails screen"
 
@@ -3385,9 +3397,9 @@ for BESCHRIFTUNG in "Fahrgemeinschaft eingetragen" "Kontaktanfrage an das Mitgli
 	has "the list names: $BESCHRIFTUNG" "$list" "$BESCHRIFTUNG"
 done
 
-# A message that nobody changed says so. All five are untouched at the start of
-# this section, and the one this section writes is put back to its default at
-# the end of it, so all five rows carry the word and no row carries a date. The
+# A message that nobody changed says so. All five were put back to their default
+# above, and the one this section writes is put back again at the end of it, so
+# all five rows carry the word and no row carries a date. The
 # word is counted on a line of its own, because the page also says "Auf Standard
 # zurücksetzen" below the list and that one is not a row.
 standard=$(printf '%s' "$list" | grep -cE 'Standard[[:space:]]*</td>')

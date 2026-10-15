@@ -1146,3 +1146,39 @@ auch nicht auf eine, die mit dem Defekt nichts zu tun hat. Das ist der Preis der
 hat sie gewollt, und es steht deshalb im README und nicht nur hier. Umgekehrt gilt dieselbe Regel
 aus der anderen Richtung schon länger: Bei der Anmeldung wird die Anmeldung **zurückgenommen**, wenn
 die Mail nicht ankommt, weil der Abmeldelink in dieser Mail stand.
+
+## Umsetzungsstand: Die Beschriftung nennt die Stellenzahl (1.25.10)
+
+Aus dem Verein: „Ich möchte die Beschriftung im Frontend der Mitgliedsnummer ergänzen um die
+Information: Mitgliedsnummer (4-stellig). Es reicht, wenn wir das in die Überschrift packen. Ich will
+keine Validierung ändern, da es nächstes Jahr neue Nummern gibt.“
+
+Drei Formulare, drei Stellen — und die Begründung, warum an **keiner** eine Prüfung steht, ist
+derselbe Satz wie die Begründung dafür, dass sie steht.
+
+### Warum die Beschriftung kommt
+
+Die Nummern des Vereins sind vierstellig und fangen mit einer Null an (`0042`). Wer seine Nummer nur
+als „42“ kennt, hat keinen Weg, das zu erfahren: Er probiert es, und die Serverseite lehnt ab,
+weil sie `42` und `0042` als verschiedene Zeichenketten vergleicht. Die Beschriftung sagt ihm, wie
+er schreiben soll, und erspart genau diese Abweisung.
+
+### Warum keine Prüfung danebensteht
+
+Weil dieselbe Überlegung sie verbietet. Die Zahlen können nächstes Jahr fünf- oder sechsstellig sein,
+und eine Prüfung, die „4-stellig“ durchsetzt, würde dann Mitglieder abweisen, die völlig richtig
+liegen. **Die Beschriftung darf im Jahr falsch sein; der Server darf nicht deshalb eine Nummer
+ablehnen.** Das ist mit eigenen Behauptungen festgehalten: kein `pattern`, keine Mindestlänge, und
+das Feld behält die 40 Zeichen der Spalte.
+
+### Die offene Rechnung, die daraus folgt
+
+Wer „4-stellig“ liest und eine dreistellige Nummer hat, tippt `0158` statt `158` — und findet das
+Mitglied heute nicht. **Die Beschriftung macht den gemeldeten Fehler häufiger, nicht seltener.** Sie
+macht nur sichtbar, was vorher nur passierte.
+
+Deshalb ist die **Toleranz für führende Nullen** in den drei öffentlichen Formularen als nächste
+Fassung vorgesehen und kein Schmuckbegriff. Ihr Plan steht: exakt zuerst, dann ein zweiter Versuch
+mit bis zu acht führenden Nullen (`FG_Schema::MEMBER_NO_ZEROES_MAX`), der Index bleibt über eine
+Abfrage mit `IN (…)` benutzt, mehr als ein Treffer wird abgelehnt, und die Dublettenprüfung im Admin
+sowie der Import bleiben exakt.

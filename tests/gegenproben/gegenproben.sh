@@ -215,6 +215,12 @@ probe 19 "der Testversand geht an eine fremde Adresse" \
 	"$SOLL/includes/class-fg-admin-mails.php" admin.sh gg19 \
 	"the test message went to the address of the logged-in account"
 
+# --- 1.25.10: die Beschriftung nennt die Stellenzahl
+probe 20 "die Angabe fehlt in einem der drei Formulare" \
+	"$PROJEKT/arbeitsdienste/includes/class-fg-public-events.php" \
+	"$SOLL/includes/class-fg-public-events.php" http.sh gg20 \
+	"all three forms say how many digits the number has"
+
 zurueck
 rsync -a --delete "$PROJEKT/arbeitsdienste/" "$MOUNT/"
 frisch "$MOUNT"

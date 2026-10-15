@@ -4,13 +4,17 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 12.10.2026 — **öffentliches HTTP 270, Mail-Ebene 124, Admin-Ebene 758,
-0 Fehler**, gegen den Stand **Plugin 1.25.9, Schema 1.9.0**, dazu **neunzehn von neunzehn
-Gegenproben mit dem gestellten Fehlerbild rot** (drei davon aus dieser Fassung; die 33 der
-Fassungen davor wurden in diesem Lauf nicht wiederholt). HTTP und Mail sind unverändert, die
-Admin-Ebene ist um 25 höher. Die CLI-Suite wurde **nicht** gefahren: Sie löscht Arbeitsdienste,
-Fahrgemeinschaften und Mitglieder, und dafür ist die Zustimmung nötig; ihr Stand ist der von
-1.25.4.
+Letzter Lauf: 15.10.2026 — **öffentliches HTTP 274, Mail-Ebene 124, Admin-Ebene 758,
+0 Fehler**, gegen den Stand **Plugin 1.25.10, Schema 1.9.0**. Die Admin-Suite ist **zweimal
+hintereinander** gefahren und war beide Male grün; die zwanzig Gegenproben sind **nicht** alle
+wiederholt worden, die dieser Fassung zugehörige ist (Nummer 20) mit dem gestellten Fehlerbild rot.
+Die CLI-Suite wurde **nicht** gefahren: Sie löscht Arbeitsdienste, Fahrgemeinschaften und Mitglieder,
+und dafür ist die Zustimmung nötig.
+
+Der Lauf hat zwei Fehler im Prüfwerkzeug aufgedeckt, die mit dem Produkt nichts zu tun hatten und
+deshalb trotzdem behoben sind: Abschnitt [13] der Admin-Suite nahm einen sauberen Datenbankstand an,
+statt ihn herzustellen, und die Fixture legte bei jedem Aufbau eine WordPress-Seite an — auf der
+Testinstallation waren es 505 geworden.
 
 Der Lauf hat die Prüfungen einmal umgezogen: Das Werkzeug für die Gegenproben lag in `/tmp` und war
 zum zweiten Mal mit einem geleerten Verzeichnis weg — neunzehn Störungen, die nicht im Repository
@@ -2961,6 +2965,61 @@ gezählt.
 
 HTTP **270**, Mail 124, Admin **758**, 0 Fehler. Die Admin-Ebene ist um 25 höher: der Abschnitt
 `[13b]` mit dem Testversand und dem gescheiterten Versand. Die CLI-Suite wurde nicht gefahren.
+
+## Fassung 1.25.10: Die Beschriftung nennt die Stellenzahl
+
+Aus dem Verein: „Ich möchte die Beschriftung im Frontend der Mitgliedsnummer ergänzen um die
+Information: Mitgliedsnummer (4-stellig). Es reicht, wenn wir das in die Überschrift packen. Ich will
+keine Validierung ändern, da es nächstes Jahr neue Nummern gibt, und die sind vielleicht nicht
+4-stellig, dann brauche ich nur die Beschriftung anpassen."
+
+Drei Stellen, weil drei Formulare nach der Nummer fragen: das Anmeldeformular des Arbeitsdienstes
+und das Kontaktformular in `class-fg-public.php`, das Angebotformular in derselben Datei. Die drei
+stehen nicht auf einer Seite — zwei auf der Fahrgemeinschaften-Seite, das Anmeldeformular auf der
+Dienstliste — und die Behauptung liest deshalb zwei Seiten und sucht jede Form einzeln.
+
+### Vier Behauptungen, drei davon gegen das, was nicht gebaut werden sollte
+
+| Behauptung | wofür |
+| --- | --- |
+| alle drei Formulare nennen die Stellenzahl | die Änderung selbst |
+| kein `pattern` auf einem Feld des Formulars | eine Prüfung wäre per Tastatur möglich gewesen |
+| keine Mindestlänge auf einem Feld | dieselbe Prüfung auf dem anderen Weg |
+| das Feld behält `maxlength="40"` | die Zahl ist Text und bleibt es |
+
+Die beiden `hasnt` sind nicht Beiwerk. Die Beschriftung lädt zum Nachfillen ein, und die Versuchung
+ist groß, sie mit einer Eingabeprüfung zu unterstützen — dann wäre die Angabe „4-stellig“ eine
+Tatsache geworden und nächstes Jahr eine Lüge, die Mitglieder abweist.
+
+### Gegenprobe 20
+
+Sie nimmt die Angabe aus **einem** der drei Formulare, dem Anmeldeformular, und lässt die beiden
+anderen stehen. Das ist der Fehler, den man beim Umbau macht, wenn man nur an die eine Seite denkt:
+zwei Formulare sagen „4-stellig“, das dritte nicht, und niemand vergleicht sie. Die Behauptung
+zählt alle drei und **nennt** das fehlende.
+
+### Zwei Befunde am Prüfwerkzeug, die diese Fassung aufgedeckt hat
+
+**Abschnitt [13] der Admin-Suite nahm seinen Anfangszustand an.** Der Abschnitt sagt „alle fünf
+unberührt“ und zählt die Zeilen — das gilt nur, wenn vorher niemand einen Wortlaut gespeichert hat.
+Auf der Testinstallation war das einmal von Hand geschehen, und der nächste Lauf meldete zwei
+Fehlschläge, die mit dem Code nichts zu tun hatten. Ein Reststand ist ein Zustand, den niemand
+hergestellt hat, und eine Behauptung, die ihn liest, ohne ihn geschrieben zu haben, liest die
+Vergangenheit. Der Abschnitt setzt die fünf Wortlaute jetzt selbst zurück, bevor er anfängt.
+
+**Die Fixture legte bei jedem Aufbau eine WordPress-Seite an.** `http_setup.php` rief
+`wp_insert_post()` ohne jede Prüfung auf und ließ WordPress nummerieren — die zweite Seite derselben
+Datei, sechs Zeilen weiter, wurde nachgeschlagen und weiterverwendet, die erste nicht. Auf der
+Testinstallation waren es **505** Seiten mit dem Titel „Fahrgemeinschaften“, alle mit demselben
+Kurztext, keine davon gelesen. Jetzt läuft die erste Seite über dasselbe Muster; drei aufeinander
+folgende Fixture-Läufe ließen die Zahl bei **4** Seiten stehen (Beispielseite, Datenschutz­erklärung,
+Arbeitsdienste, Fahrgemeinschaften).
+
+### Läufe
+
+HTTP **274**, Mail 124, Admin **758**, 0 Fehler. HTTP ist um vier höher: die Behauptungen zur
+Beschriftung. Die Admin-Suite ist zweimal hintereinander gefahren und war **beide** Male grün —
+das ist bei diesem Abschnitt die eigentliche Aussage, denn vorher wäre der zweite Lauf rot gewesen.
 
 ## Mail-Auswertung
 

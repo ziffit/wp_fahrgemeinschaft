@@ -24,14 +24,44 @@ foreach ( $repo->get_members_page() as $member ) {
 delete_option( FG_STATS_OPTION );
 delete_option( FG_CLEANUP_OPTION );
 
-$page_id = wp_insert_post(
+// The first page, and it is looked up before it is made, for the same reason and
+// in the same shape as the second one below. Every run of before inserted a new
+// one here and let WordPress number it, so a fixture that is built often enough
+// leaves a page behind every time: This installation had reached 505 of them, all
+// titled "Fahrgemeinschaften", all carrying the same shortcode and none of them
+// read. A page that a run leaves behind is a page the next run has to scroll past,
+// and the numbering made the pile grow in a way nothing announced.
+$ride_pages = get_posts(
 	array(
-		'post_type'    => 'page',
-		'post_status'  => 'publish',
-		'post_title'   => 'Fahrgemeinschaften',
-		'post_content' => '[fahrgemeinschaften]',
+		'post_type'        => 'page',
+		'post_status'      => 'any',
+		'name'             => 'fahrgemeinschaften',
+		'numberposts'      => 1,
+		'suppress_filters' => true,
 	)
 );
+
+if ( $ride_pages ) {
+	$page_id = $ride_pages[0]->ID;
+	wp_update_post(
+		array(
+			'ID'           => $page_id,
+			'post_title'   => 'Fahrgemeinschaften',
+			'post_content' => '[fahrgemeinschaften]',
+			'post_status'  => 'publish',
+		)
+	);
+} else {
+	$page_id = wp_insert_post(
+		array(
+			'post_type'    => 'page',
+			'post_status'  => 'publish',
+			'post_title'   => 'Fahrgemeinschaften',
+			'post_name'    => 'fahrgemeinschaften',
+			'post_content' => '[fahrgemeinschaften]',
+		)
+	);
+}
 
 // The second page, carrying nothing but the list of work duties. It stands on
 // its own so that the list is fetched the way a visitor finds it: over the
@@ -40,9 +70,9 @@ $page_id = wp_insert_post(
 // A page of every run of before is reused rather than a new one created. The
 // URL of this page is written into the fixture and read by two suites, and a
 // suite that pointed at a page from a run of before would be reading a fixture
-// somebody else built. WordPress keeps the numbered leftovers of the runs
-// that did create a page each; they carry the same shortcode and are inert,
-// and they belong to the same pile of test pages as the ride pages above.
+// somebody else built. WordPress kept the numbered leftovers of the runs that did
+// create a page each; they carry the same shortcode and are inert, and they were
+// cleared by hand once.
 $list_pages = get_posts(
 	array(
 		'post_type'        => 'page',

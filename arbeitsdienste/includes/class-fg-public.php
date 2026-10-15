@@ -149,7 +149,7 @@ final class FG_Public {
 							</div>
 
 							<div class="fg-field">
-								<label for="fg-ride-member-no"><?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?></label>
+								<label for="fg-ride-member-no"><?php esc_html_e( 'Mitgliedsnummer (4-stellig)', 'arbeitsdienste' ); ?></label>
 								<input type="text" id="fg-ride-member-no" name="fg_member_no" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_NO_MAX ); ?>" required>
 							</div>
 
@@ -289,7 +289,7 @@ final class FG_Public {
 					<?php // The same pair of fields as in the two other forms of the plugin, the same row class and the same rule: a member number and an address, and both have to belong to the same member. The field names keep the fg_contact_ prefix because this form stands inside the list while the offer form stands above it on the same page — the question is the same, the name tells the two apart. ?>
 					<div class="fg-member-row">
 						<div class="fg-field">
-							<label for="fg-contact-no-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?></label>
+							<label for="fg-contact-no-<?php echo esc_attr( $data['public_ref'] ); ?>"><?php esc_html_e( 'Mitgliedsnummer (4-stellig)', 'arbeitsdienste' ); ?></label>
 							<input type="text" id="fg-contact-no-<?php echo esc_attr( $data['public_ref'] ); ?>" name="fg_contact_member_no" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_NO_MAX ); ?>" required>
 						</div>
 						<div class="fg-field">
