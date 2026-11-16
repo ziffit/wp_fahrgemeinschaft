@@ -15,7 +15,7 @@ Abbruch in Abschnitt `[18]` verdeckt hatte: Dort stand ein Aufruf von
 ist. Nach dem Beheben lief die Suite weiter und wurde an den Stellen rot, die seither dazugekommen
 sind. Jede ist am Plugin geprüft und die **Prüfung** nachgezogen, nicht das Plugin:
 
-- **`[18]` Import:** Seit 1.20.0 ist die E-Mail-Adresse kein Schlüssel mehr, zwei Mitglieder dürfen
+- **`[18]` Import:** Seit 1.20.0 ist die E-Mail-Adresse kein Schlüssel mehr, mehrere Mitglieder dürfen
   dieselbe haben. Die Suite führte „dieselbe Adresse zweimal“ als Ablehnung und verlangte eine
   Fehlermeldung, die es nicht mehr gibt. Sie prüft jetzt positiv, dass eine Datei die Adresse
   eines vorhandenen Mitglieds übernehmen und zweimal nennen darf.
