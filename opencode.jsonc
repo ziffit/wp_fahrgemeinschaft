@@ -1,0 +1,37 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Projektlokale Konfiguration für wp_fahrgemeinschaft.
+  // Ponytail (lazy-senior-dev-Regeln) ist auch global installiert; hier gepinnt,
+  // damit das Repo ohne globales Setup funktioniert.
+  "plugins": [
+    "@dietrichgebert/ponytail"
+  ],
+  "permissions": [
+    // Ausführen nur mit Zustimmung; Ausnahmen für Routine-Aufgaben.
+    { "action": "shell", "resource": "*", "effect": "ask" },
+    { "action": "shell", "resource": "bash tests/run-all.sh*", "effect": "allow" },
+    { "action": "shell", "resource": "bash tests/gegenproben/gegenproben.sh*", "effect": "allow" },
+    { "action": "shell", "resource": "docker exec wpdev-wordpress-1*", "effect": "allow" },
+    // Routine-Git-Inspektion ohne Nachfrage (nur lesend).
+    { "action": "shell", "resource": "git status*", "effect": "allow" },
+    { "action": "shell", "resource": "git diff*", "effect": "allow" },
+    { "action": "shell", "resource": "git log*", "effect": "allow" },
+    // Harte Sperren — gelten auch gegen „Allow always“ (letzte Regel gewinnt).
+    { "action": "shell", "resource": "rm -rf *", "effect": "deny" },
+    { "action": "shell", "resource": "git push *", "effect": "deny" },
+    { "action": "shell", "resource": "git push*", "effect": "ask" },
+    { "action": "shell", "resource": "sudo *", "effect": "deny" },
+    // Zugriff außerhalb des Projekts (z. B. anderes Projekt, Systempfade)
+    // soll immer nachgefragt werden.
+    { "action": "external_directory", "resource": "*", "effect": "ask" }
+  ],
+  "agents": {
+    "reviewer": {
+      "description": "Ponytail-Review anstehender Änderungen — liest und prüft, ändert nichts.",
+      "mode": "subagent",
+      "permissions": [
+        { "action": "edit", "resource": "*", "effect": "deny" }
+      ]
+    }
+  }
+}
