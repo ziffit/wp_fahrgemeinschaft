@@ -410,8 +410,8 @@ final class FG_Member_Import {
 	 * Apply a parsed member list to the member table.
 	 *
 	 * The rows are worked out against the stored members first and only then
-	 * written, so a row that turns out to collide with a member in the database
-	 * stops the whole import while nothing has been changed yet.
+	 * written, so the report is complete before the first row is written. A
+	 * write that fails stops the import and names the line it was on.
 	 *
 	 * @param array $rows Rows as read by parse().
 	 * @return array Report: ok, error, created, updated, unchanged, missing, rows.

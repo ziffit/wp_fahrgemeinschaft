@@ -4,7 +4,36 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 15.10.2026 — **öffentliches HTTP 274, Mail-Ebene 124, Admin-Ebene 758,
+Letzter Lauf: 16.11.2026 — **CLI 545, öffentliches HTTP 274, Mail-Ebene 124, Admin-Ebene 758,
+0 Fehler**, gegen den Stand **Plugin 1.25.10, Schema 1.9.0**. Zum ersten Mal in dieser Reihe
+sind alle vier Suiten über `run-all.sh` gefahren; die CLI-Suite mit ausdrücklicher Zustimmung,
+weil sie am Anfang alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht.
+
+Die CLI-Suite war seit **1.16.0** nicht mehr gefahren und an drei Stellen überholt, die ein
+Abbruch in Abschnitt `[18]` verdeckt hatte: Dort stand ein Aufruf von
+`FG_Member_Import::ERROR_EMAIL_TAKEN`, einer Konstanten, die mit der Regel selbst verschwunden
+ist. Nach dem Beheben lief die Suite weiter und wurde an den Stellen rot, die seither dazugekommen
+sind. Jede ist am Plugin geprüft und die **Prüfung** nachgezogen, nicht das Plugin:
+
+- **`[18]` Import:** Seit 1.20.0 ist die E-Mail-Adresse kein Schlüssel mehr, zwei Mitglieder dürfen
+  dieselbe haben. Die Suite führte „dieselbe Adresse zweimal“ als Ablehnung und verlangte eine
+  Fehlermeldung, die es nicht mehr gibt. Sie prüft jetzt positiv, dass eine Datei die Adresse
+  eines vorhandenen Mitglieds übernehmen und zweimal nennen darf.
+- **`[2a]` Spalten:** Seit 1.25.5 stehen **sechs** angehängte Spalten am Tabellenende, nicht vier —
+  `meeting_point` und `meeting_point_url` kamen dazu.
+- **Token-Links:** Seit 1.21.0 ist der Mailrumpf das Layout; die Links stehen in `href`-Attributen
+  und ihr `&` ist als `&#038;` geschrieben. `wp_parse_url` liest das `#` darin als Fragmentanfang
+  und schnitt die Query hinter `fg_ride_action=view&` ab, sodass kein `intent` mehr ankam und der
+  ganze Löschfluss als Kette rot wurde. Der Extraktor dekodiert jetzt die Entities und lässt die
+  Adresse am Anführungszeichen enden.
+
+Dazu eine Lücke in der Umgebung und keine im Plugin: Abschnitt `[3c]` prüft den Wochentag zweimal,
+einmal gegen das deutsche Wort und einmal dagegen, dass kein englischer Wochentag auf der Seite
+steht. Auf einer englischen Site verlangt die eine Behauptung „Monday“ und die andere verbietet es
+— die Site muss deutsch sein. `bootstrap.php` installiert en_US; `setup.sh` lädt deshalb jetzt über
+`lang-fixture.php` das Core-Sprachpaket de_DE und setzt `WPLANG` (siehe „Umgebung herstellen“).
+
+Vorheriger Lauf: 15.10.2026 — **öffentliches HTTP 274, Mail-Ebene 124, Admin-Ebene 758,
 0 Fehler**, gegen den Stand **Plugin 1.25.10, Schema 1.9.0**. Die Admin-Suite ist **zweimal
 hintereinander** gefahren und war beide Male grün; die zwanzig Gegenproben sind **nicht** alle
 wiederholt worden, die dieser Fassung zugehörige ist (Nummer 20) mit dem gestellten Fehlerbild rot.
@@ -51,7 +80,7 @@ Anführungszeichen in einem Kommentar den Python-Block abgeschnitten hat. Eine d
 stammt aus 1.20.0. Beide sind repariert, und eine neue Behauptung prüft jetzt beide
 Dateien auf genau diese Klasse von Schaden.
 
-**Die CLI-Suite ist bei diesem Lauf nicht gefahren worden.** Sie stand zuletzt mit **CLI 533**
+**Die CLI-Suite ist bei diesem Lauf nicht gefahren worden.** Sie stand damals zuletzt mit **CLI 533**
 gegen den Stand **Plugin 1.16.0** (Commit `9883f85`) und ist damit die einzige der vier
 Zahlen, die nicht zu diesem Stand gehört; sie zu wiederholen wäre ein Lauf, der am Anfang
 alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht, und dafür lag an diesem
@@ -199,7 +228,7 @@ Das Skript ist idempotent und in fünf Schritten aufgeteilt:
 2. Warten, bis die Datenbank eine Verbindung annimmt
 3. TLS-Vhost und Zertifikat einspielen, danach prüfen, ob der TLS-Port antwortet
 4. Plugin-Ordner synchronisieren und die Testdateien in den Container kopieren
-5. Installation und Aktivierung: `bootstrap.php repair`, `install`, `configure`, Mail-Log leeren, Erreichbarkeit prüfen, Zustand ausgeben
+5. Installation und Aktivierung: `bootstrap.php repair`, `install`, `configure`, die beiden Fixtures, Mail-Log leeren, Erreichbarkeit prüfen, Zustand ausgeben
 
 `tests/bootstrap.php` arbeitet in drei Phasen:
 
@@ -213,8 +242,15 @@ Das Skript ist idempotent und in fünf Schritten aufgeteilt:
 - **configure** setzt Site-URLs, Zeitzone, Administrator, Plugin-Aktivierung, Rewrite-Regeln,
   Cron und den Mail-Recorder und meldet, was fehlt.
 
+Zwei Fixtures stellt `setup.sh` zusätzlich her, weil die Suiten sie erwarten und die
+Original-Umgebung sie von Hand hatte: `logo-fixture.php` legt das Logo in der Mediathek an —
+die Mail-Suite prüft, dass das Layout es über die Adresse des eigenen Servers lädt — und
+`lang-fixture.php` lädt das Core-Sprachpaket **de_DE** und setzt `WPLANG`. Ohne die Sprache
+wäre die Site en_US, und die CLI-Suite verlangt in Abschnitt `[3c]` zweimal etwas
+Unvereinbares: einmal „Monday“ im Inhalt, einmal „Monday“ nicht.
+
 Nach dem Setup ist die Umgebung in dem Zustand, den die Tests erwarten: Plugin aktiv,
-`fg_schema_version` auf `1.5.0`, die fünf Tabellen `wp_fg_events`, `wp_fg_rides`,
+`fg_schema_version` auf `1.9.0`, die fünf Tabellen `wp_fg_events`, `wp_fg_rides`,
 `wp_fg_members`, `wp_fg_event_members` und `wp_fg_mail_templates` vorhanden, die Spalte
 `member_id` in `wp_fg_rides` angelegt, `fg_daily_cleanup` geplant, keine
 Rollenberechtigung des Plugins, Mail-Log leer.

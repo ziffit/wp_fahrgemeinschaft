@@ -134,7 +134,10 @@ function fg_mail_recipients() {
  */
 function fg_extract_links( $body ) {
 	$links = array();
-	if ( preg_match_all( '#https?://\S+#', (string) $body, $matches ) ) {
+	// Since 1.21.0 the mail body is the layout, so the links stand in href
+	// attributes and their & is written as &#038;. Without decoding, the #
+	// inside the entity reads as the start of a fragment and cuts the query.
+	if ( preg_match_all( '#https?://[^\s"\'<>]+#', html_entity_decode( (string) $body, ENT_QUOTES ), $matches ) ) {
 		foreach ( $matches[0] as $url ) {
 			$query = (string) wp_parse_url( $url, PHP_URL_QUERY );
 			$args  = array();
@@ -860,9 +863,10 @@ $GLOBALS['fg_state']['draft_event']   = $inactive_event;
 /* The four optional details of a work duty.
  *
  * Two things are proved here that a rendered page could never show: that the
- * four columns really came into a table that already existed, and that a value
- * the server does not accept is refused instead of stored in a corrected form.
- * A page can only show what was stored; it cannot show what was thrown away.
+ * columns of the details really came into a table that already existed, and that
+ * a value the server does not accept is refused instead of stored in a
+ * corrected form. A page can only show what was stored; it cannot show what was
+ * thrown away.
  */
 echo "[2a] The four optional details of a work duty\n";
 
@@ -872,8 +876,8 @@ foreach ( (array) $wpdb->get_results( 'SHOW COLUMNS FROM ' . FG_Schema::events_t
 	$event_columns_seen[] = $column['Field'];
 }
 fg_ok(
-	array( 'group_name', 'demand', 'duration_hours', 'description' ) === array_slice( $event_columns_seen, -4 ),
-	'the four columns stand at the end of a table that already existed',
+	array( 'group_name', 'demand', 'duration_hours', 'description', 'meeting_point', 'meeting_point_url' ) === array_slice( $event_columns_seen, -6 ),
+	'the columns added later stand at the end of a table that already existed',
 	implode( ',', $event_columns_seen )
 );
 
@@ -2398,7 +2402,6 @@ $ablehnungen = array(
 	'one number twice'            => array( $kopf . "800;eins@example.org;Eins;Probe\n800;zwei@example.org;Zwei;Probe\n", 'Zeile 3' ),
 	'one number twice, once padded with a space' => array( $kopf . "800;eins@example.org;Eins;Probe\n 800 ;zwei@example.org;Zwei;Probe\n", 'Zeile 3' ),
 	'one number twice in a different case' => array( $kopf . "abc;eins@example.org;Eins;Probe\nABC;zwei@example.org;Zwei;Probe\n", 'Zeile 3' ),
-	'one address twice'           => array( $kopf . "800;gleich@example.org;Eins;Probe\n801;GLEICH@example.org;Zwei;Probe\n", 'Zeile 3' ),
 	'a row with too few fields'   => array( $kopf . "800;eins@example.org;Eins\n", 'Zeile 2' ),
 	'too many rows'               => array( $kopf . str_repeat( "1;eins@example.org;Eins;Probe\n", FG_Schema::MEMBER_IMPORT_MAX + 1 ), 'höchstens' ),
 	'an over-long number'         => array( $kopf . str_repeat( '8', FG_Schema::MEMBER_NO_MAX + 1 ) . ";lang@example.org;Lang;Probe\n", 'zu lang' ),
@@ -2423,15 +2426,22 @@ foreach ( $ablehnungen as $bezeichnung => $fall ) {
 
 fg_ok( $stand_vorher === $fg_repo->count_members(), 'a refused file leaves the member list untouched', $stand_vorher . ' -> ' . $fg_repo->count_members() );
 
-// A file that reads cleanly but claims an address that belongs to somebody else
-// is refused by the same rule, and this one is caught while applying, not while
-// reading.
+/* The address is not a key since schema 1.6.0, and that holds for the import
+ * too: a row may take the address of a member that is already stored, and two
+ * rows may carry the same one. The number tells the members apart, and only it.
+ */
 $vor_der_anwendung = $fg_repo->count_members();
-$kollision          = $import->apply( $import->parse( $kopf . "810;import1@example.org;Kollision;Probe\n" )['rows'] );
-fg_ok( ! $kollision['ok'], 'a file that takes the address of another member is refused' );
-fg_ok( FG_Member_Import::ERROR_EMAIL_TAKEN === $kollision['error']['code'], 'and it is refused by name', wp_json_encode( $kollision['error'] ) );
-fg_ok( null === $fg_repo->get_member_by_number( '810' ), 'the member that would have taken the address is not there' );
-fg_ok( $vor_der_anwendung === $fg_repo->count_members(), 'a refused application writes nothing at all', $vor_der_anwendung . ' -> ' . $fg_repo->count_members() );
+$geteilt_import    = $import->apply(
+	$import->parse(
+		$kopf
+		. "810;import1@example.org;Kollision;Probe\n"
+		. "811;import1@example.org;Zweite;Probe\n"
+	)['rows']
+);
+fg_ok( $geteilt_import['ok'] && 2 === $geteilt_import['created'], 'a file may take and repeat the address of a member', wp_json_encode( $geteilt_import ) );
+fg_ok( null !== $fg_repo->get_member_by_number( '810' ) && null !== $fg_repo->get_member_by_number( '811' ), 'both members of the file are in the club' );
+fg_ok( 3 === count( $fg_repo->get_members_by_email( 'import1@example.org' ) ), 'and the address reads back as three members', (string) count( $fg_repo->get_members_by_email( 'import1@example.org' ) ) );
+fg_ok( $vor_der_anwendung + 2 === $fg_repo->count_members(), 'and the file added two members, not one row for the same address', $vor_der_anwendung . ' -> ' . $fg_repo->count_members() );
 
 /* The shapes of a real export: a comma instead of a semicolon, a declaration
  * line, an upper-case header, a byte order mark, more columns than needed and
