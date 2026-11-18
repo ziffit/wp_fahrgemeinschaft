@@ -2394,7 +2394,9 @@ fi
 echo "[10] the status form of a member"
 STATUS_PATH=$(jq status_page_path)
 STATUS=$(curl -sk "$BASE$STATUS_PATH")
-has "the status page renders the form" "$STATUS" "Bestätigung erneut senden"
+has "the status page names what it is for" "$STATUS" "Bin ich angemeldet?"
+has "and says what the member gets" "$STATUS" "Prüfe hier, ob du angemeldet bist und lasse dir deine Bestätigungsmail erneut zusenden."
+has "the status page renders the form" "$STATUS" "Anmeldung prüfen"
 has "the status form asks for the member number" "$STATUS" 'for="fg-status-member-no"'
 has "the status form asks for the address" "$STATUS" 'for="fg-status-member-email"'
 # One button. It is the answer and the mail in one step, and a second button

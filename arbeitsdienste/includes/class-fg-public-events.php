@@ -137,8 +137,8 @@ final class FG_Public_Events {
 		<div class="fg-wrapper">
 			<?php $this->render_notice(); ?>
 			<section class="fg-section" aria-labelledby="<?php echo esc_attr( self::ANCHOR_STATUS ); ?>">
-				<h2 id="<?php echo esc_attr( self::ANCHOR_STATUS ); ?>"><?php esc_html_e( 'Ist meine Anmeldung angekommen?', 'arbeitsdienste' ); ?></h2>
-				<p class="fg-hint"><?php esc_html_e( 'Der Verein zeigt nicht, wer sich für welchen Arbeitsdienst angemeldet hat. Hier kannst du nachsehen, ob deine Anmeldung angekommen ist, und dir die Bestätigung noch einmal schicken lassen.', 'arbeitsdienste' ); ?></p>
+				<h2 id="<?php echo esc_attr( self::ANCHOR_STATUS ); ?>"><?php esc_html_e( 'Bin ich angemeldet?', 'arbeitsdienste' ); ?></h2>
+				<p class="fg-hint"><?php esc_html_e( 'Prüfe hier, ob du angemeldet bist und lasse dir deine Bestätigungsmail erneut zusenden.', 'arbeitsdienste' ); ?></p>
 				<form class="fg-status-form" action="<?php echo esc_url( $admin_url ); ?>" method="post">
 					<input type="hidden" name="action" value="fg_resend_duty_mails">
 					<input type="hidden" name="source_url" value="<?php echo esc_url( $source ); ?>">
@@ -161,7 +161,7 @@ final class FG_Public_Events {
 					</div>
 					<p class="fg-hint fg-hint-row"><?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen. Dann schicken wir dir die Bestätigung zu deinen kommenden Arbeitsdiensten noch einmal zu.', 'arbeitsdienste' ); ?></p>
 					<div class="fg-actions">
-						<button class="fg-button" type="submit"><?php esc_html_e( 'Bestätigung erneut senden', 'arbeitsdienste' ); ?></button>
+						<button class="fg-button" type="submit"><?php esc_html_e( 'Anmeldung prüfen', 'arbeitsdienste' ); ?></button>
 					</div>
 					<?php if ( $privacy ) : ?>
 						<p class="fg-hint">
