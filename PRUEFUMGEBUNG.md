@@ -4,10 +4,10 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 18.11.2026 — **öffentliches HTTP 305, Mail-Ebene 124, Admin-Ebene 758, 0 Fehler**,
-gegen den Stand **Plugin 1.25.11, Schema 1.9.0**. Die CLI-Suite wurde **nicht** gefahren: Sie löscht
-Arbeitsdienste, Fahrgemeinschaften und Mitglieder, und dafür ist die Zustimmung nötig. Gegenüber dem
-Lauf vom 16.11.2026 sind 31 Behauptungen dazugekommen. Sie stehen fast alle im neuen Abschnitt `[10]`
+Letzter Lauf: 18.11.2026 — **CLI 545, öffentliches HTTP 305, Mail-Ebene 124, Admin-Ebene 758,
+0 Fehler**, gegen den Stand **Plugin 1.25.11, Schema 1.9.0**. Die CLI-Suite lief mit ausdrücklicher
+Zustimmung, weil sie am Anfang alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht.
+Gegenüber dem Lauf vom 16.11.2026 sind 31 Behauptungen dazugekommen. Sie stehen fast alle im neuen Abschnitt `[10]`
 der öffentlichen Suite und prüfen die Selbstauskunft `[anmeldung_pruefen]`: das Formular mit demselben
 Paar in denselben zwei Worten wie die anderen drei, **einen** Knopf, POST statt GET, keine Nummer,
 Adresse, kein Token und keine interne ID auf der Seite, die **einen** Satz für zwei Fälle — ein fremdes
