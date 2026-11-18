@@ -2384,6 +2384,231 @@ else
 	bad "the section leaves the duty as it found it" "$(s count-registrations "$DIENST")"
 fi
 
+# --- 10. the status form: is my registration there, and send the mail again
+#
+# The list of duties names nobody, and that stays so. This form is the member's
+# own way back: the same pair as the three other forms, and the confirmation
+# mail again, with a fresh link. The answer is one sentence and not a list —
+# a list would have to survive the redirect, and the address is the one place
+# this plugin never puts the pair.
+echo "[10] the status form of a member"
+STATUS_PATH=$(jq status_page_path)
+STATUS=$(curl -sk "$BASE$STATUS_PATH")
+has "the status page renders the form" "$STATUS" "Bestätigung erneut senden"
+has "the status form asks for the member number" "$STATUS" 'for="fg-status-member-no"'
+has "the status form asks for the address" "$STATUS" 'for="fg-status-member-email"'
+# One button. It is the answer and the mail in one step, and a second button
+# that only looked would ask the member for a second press for the same answer.
+struct "$STATUS" "the status form carries one button" "
+import re, sys
+h = sys.stdin.read()
+form = re.search(r'<form class=\"fg-status-form\".*?</form>', h, re.S)
+sys.exit(0 if form and len(re.findall(r'<button', form.group(0))) == 1 else 1)
+" "the status form carries no button, or more than one"
+# Nothing of the pair, no token and no internal id leaves the page. The values
+# are the ones of the fixture, and the nonce values are taken out first for the
+# same reason as on the offer page: a random value could carry the digits by
+# accident, and then the check would fail for a page that is clean.
+STATUS_OHNE_NONCE=$(printf '%s' "$STATUS" | sed -E 's/(name="[^"]*nonce[^"]*"[^>]*value=")[^"]*"/\1"/g')
+hasnt "the status page hides the member number" "$STATUS_OHNE_NONCE" "$MITGLIED_NR"
+hasnt "the status page hides the address" "$STATUS" "$MITGLIED_MAIL"
+hasnt "the status page hides tokens" "$STATUS" "token="
+hasnt "the status page hides internal ids" "$STATUS" "fg_fahrgemeinschaft="
+# A lookup that travelled in the address would put the pair into the history of
+# the browser that made it, so the form posts and does not get.
+struct "$STATUS" "the status form posts and does not get" "
+import re, sys
+h = sys.stdin.read()
+form = re.search(r'<form class=\"fg-status-form\"[^>]*>', h)
+sys.exit(0 if form and 'method=\"post\"' in form.group(0) else 1)
+" "the status form does not post"
+STATUS_NONCE=$(printf '%s' "$STATUS" | grep -o 'name="fg_resend_nonce" value="[^"]*"' | head -1 | sed 's/.*value="//;s/"//')
+if [ -n "$STATUS_NONCE" ]; then
+	ok "the status page hands out a nonce"
+else
+	bad "the status page hands out a nonce" "no nonce on the page"
+fi
+FULL_NR=$(jq member_full_no)
+FULL_MAIL=$(jq member_full_mail)
+FULL_ID=$(jq full_event_id)
+# The pair of the status form is the pair of the signup form, in the same words:
+# a member who has read one form has read the other.
+struct "$(printf '%s\n<!-- TRENNER -->\n%s' "$(curl -sk "$BASE$LIST_PATH")" "$STATUS")" "the status form asks for the pair in the words the signup form uses" "
+import re, sys
+teile = sys.stdin.read().split('<!-- TRENNER -->')
+if len(teile) != 2:
+    sys.exit(1)
+def worte(teil, praefixe):
+    gefunden = []
+    for praefix in praefixe:
+        gefunden += re.findall(r'<label for=\"fg-' + praefix + r'[^\"]*\">([^<]*)</label>', teil)
+    raus = []
+    for w in gefunden:
+        w = re.sub(r'\s+', ' ', w).strip()
+        if w not in raus:
+            raus.append(w)
+    return raus
+sys.exit(0 if worte(teile[0], ('member-no', 'member-email')) == worte(teile[1], ('status-member-no', 'status-member-email')) else 1)
+" "the two forms ask for the pair in different words"
+
+# Send the status form and keep the page the member lands on, so that the
+# sentence is read the way the member reads it and not out of a redirect line.
+status_post() {
+	curl -skL -o "$DIR/status.html" -w '%{url_effective}' -X POST "$BASE/wp-admin/admin-post.php" \
+		--data-urlencode "action=fg_resend_duty_mails" \
+		--data-urlencode "fg_resend_nonce=$STATUS_NONCE" \
+		--data-urlencode "fg_status_member_no=$1" \
+		--data-urlencode "fg_status_member_email=$2" \
+		--data-urlencode "fg_website=" \
+		--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
+		--data-urlencode "source_url=$BASE$STATUS_PATH"
+}
+
+# A member who is in no upcoming duty. 0044 is in the member administration and
+# in no duty of the fixture, and it is the case the answer has to cover with the
+# same sentence as a pair that belongs to nobody.
+clear_mails
+loc=$(status_post "$MITGLIED_NR" "$MITGLIED_MAIL")
+if [ "$(hinweis "$loc")" = "duty_none" ]; then
+	ok "a member without a duty is told that nothing is registered"
+else
+	bad "a member without a duty is told that nothing is registered" "$loc"
+fi
+KEINER_TEXT=$(hinweis_text < "$DIR/status.html")
+if [ -n "$KEINER_TEXT" ]; then
+	ok "and the sentence is read from the page the redirect leads to"
+else
+	bad "and the sentence is read from the page the redirect leads to" "the page carries no message"
+fi
+if [ "$(s mail-count)" = "0" ]; then
+	ok "and no mail is sent"
+else
+	bad "and no mail is sent" "$(s mail-count) mails"
+fi
+# The second sentence is not decoration: without it a member who worked a duty
+# last month reads the answer as "I am not registered".
+has "the answer speaks about the future and not about the past" "$KEINER_TEXT" "keine Aussage, ob du bereits einen Arbeitsdienst geleistet hast"
+
+# A pair that does not belong together. The sentence has to be the same one, and
+# it is compared with the sentence above rather than only looked at: the whole
+# point is that the two cases cannot be told apart.
+loc=$(status_post "$FREMDE_NR" "fremd@angeln.example.org")
+if [ "$(hinweis "$loc")" = "duty_none" ]; then
+	ok "a pair that belongs to nobody is refused"
+else
+	bad "a pair that belongs to nobody is refused" "$loc"
+fi
+FREMD_TEXT=$(hinweis_text < "$DIR/status.html")
+if [ "$FREMD_TEXT" = "$KEINER_TEXT" ]; then
+	ok "and the refusal is the same sentence as the empty answer"
+else
+	bad "and the refusal is the same sentence as the empty answer" "refusal: $FREMD_TEXT"
+fi
+
+# The member who is registered. 0042 is in the main duty of the fixture.
+ANZAHL_VORHER=$(s count-registrations "$DIENST")
+VORHER_NOTIFIED=$(s notified "$DIENST" "$FREMDE_NR" | cut -f1)
+VORHER_TOKENS=$(s notified "$DIENST" "$FREMDE_NR" | cut -f2)
+clear_mails
+loc=$(status_post "$FREMDE_NR" "$FREMDE_MAIL")
+if [ "$(hinweis "$loc")" = "duty_mail_resent" ]; then
+	ok "the member who is registered is told that the mail is on its way"
+else
+	bad "the member who is registered is told that the mail is on its way" "$loc"
+fi
+if [ "$(mail_to)" = "$FREMDE_MAIL" ]; then
+	ok "and the mail goes to the address of the pair and to no other"
+else
+	bad "and the mail goes to the address of the pair and to no other" "$(mail_to)"
+fi
+# The mail is the confirmation again, with a fresh unregistration link: that
+# link is the whole reason the member needs the mail, and a mail without it
+# would be a notification without a way back.
+RESEND_BODY=$(mail_body)
+has "and the mail carries the unregistration link" "$RESEND_BODY" "fg_duty_action=view"
+has "and the mail names the duty" "$RESEND_BODY" "$DIENST_TITEL"
+# A resend is not a second registration, and the counter of delivered mails
+# rises while the tokens rise with them: a token is readable only in the mail it
+# was written for, so every further mail needs a further row.
+if [ "$(s count-registrations "$DIENST")" = "$ANZAHL_VORHER" ]; then
+	ok "and no second registration is written"
+else
+	bad "and no second registration is written" "$(s count-registrations "$DIENST")"
+fi
+NACHHER_NOTIFIED=$(s notified "$DIENST" "$FREMDE_NR" | cut -f1)
+NACHHER_TOKENS=$(s notified "$DIENST" "$FREMDE_NR" | cut -f2)
+if [ "$NACHHER_NOTIFIED" = "$((VORHER_NOTIFIED + 1))" ]; then
+	ok "and the delivered mail is counted at the registration"
+else
+	bad "and the delivered mail is counted at the registration" "$VORHER_NOTIFIED -> $NACHHER_NOTIFIED"
+fi
+if [ "$NACHHER_TOKENS" = "$((VORHER_TOKENS + 1))" ]; then
+	ok "and the fresh link gets a row of its own"
+else
+	bad "and the fresh link gets a row of its own" "$VORHER_TOKENS -> $NACHHER_TOKENS"
+fi
+
+# The second press within the minute. This is the one place of the plugin where
+# a mail goes out for a state that already stands, so a stranger who knows the
+# pair could otherwise fill a mailbox and the token table.
+clear_mails
+loc=$(status_post "$FREMDE_NR" "$FREMDE_MAIL")
+if [ "$(hinweis "$loc")" = "duty_mail_wait" ]; then
+	ok "the second press within the minute is refused"
+else
+	bad "the second press within the minute is refused" "$loc"
+fi
+if [ "$(s mail-count)" = "0" ]; then
+	ok "and the refused press sends no second mail"
+else
+	bad "and the refused press sends no second mail" "$(s mail-count) mails"
+fi
+
+# A mail that cannot be handed over. The sentence is its own and not the one of
+# the signup form: the registration stands, and it is the mail that did not
+# leave. The fresh link goes back out of the table with it, so that no row
+# claims a link that nobody received.
+VORHER_TOKENS_FULL=$(s notified "$FULL_ID" "$FULL_NR" | cut -f2)
+mail_fail 1
+loc=$(status_post "$FULL_NR" "$FULL_MAIL")
+mail_fail 0
+if [ "$(hinweis "$loc")" = "duty_mail_failed" ]; then
+	ok "a mail that cannot be handed over is reported"
+else
+	bad "a mail that cannot be handed over is reported" "$loc"
+fi
+NACHHER_TOKENS_FULL=$(s notified "$FULL_ID" "$FULL_NR" | cut -f2)
+if [ "$NACHHER_TOKENS_FULL" = "$VORHER_TOKENS_FULL" ]; then
+	ok "and the link of the undelivered mail is taken back out of the table"
+else
+	bad "and the link of the undelivered mail is taken back out of the table" "$VORHER_TOKENS_FULL -> $NACHHER_TOKENS_FULL"
+fi
+
+# A member who is on two upcoming duties gets two mails, and the sentence says
+# so. The second duty is built here and taken away again, so the fixture keeps
+# the shape the other sections expect. 0043 is on the full duty of the fixture
+# and is not the member the throttle above was set for.
+ZWEITER=$(s make-event "Zweiter Dienst für die Statusabfrage" "$(date -d '+40 days' +%Y-%m-%d)" 2)
+s register "$ZWEITER" "$FULL_NR" "$FULL_MAIL" >/dev/null
+clear_mails
+loc=$(status_post "$FULL_NR" "$FULL_MAIL")
+if [ "$(hinweis "$loc")" = "duty_mails_resent" ]; then
+	ok "a member on two duties is told that the mails are on their way"
+else
+	bad "a member on two duties is told that the mails are on their way" "$loc"
+fi
+if [ "$(s mail-count)" = "2" ]; then
+	ok "and two mails are sent"
+else
+	bad "and two mails are sent" "$(s mail-count) mails"
+fi
+s delete-event "$ZWEITER" >/dev/null
+if [ "$(s count-registrations "$DIENST")" = "$ANZAHL_VORHER" ]; then
+	ok "the section leaves the main duty as it found it"
+else
+	bad "the section leaves the main duty as it found it" "$(s count-registrations "$DIENST")"
+fi
+
 echo
 echo "== $pass passed, $fail failed =="
 [ "$fail" -eq 0 ]

@@ -2,7 +2,7 @@
 
 Minimales WordPress-Plugin zur Planung von Vereinsarbeitsdiensten, zur Anmeldung von Mitgliedern zu einem Dienst und zur Koordination der Fahrgemeinschaften je Dienst.
 
-Fassung 1.25.10.
+Fassung 1.25.11.
 
 ## Installation
 
@@ -12,7 +12,8 @@ Fassung 1.25.10.
 4. Unter **Arbeitsdienste → Arbeitsdienste** einen Arbeitsdienst mit Datum und Bedarf anlegen.
 5. Eine beliebige WordPress-Seite erstellen und den Shortcode `[arbeitsdienste]` einfügen. Auf dieser Seite tragen sich die Mitglieder selbst zu den kommenden Diensten ein.
 6. Eine weitere WordPress-Seite erstellen und dort den Shortcode `[fahrgemeinschaften]` einfügen; dort bieten die Angemeldeten ihre Fahrgemeinschaften an.
-7. Für zuverlässige E-Mails ein SMTP-Plugin einrichten und SPF, DKIM sowie DMARC prüfen.
+7. Eine dritte Seite erstellen und dort den Shortcode `[anmeldung_pruefen]` einfügen; dort sieht ein Mitglied nach, ob seine Anmeldung angekommen ist, und lässt sich die Bestätigung erneut schicken.
+8. Für zuverlässige E-Mails ein SMTP-Plugin einrichten und SPF, DKIM sowie DMARC prüfen.
 
 ## Öffentliche Seite
 
@@ -45,6 +46,10 @@ Fassung 1.25.10.
 - Nach dem Anmelden geht sofort eine E-Mail mit dem Abmeldelink an die Adresse des Mitglieds. Sie nennt den Dienst, den Link und den Namen des Mitglieds — die Adresse gehört zu einem Mitglied, Vor- und Nachname stehen in der Mitgliederverwaltung des Vereins, und eine Mail, die ein Mitglied mit „Hallo“ begrüßt, ist eine von der Sorte, die im Verein als unpersönlich gilt. Die Anrede lautet seit Version 1.16.0 „Hallo Vorname Nachname“ und gilt für alle fünf Nachrichten des Plugins; bis dahin stand dort nur der Vorname. Der Link öffnet eine Seite, die nachfragt, und erst das erneute Absenden löscht die Anmeldung; ein Mailscanner, der jedem Link folgt, nimmt einem Mitglied damit nichts weg. Auf der Seite steht wieder die Liste, von der aus sich das Mitglied angemeldet hat.
 - Wird ein Mitglied wieder von einem Arbeitsdienst genommen — durch den Löschlink aus der Anmelde-Mail oder durch die Redaktion im Adminbereich —, geht eine E-Mail an dieselbe Adresse. Sie nennt den Dienst und sagt, dass es die eigene Abmeldung war oder nicht. Diese Nachricht ist mit 1.25.4 dazugekommen, und die Wege, an denen **keine** Mail entsteht, sind genau benannt: Wird der ganze Arbeitsdienst gelöscht oder das Mitglied selbst, gibt es nichts mehr, wovon man schreiben könnte. Beide Wege, die eine Mail schreiben, schreiben **dieselbe** — ein Mitglied soll aus dem Wortlaut nicht ablesen können, ob es selbst gegangen ist oder ob es herausgenommen wurde. Kommt die Mail nicht an, bleibt die Entfernung stehen; das Gegenteil würde das Mitglied auf genau den Dienst zurückholen, von dem es sich gerade abgemeldet hat.
 - Ein Mitglied kann für beliebig viele Arbeitsdienste angemeldet sein; jede Anmeldung ist eine eigene Zeile mit eigenem Link. Derselbe Dienst zweimal geht nicht: Die Anmeldung wird abgelehnt, statt eine zweite Zeile anzulegen.
+- Der Shortcode `[anmeldung_pruefen]` steht für sich allein auf einer eigenen Seite und beantwortet die Frage, die die Dienstliste offenlässt: Die Liste nennt niemanden beim Namen, also kann ein Mitglied dort nicht sehen, ob seine Anmeldung angekommen ist. Das Formular fragt dasselbe Paar wie die drei anderen — **Mitgliedsnummer** (mit der Angabe „4-stellig“) und **E-Mail-Adresse** — und hat **einen** Knopf, **Bestätigung erneut senden**. Ein zweiter Knopf **Nachschauen** stand zur Wahl und ist weg: Das Absenden schickt die Mail und ist damit selbst der Nachweis, und ein Knopf, der nichts tut als nachzusehen, verlangt vom Mitglied einen zweiten Schritt für dieselbe Antwort.
+- Die Antwort ist ein fester Satz, keine Liste der Dienste. Eine Liste müsste durch die Weiterleitung nach dem Absenden mitwandern, und der einzige Ort, an dem das Plugin nichts ablegt, ist die Adresse: Ein Ergebnis in der Adresszeile wäre das Paar selbst im Verlauf des Browsers, der danach sucht. Der Satz im Erfolgsfall nennt deshalb nur, dass die Bestätigung unterwegs ist; **welcher** Dienst gemeint ist, steht in der Mail, und die ist der bessere Ort dafür.
+- Die Mail geht an **alle** kommenden Arbeitsdienste des Mitglieds, mit je frischem Abmeldelink. Ein Mitglied, das sich für zwei Dienste eingetragen und nur eine Mail behalten hat, bekommt so beide Wege zurück. Der Satz steht im Singular, wenn eine Mail rausgeht, und im Plural bei mehreren: „Bestätigungsmail(s)“ ist, was ein Serienbrief schreibt, und das hier ist ein Satz an ein Mitglied.
+- „Kommend“ heißt dieselbe Menge, die die öffentliche Liste zeigt: die aktiven Arbeitsdienste, deren Termin noch nicht vorbei ist. Ein Dienst von letztem Monat zählt nicht, und deshalb endet die Absage mit dem zweiten Satz, dass sie nichts darüber sagt, ob schon ein Dienst geleistet wurde. Ohne ihn läse ein Mitglied, das im Frühjahr gearbeitet hat, aus der Antwort, es sei nirgends eingetragen.
 
 ## Adminbereich
 
@@ -175,6 +180,7 @@ Vor einer Installation sollten in einer Staging-Installation mindestens diese F�
 - das endgültige Löschen eines Arbeitsdienstes löscht alle zugehörigen Einträge und Anmeldungen,
 - ein Import mit einem Fehler in der Mitte schreibt überhaupt nichts, und ein Import derselben Datei ein zweites Mal meldet nur „unverändert“,
 - die öffentliche HTML-Ausgabe enthält keine E-Mail-Adresse, UUID, keinen Namen und keine interne Datensatz-ID,
+- die Selbstauskunft schickt die Bestätigung nur an die Adresse, die zum eingegebenen Paar gehört, und ihre Antwort verrät nicht, ob das Paar zu einem Mitglied gehört oder nicht,
 - die E-Mail ist im Spam-Ordner angekommen: Eine HTML-Nachricht von einer kleinen Vereinsdomain ohne eigenes SPF/DKIM wird häufiger als reine Textmail aussortiert. Der Plain-Text-Teil senkt das Risiko, beseitigt es aber nicht. Der erste echte Versand sollte deshalb mit einem Blick in den Spam-Ordner beginnen.
 
 ## Verhalten bei Fehlern und Grenzfällen
@@ -185,8 +191,11 @@ Vor einer Installation sollten in einer Staging-Installation mindestens diese F�
   - Der Grund für diese Fassung ist nicht Höflichkeit, sondern eine Grenze: Fünf Stellen im Plugin landen in dieser Absage (ein POST ohne HTTPS, der Honigtopf, ein Block aus acht Bedingungen, ein Mitglied, das nicht im Dienst steht, und ein Schreibfehler), und ein Satz, der auf alle fünf passt, kann nicht speziell sein. Was alle fünf gemeinsam haben, ist die Regel — also nennt er die, und die steht ohnehin unter dem Formular.
   - Der Satz „deine Nummer stimmt, aber du bist nicht im Dienst“ ist damit **ausgeschlossen**, und nicht aus Höflichkeit: Er kann nur erscheinen, wenn das Paar stimmt, und sein Erscheinen verrät einem Fremden, dass eine geratene Mitgliedsnummer existiert. Der nächste Schritt steht deshalb für alle Leser da und nicht als Erklärung.
   - Das Anmeldeformular sagt weiterhin nur: „Die Anmeldung ist nicht möglich. Mitgliedsnummer und E-Mail-Adresse müssen zu einem Mitglied des Vereins passen.“ Das ist keine Auslassung, sondern die richtige Angabe: Dieses Formular **legt** die Anmeldung an, es gibt also keine zweite Bedingung, an der es scheitern könnte. Beide Formulare beginnen mit demselben Paar-Satz und unterscheiden sich danach, weil sie verschiedene Bedingungen haben.
-  - Das Kontaktformular antwortet auch im Fehlerfall mit demselben höflichen Satz wie im Erfolgsfall (`contact_received`), weil der Besucher sonst an einem Formular, das zwei Felder hat, aus der Antwort herausliest, welches der beiden nicht gepasst hat. Zwei Zeilen mit einer richtigen Nummer und einer fremden Adresse und umgekehrt enden deshalb gleich: keine Mail, derselbe Zähler `contact_invalid_email`, dieselbe Antwort. Das Kontaktformular antwortet auch im Fehlerfall mit demselben höflichen Satz wie im Erfolgsfall (`contact_received`), weil der Besucher sonst an einem Formular, das zwei Felder hat, aus der Antwort herausliest, welches der beiden nicht gepasst hat. Zwei Zeilen mit einer richtigen Nummer und einer fremden Adresse und umgekehrt enden deshalb gleich: keine Mail, derselbe Zähler `contact_invalid_email`, dieselbe Antwort.
+  - Das Kontaktformular antwortet auch im Fehlerfall mit demselben höflichen Satz wie im Erfolgsfall (`contact_received`), weil der Besucher sonst an einem Formular, das zwei Felder hat, aus der Antwort herausliest, welches der beiden nicht gepasst hat. Zwei Zeilen mit einer richtigen Nummer und einer fremden Adresse und umgekehrt enden deshalb gleich: keine Mail, derselbe Zähler `contact_invalid_email`, dieselbe Antwort.
 - Anmeldung für einen Dienst, für den das Mitglied schon eingetragen ist: es wird keine zweite Zeile angelegt, und die Meldung sagt das. Der Fall ist nicht selten: Nachdem die Schaltfläche **Eintragen** einmal nichts angezeigt hat, probiert es die meisten ein zweites Mal.
+- Die Statusabfrage antwortet auf ein Paar, das zu keinem Mitglied gehört, und auf ein Mitglied ohne kommende Anmeldung mit **demselben** Satz. Die beiden Fälle auseinanderzuhalten hieße, einem Fremden zu sagen, ob eine geratene Mitgliedsnummer im Verein vorkommt — dieselbe Grenze wie beim Anmeldeformular. Der Satz steht auch dann, wenn der POST gar kein gültiges Formular war (Honigtopf, abgelaufenes Token): Ein Bot soll aus der Antwort nichts lernen, und ein Mensch, der die Seite neu lädt, liest dort dasselbe.
+- Die Statusabfrage ist die einzige Stelle im Plugin, an der eine Mail zu einem Zustand rausgeht, der **schon geschrieben** ist. Jede andere Mail entsteht einmal, im Moment einer Änderung; diese entsteht auf Druck, und wer das Paar kennt, kann sie wiederholen. Deshalb steht hinter dem Versand eine Drossel: ein Transient je Mitglied, eine Minute. Der zweite Druck in dieser Minute antwortet mit `duty_mail_wait` und schickt nichts. Eine Minute begrenzt nicht das Mitglied, das zweimal gedrückt hat; sie trennt den zweiten Druck von der Schleife. Das Paar, das zu niemandem gehört, setzt die Drossel nicht: Ein Versuch, der niemanden erreicht, darf keine Spur hinterlassen.
+- Der Erfolgssatz nennt die Zahl der **zugestellten** Mails und nicht die Zahl der gefundenen Anmeldungen. Geht keine davon raus — die Adresse nimmt nichts an —, steht `duty_mail_failed` und nicht die freundliche Antwort: Ein Mitglied, dem man sagt, die Mail sei unterwegs, wartet auf eine Nachricht, die nicht kommt. Der Satz ist ein eigener und nicht der des Anmeldeformulars: Dort heißt es, die Anmeldung habe nicht angelegt werden können, und hier steht die Anmeldung — es ist die Mail, die nicht rausging. Das Token einer nicht zugestellten Mail wird wieder zurückgenommen, wie beim Anmeldeformular und beim Adminversand, damit in der Tabelle keine Zeile steht, die einen Link behauptet, den niemand bekommen hat.
 - E-Mail mit dem Abmeldelink nicht zustellbar: Die Anmeldung wird wieder gelöscht, der Zähler `mail_send_failed` steigt, die öffentliche Antwort lautet `email_failed`. Eine Anmeldung ohne Abmeldeweg wäre eine Anmeldung, die nur noch über den Adminbereich zurückgenommen werden kann.
 - E-Mail zu einem eben angelegten Eintrag nicht zustellbar: Der Eintrag bleibt stehen und bleibt öffentlich, der Zähler `mail_send_failed` steigt und die öffentliche Antwort lautet `email_failed`. Der Zähler `publish_published` steigt **nicht**. Es gibt seit 1.15.0 kein Gegenteil dieses Falls mehr: Vor dieser Fassung wäre eine nicht zugestellte Mail Grund gewesen, eine Veröffentlichung zurückzunehmen, weil der Eintrag ohnehin noch vorgemerkt war und die Löschung des Vorgangs den Besitz der Zeile ungeklärt gelassen hätte. Ein Eintrag ohne Löschweg ist für den Besitzer kein Nachteil gegenüber einem gelöschten, und für den Verein ist der stehengebliebene Eintrag sichtbarer als ein verschwundener.
 - Veraltetes oder manipuliertes Formular-Token: Die Anfrage wird nicht ausgeführt, die öffentliche Antwort lautet `form_expired`.
@@ -220,6 +229,29 @@ Vor einer Installation sollten in einer Staging-Installation mindestens diese F�
   die Mails seit Wochen in Postfächern liegen, hätte niemand es gemerkt. Ein **Fehlschlag**
   nimmt sein Token wieder mit sich, und ein Eintrag ohne Mail gar keins: In der Tabelle steht
   eine Zeile je zugestellter Mail, und mehr lässt sich über sie nicht sagen.
+- **Die Selbstauskunft antwortet mit einem Satz und nicht mit einer Liste.** Ein Mitglied ohne
+  Blick in die Verwaltung soll wissen, ob seine Anmeldung angekommen ist; die Dienstliste
+  selbst nennt aber niemanden, und das bleibt so. Der Weg dorthin ist das Paar, das alle
+  Formulare des Plugins fragen. Was die Antwort **nicht** tut, ist die Dienste aufzählen: Eine
+  Liste müsste den Redirect nach dem Absenden überstehen, und der einzige Transportweg wäre
+  die Adresse — genau der Ort, an dem das Plugin das Paar nie ablegt. Der Satz bleibt deshalb
+  fest, und welcher Dienst gemeint ist, sagt die Mail. Das kostet die Bequemlichkeit, den
+  Dienstnamen schon auf der Seite zu lesen, und spart den einzigen Weg, auf dem das Paar den
+  Bildschirm verlassen hätte.
+- **Eine Antwort für zwei Fälle, und ein zweiter Satz, der sie ehrlich macht.** Ein Paar, das
+  zu keinem Mitglied gehört, und ein Mitglied ohne kommende Anmeldung ergeben denselben Satz —
+  sonst verriete die Antwort, ob eine geratene Nummer existiert. Damit der Satz trotzdem wahr
+  bleibt, endet er mit „Das ist keine Aussage, ob du bereits einen Arbeitsdienst geleistet
+  hast.“: „Kein zukünftiger Arbeitsdienst“ ist eine Aussage über den Kalender und nicht über
+  die Vergangenheit, und wer im Frühjahr gearbeitet hat, liest sonst „nirgends eingetragen“.
+- **Die Drossel ist der Preis dafür, dass diese Mail auf Druck entsteht.** Alle anderen Mails
+  des Plugins sind an eine Änderung gebunden und entstehen deshalb einmal; diese entsteht für
+  einen Zustand, der schon steht. Ohne Grenze wäre das Formular ein Weg, ein fremdes Postfach
+  zu fluten und die Tabelle der Abmeldetokens vollzuschreiben — jede erneute Mail legt eine
+  neue Zeile an, weil ein Token nur in der Mail lesbar ist, für die es geschrieben wurde. Ein
+  Transient je Mitglied für eine Minute trennt den zweiten Druck von der Schleife und kostet
+  kein Schema. Er steht **hinter** der Paar-Prüfung: Ein Versuch mit einem Paar, das zu
+  niemandem gehört, erreicht niemanden und darf keine Spur hinterlassen.
 - **Über dem angekündigten Bedarf trägt die Redaktion trotzdem ein.** Der Bedarf ist eine
   Ansage des Vereins an die Mitglieder, und die Redaktion weiß mehr als die Zahl. Die Liste
   sagt dann, wie viele Mitglieder für wie viele angekündigte Plätze drinstehen, und dass die

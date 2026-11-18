@@ -56,8 +56,8 @@ hier). Dann nur statisch arbeiten (PHP-Lint, Doku) und das offenlegen.
 - **Nichts Öffentliches:** E-Mail-Adressen, interne IDs, UUIDs und Lösch-Tokens
   erscheinen nie im Frontend. Der Löschlink ist der einzige Link der Mail.
 - **Ein Link wird nur gezeichnet, wenn Text daneben steht.**
-- Shortcodes `[arbeitsdienste]` und `[fahrgemeinschaften]`; die öffentliche Seite
-  kommt ohne JavaScript aus (native `details`).
+- Shortcodes `[arbeitsdienste]`, `[fahrgemeinschaften]` und `[anmeldung_pruefen]`;
+  die öffentliche Seite kommt ohne JavaScript aus (native `details`).
 
 ## Datenschutz (hart)
 

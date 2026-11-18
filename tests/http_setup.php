@@ -105,6 +105,42 @@ if ( $list_pages ) {
 	);
 }
 
+// The third page, carrying nothing but the status form of a member. It stands
+// on its own for the same reason as the second one, and it is looked up before
+// it is made for the same reason as both of them: a fixture that is built often
+// enough must not leave a page behind on every run.
+$status_pages = get_posts(
+	array(
+		'post_type'        => 'page',
+		'post_status'      => 'any',
+		'name'             => 'anmeldung-pruefen',
+		'numberposts'      => 1,
+		'suppress_filters' => true,
+	)
+);
+
+if ( $status_pages ) {
+	$status_page_id = $status_pages[0]->ID;
+	wp_update_post(
+		array(
+			'ID'           => $status_page_id,
+			'post_title'   => 'Anmeldung prüfen',
+			'post_content' => '[anmeldung_pruefen]',
+			'post_status'  => 'publish',
+		)
+	);
+} else {
+	$status_page_id = wp_insert_post(
+		array(
+			'post_type'    => 'page',
+			'post_status'  => 'publish',
+			'post_title'   => 'Anmeldung prüfen',
+			'post_name'    => 'anmeldung-pruefen',
+			'post_content' => '[anmeldung_pruefen]',
+		)
+	);
+}
+
 $soon = current_datetime()->modify( '+9 days' )->format( 'Y-m-d' );
 
 // The main duty carries a meeting point with a web address and a description of
@@ -256,6 +292,8 @@ $output = array(
 	'page_id'         => $page_id,
 	'list_page_id'    => $list_page_id,
 	'list_page_path'  => wp_make_link_relative( get_permalink( $list_page_id ) ),
+	'status_page_id'  => $status_page_id,
+	'status_page_path' => wp_make_link_relative( get_permalink( $status_page_id ) ),
 	'event_id'        => $event_id,
 	'event_ref'       => $event->public_ref,
 	'event_uuid'      => $event->event_uuid,
@@ -273,6 +311,8 @@ $output = array(
 	'member_free_mail' => 'cem@angeln.example.org',
 	'member_taken_no' => '0042',
 	'member_taken_mail' => 'anton@angeln.example.org',
+	'member_full_no'  => '0043',
+	'member_full_mail' => 'berta@angeln.example.org',
 	'full_event_id'   => $voller_id,
 	'full_event_ref'  => $repo->get_event( $voller_id )->public_ref,
 	'full_registrations' => (int) $repo->count_event_registrations( $voller_id ),

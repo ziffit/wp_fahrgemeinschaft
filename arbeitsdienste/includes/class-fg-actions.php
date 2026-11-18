@@ -19,6 +19,13 @@ defined( 'ABSPATH' ) || exit;
  */
 final class FG_Actions {
 	/**
+	 * Transient prefix of the resend throttle, one entry per member.
+	 *
+	 * @var string
+	 */
+	const RESEND_THROTTLE = 'fg_duty_resend_';
+
+	/**
 	 * Repository.
 	 *
 	 * @var FG_Repository
@@ -61,6 +68,8 @@ final class FG_Actions {
 		add_action( 'admin_post_fg_register_member', array( $this, 'register_member' ) );
 		add_action( 'admin_post_nopriv_fg_process_duty_token', array( $this, 'process_duty_token' ) );
 		add_action( 'admin_post_fg_process_duty_token', array( $this, 'process_duty_token' ) );
+		add_action( 'admin_post_nopriv_fg_resend_duty_mails', array( $this, 'resend_duty_mails' ) );
+		add_action( 'admin_post_fg_resend_duty_mails', array( $this, 'resend_duty_mails' ) );
 		add_action( 'template_redirect', array( $this, 'maybe_require_https' ), -1 );
 		add_action( 'template_redirect', array( $this, 'maybe_render_action_page' ), 0 );
 		add_action( 'template_redirect', array( $this, 'maybe_render_duty_action_page' ), 0 );
@@ -264,12 +273,17 @@ final class FG_Actions {
 
 		$is_action_page = 'view' === $this->query_value( 'fg_ride_action' );
 		$post           = get_post();
-		// Only the ride list is upgraded. The duty list is a list first: a member
-		// reads it on a phone, and the club runs its site over HTTPS anyway, so
-		// an upgrade there would only cost somebody the page. A POST from the duty
-		// form is still upgraded, because a write belongs in a request nobody can
-		// read on the way.
-		$is_shortcode   = $post && has_shortcode( $post->post_content, 'fahrgemeinschaften' );
+		// Only the ride list and the status form are upgraded. The duty list is a
+		// list first: a member reads it on a phone, and the club runs its site
+		// over HTTPS anyway, so an upgrade there would only cost somebody the
+		// page. The status form asks for the pair, so it is not a list and it is
+		// upgraded like the ride page. A POST from the duty form is still
+		// upgraded, because a write belongs in a request nobody can read on the
+		// way.
+		$is_shortcode   = $post && (
+			has_shortcode( $post->post_content, 'fahrgemeinschaften' )
+			|| has_shortcode( $post->post_content, 'anmeldung_pruefen' )
+		);
 
 		if ( ! $is_action_page && ! $is_shortcode ) {
 			return;
@@ -615,6 +629,119 @@ final class FG_Actions {
 		}
 
 		FG_Security::redirect_with_notice( 'unregistered', $source );
+	}
+
+	/**
+	 * Answer "am I registered?" and send the confirmation again.
+	 *
+	 * There is no list of who is on which duty, and there will not be one: the
+	 * club decided that. A member therefore has no way to see that their
+	 * registration arrived, and a member whose confirmation mail never came has
+	 * no way back to the unregistration link it carried. This handler is that
+	 * way. It asks the same pair as the three other forms of the plugin and
+	 * sends the same mail again, with a fresh link.
+	 *
+	 * One answer covers a pair that belongs to nobody and a member who is on no
+	 * upcoming duty. The two are told apart by nothing, because a sentence that
+	 * distinguished them would tell a passer-by whether a guessed member number
+	 * exists — the same rule the signup form follows. The duty itself is not
+	 * named in the answer either: the mail names it, and the answer is a
+	 * sentence about the mailbox.
+	 *
+	 * The second sentence of the refusal is not decoration. A member who has
+	 * done a duty and forgotten about it reads the first half as "I am not
+	 * registered", and the second half says that this is a statement about
+	 * what is coming and not about what has been.
+	 *
+	 * The one thing this handler does that no other handler of the plugin does
+	 * is send a mail for a state that is already written. Every other mail goes
+	 * out once, at the moment something changes. A member can therefore press
+	 * the button again and again, and a stranger who knows the pair can do the
+	 * same, so the send is throttled per member. One minute is not a limit on
+	 * the member: it is the difference between a second press and a loop.
+	 *
+	 * @return void
+	 */
+	public function resend_duty_mails() {
+		$this->require_post_method();
+		$this->require_https_post( 'form_expired' );
+		$this->verify_nonce( 'fg_resend_nonce', 'fg_resend_duty_mails' );
+
+		$source = FG_Security::safe_source_url( $this->post_value( 'source_url' ) );
+		$this->record_speed_signal( absint( $this->post_value( 'form_started_at' ) ) );
+		$this->stats->increment( 'status_total' );
+
+		if ( ! empty( $_POST['fg_website'] ) ) {
+			$this->stats->increment( 'bot_honeypot' );
+			FG_Security::redirect_with_notice( 'duty_none', $source );
+		}
+
+		$member = $this->repository->find_member_for_registration(
+			$this->post_value( 'fg_status_member_no' ),
+			$this->post_value( 'fg_status_member_email' )
+		);
+
+		if ( ! $member ) {
+			FG_Security::redirect_with_notice( 'duty_none', $source );
+		}
+
+		// The throttle stands after the lookup and before the first send, so a
+		// pair that belongs to nobody leaves no trace and cannot be used to fill
+		// the table of transients either.
+		if ( get_transient( self::RESEND_THROTTLE . $member->id ) ) {
+			$this->stats->increment( 'status_throttled' );
+			FG_Security::redirect_with_notice( 'duty_mail_wait', $source );
+		}
+
+		// The upcoming duties are the ones the public list shows, and the rule
+		// that decides which those are stays in one place: the loop asks per
+		// duty instead of writing the date comparison a second time. A club has
+		// a handful of duties ahead of it, so the extra lookups are the cheap
+		// half of that trade.
+		$found = 0;
+		$sent  = 0;
+
+		foreach ( $this->repository->get_active_events() as $event ) {
+			$registration = $this->repository->find_registration_pair( $event->id, $member->id );
+			if ( ! $registration ) {
+				continue;
+			}
+
+			$found++;
+
+			$token = $this->repository->unregister_token_for_registration( $registration->id );
+			if ( '' === $token ) {
+				continue;
+			}
+
+			if ( $this->mailer->send_duty_signup( $registration->id, $this->duty_action_url( $registration->public_ref, $token ) ) ) {
+				$sent++;
+				continue;
+			}
+
+			// A token that went into a mail that did not arrive is taken back,
+			// the same way the backend does it: the links of the mails that did
+			// arrive keep working, and a row that claims a link was sent out
+			// would be a wrong statement in the table.
+			$this->repository->drop_unregister_token( $registration->id, $token );
+			$this->stats->increment( 'mail_send_failed' );
+		}
+
+		if ( 0 === $found ) {
+			FG_Security::redirect_with_notice( 'duty_none', $source );
+		}
+
+		// A mail that could not be handed over is said, and it is the one case
+		// where the answer may not be the friendly one: the member would
+		// otherwise wait for a message that is not coming.
+		if ( 0 === $sent ) {
+			FG_Security::redirect_with_notice( 'duty_mail_failed', $source );
+		}
+
+		set_transient( self::RESEND_THROTTLE . $member->id, 1, MINUTE_IN_SECONDS );
+		$this->stats->increment( 'status_mails_resent', $sent );
+
+		FG_Security::redirect_with_notice( 1 === $sent ? 'duty_mail_resent' : 'duty_mails_resent', $source );
 	}
 
 	/**

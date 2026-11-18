@@ -61,6 +61,15 @@ final class FG_Stats {
 			'duty_removed_mail'         => 'E-Mails zur Entfernung aus einem Arbeitsdienst übergeben',
 			'admin_participant_added'   => 'Vom Redakteur eingetragene Anmeldungen',
 			'admin_participant_notified' => 'Vom Redakteur verschickte Anmelde-E-Mails',
+			// The status form of the public page. The two counters are apart
+			// because they answer two different questions: how often the form was
+			// used at all, and how many members it actually reached. A pair that
+			// belongs to nobody and a member who is on no upcoming duty raise
+			// neither of them beyond the first, and that is the point of the
+			// answer the form gives.
+			'status_total'           => 'Anfragen zum Prüfen der eigenen Anmeldung gesamt',
+			'status_mails_resent'    => 'Erneut zugesendete Bestätigungen zu Arbeitsdiensten',
+			'status_throttled'       => 'Anfragen zum Prüfen der eigenen Anmeldung, die zu früh wiederholt wurden',
 		);
 	}
 

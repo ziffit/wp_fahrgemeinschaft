@@ -8,7 +8,8 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Renders [arbeitsdienste], the list of the work duties still to come.
+ * Renders [arbeitsdienste], the list of the work duties still to come, and
+ * [anmeldung_pruefen], the form that answers "am I registered?".
  *
  * The list is built from the same work duties as the selection field of the
  * offer form, so the two pages cannot disagree about what is coming up.
@@ -18,6 +19,9 @@ defined( 'ABSPATH' ) || exit;
  * name is already in the member administration and must not be typed a second
  * time by someone who might type it differently. Both values are checked against
  * that administration; a pair that does not belong together is refused.
+ *
+ * The two shortcodes are meant for two pages and share one list of messages,
+ * because they answer with the same words where they answer the same thing.
  *
  * The page carries no script. The form is opened by a native details element,
  * the same way the contact form of a ride is, so a member without JavaScript can
@@ -30,6 +34,13 @@ final class FG_Public_Events {
 	 * @var string
 	 */
 	const ANCHOR_LIST = 'fg-dienste';
+
+	/**
+	 * Anchor of the status form, used as the id of its heading.
+	 *
+	 * @var string
+	 */
+	const ANCHOR_STATUS = 'fg-anmeldung';
 
 	/**
 	 * Repository.
@@ -46,6 +57,7 @@ final class FG_Public_Events {
 	public function __construct( FG_Repository $repository = null ) {
 		$this->repository = $repository ? $repository : new FG_Repository();
 		add_shortcode( 'arbeitsdienste', array( $this, 'render_shortcode' ) );
+		add_shortcode( 'anmeldung_pruefen', array( $this, 'render_status_shortcode' ) );
 	}
 
 	/**
@@ -86,6 +98,77 @@ final class FG_Public_Events {
 						?>
 					<?php endforeach; ?>
 				<?php endif; ?>
+			</section>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Render [anmeldung_pruefen].
+	 *
+	 * A member who registered for a duty has no way to see that it arrived: the
+	 * page names no participants, by the club's decision, and the only proof is
+	 * the mail. This form is the way back to that proof. It asks the same pair
+	 * as the three other forms of the plugin and sends the same mail again with
+	 * a fresh unregistration link.
+	 *
+	 * The answer is a sentence and not a list of duties. A list would have to
+	 * travel through the redirect that follows the form, and the one thing this
+	 * plugin never puts into an address is the pair — a page that carried the
+	 * result of a lookup would carry the lookup itself in the history of the
+	 * browser that made it.
+	 *
+	 * @return void
+	 */
+	public function render_status_shortcode() {
+		if ( ! is_ssl() && FG_Security::site_uses_https() ) {
+			return '<div class="fg-notice fg-notice-error" role="alert">' . esc_html__( 'Diese Seite ist nur über eine sichere HTTPS-Verbindung verfügbar.', 'arbeitsdienste' ) . '</div>';
+		}
+
+		FG_Public::enqueue_style();
+
+		$admin_url = admin_url( 'admin-post.php' );
+		$source    = $this->current_source_url();
+		$privacy   = get_privacy_policy_url();
+
+		ob_start();
+		?>
+		<div class="fg-wrapper">
+			<?php $this->render_notice(); ?>
+			<section class="fg-section" aria-labelledby="<?php echo esc_attr( self::ANCHOR_STATUS ); ?>">
+				<h2 id="<?php echo esc_attr( self::ANCHOR_STATUS ); ?>"><?php esc_html_e( 'Ist meine Anmeldung angekommen?', 'arbeitsdienste' ); ?></h2>
+				<p class="fg-hint"><?php esc_html_e( 'Der Verein zeigt nicht, wer sich für welchen Arbeitsdienst angemeldet hat. Hier kannst du nachsehen, ob deine Anmeldung angekommen ist, und dir die Bestätigung noch einmal schicken lassen.', 'arbeitsdienste' ); ?></p>
+				<form class="fg-status-form" action="<?php echo esc_url( $admin_url ); ?>" method="post">
+					<input type="hidden" name="action" value="fg_resend_duty_mails">
+					<input type="hidden" name="source_url" value="<?php echo esc_url( $source ); ?>">
+					<input type="hidden" name="form_started_at" value="<?php echo esc_attr( time() ); ?>">
+					<?php wp_nonce_field( 'fg_resend_duty_mails', 'fg_resend_nonce', false ); ?>
+					<div class="fg-honeypot" aria-hidden="true">
+						<label for="fg-status-website"><?php esc_html_e( 'Bitte dieses Feld leer lassen', 'arbeitsdienste' ); ?></label>
+						<input type="text" id="fg-status-website" name="fg_website" value="" tabindex="-1" autocomplete="off">
+					</div>
+					<?php // The same pair in the same words as in the three other forms of the plugin. The field names carry their own prefix because this form is meant for a page of its own and a second form beside it must not answer for it. ?>
+					<div class="fg-member-row">
+						<div class="fg-field">
+							<label for="fg-status-member-no"><?php esc_html_e( 'Mitgliedsnummer (4-stellig)', 'arbeitsdienste' ); ?></label>
+							<input type="text" id="fg-status-member-no" name="fg_status_member_no" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_NO_MAX ); ?>" required>
+						</div>
+						<div class="fg-field">
+							<label for="fg-status-member-email"><?php esc_html_e( 'E-Mail-Adresse', 'arbeitsdienste' ); ?></label>
+							<input type="email" id="fg-status-member-email" name="fg_status_member_email" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_EMAIL_MAX ); ?>" autocomplete="email" required>
+						</div>
+					</div>
+					<p class="fg-hint fg-hint-row"><?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen. Dann schicken wir dir die Bestätigung zu deinen kommenden Arbeitsdiensten noch einmal zu.', 'arbeitsdienste' ); ?></p>
+					<div class="fg-actions">
+						<button class="fg-button" type="submit"><?php esc_html_e( 'Bestätigung erneut senden', 'arbeitsdienste' ); ?></button>
+					</div>
+					<?php if ( $privacy ) : ?>
+						<p class="fg-hint">
+							<a href="<?php echo esc_url( $privacy ); ?>"><?php esc_html_e( 'Datenschutzerklärung', 'arbeitsdienste' ); ?></a>
+						</p>
+					<?php endif; ?>
+				</form>
 			</section>
 		</div>
 		<?php
@@ -355,6 +438,32 @@ final class FG_Public_Events {
 			'email_failed'     => array( __( 'Die Anmeldung konnte nicht angelegt werden, weil die E-Mail mit dem Abmeldelink nicht zugestellt werden konnte. Bitte versuche es später erneut.', 'arbeitsdienste' ), true ),
 			'invalid_token'    => array( __( 'Der Link ist ungültig oder abgelaufen.', 'arbeitsdienste' ), true ),
 			'form_expired'     => array( __( 'Das Formular ist nicht mehr gültig. Bitte lade die Seite neu und sende das Formular erneut ab.', 'arbeitsdienste' ), true ),
+			// The answer of the status form. It covers two cases with one
+			// sentence on purpose: a pair that belongs to no member, and a member
+			// who is on no upcoming duty. A sentence that told the two apart
+			// would tell a passer-by whether a guessed member number exists, the
+			// same rule the signup form follows.
+			//
+			// The second half is not padding. A member who worked a duty last
+			// month and forgot about it reads the first half as "I am not
+			// registered", and the second half says that this is a statement
+			// about what is coming, not about what has been. It is also the
+			// sentence that makes the answer true for a duty that is over: the
+			// registration of such a duty is still in the table, and the form
+			// does not look at it.
+			'duty_none'        => array( __( 'Du bist für keinen zukünftigen Arbeitsdienst angemeldet. Das ist keine Aussage, ob du bereits einen Arbeitsdienst geleistet hast.', 'arbeitsdienste' ), false ),
+			// Singular and plural apart, because "die Bestätigungsmail(s)" is
+			// what a form letter writes and this is a sentence to a member. Which
+			// of the two stands here is the number of mails that were handed
+			// over, not the number of duties found: a member who reads that the
+			// mails are coming and gets none would look in the wrong place.
+			'duty_mail_resent' => array( __( 'Wir haben dir die Bestätigungsmail zu deinem Arbeitsdienst erneut zugesendet. Bitte prüfe deinen Posteingang und gegebenenfalls den Spam-Ordner.', 'arbeitsdienste' ), false ),
+			'duty_mails_resent' => array( __( 'Wir haben dir die Bestätigungsmails zu deinen Arbeitsdiensten erneut zugesendet. Bitte prüfe deinen Posteingang und gegebenenfalls den Spam-Ordner.', 'arbeitsdienste' ), false ),
+			'duty_mail_wait'   => array( __( 'Die Bestätigung wurde gerade verschickt. Bitte warte eine Minute und versuche es dann noch einmal.', 'arbeitsdienste' ), true ),
+			// Its own sentence and not the one of the signup form: that one says
+			// that the registration could not be written, and here the
+			// registration stands — it is the mail that did not leave.
+			'duty_mail_failed' => array( __( 'Die E-Mail konnte nicht zugestellt werden. Bitte versuche es später erneut.', 'arbeitsdienste' ), true ),
 		);
 
 		if ( ! isset( $notices[ $notice_key ] ) ) {
