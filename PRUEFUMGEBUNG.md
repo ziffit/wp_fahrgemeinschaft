@@ -4,12 +4,15 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 18.11.2026 — **CLI 545, öffentliches HTTP 305, Mail-Ebene 124, Admin-Ebene 758,
+Letzter Lauf: 18.11.2026 — **CLI 545, öffentliches HTTP 307, Mail-Ebene 124, Admin-Ebene 758,
 0 Fehler**, gegen den Stand **Plugin 1.25.11, Schema 1.9.0**. Die CLI-Suite lief mit ausdrücklicher
-Zustimmung, weil sie am Anfang alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht.
-Gegenüber dem Lauf vom 16.11.2026 sind 31 Behauptungen dazugekommen. Sie stehen fast alle im neuen Abschnitt `[10]`
-der öffentlichen Suite und prüfen die Selbstauskunft `[anmeldung_pruefen]`: das Formular mit demselben
-Paar in denselben zwei Worten wie die anderen drei, **einen** Knopf, POST statt GET, keine Nummer,
+Zustimmung, weil sie am Anfang alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht. Die
+zwei Behauptungen auf Kopfzeile und Knopftext der Selbstauskunft sind am selben Tag mit der
+öffentlichen Suite allein nachgezogen; die drei anderen Suiten berührt ein Wortlaut nicht.
+Gegenüber dem Lauf vom 16.11.2026 sind 33 Behauptungen dazugekommen. Sie stehen fast alle im neuen Abschnitt `[10]`
+der öffentlichen Suite und prüfen die Selbstauskunft `[anmeldung_pruefen]`: die Frage als Kopfzeile,
+den einen Knopf **Anmeldung prüfen**, das Formular mit demselben
+Paar in denselben zwei Worten wie die anderen drei, POST statt GET, keine Nummer,
 Adresse, kein Token und keine interne ID auf der Seite, die **einen** Satz für zwei Fälle — ein fremdes
 Paar und ein Mitglied ohne kommenden Dienst —, den Erfolgssatz im Singular und im Plural, die
 wiederholte Bestätigungsmail an genau die Paar-Adresse mit frischem Abmeldelink, die Drossel von einer
