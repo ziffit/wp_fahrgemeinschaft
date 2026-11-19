@@ -57,11 +57,11 @@ has "page renders the offer form" "$body" "Fahrgemeinschaft anbieten"
 has "page lists the published ride" "$body" "Berta"
 has "page lists the ride by the first name of the member" "$body" "Suedstadt"
 # The member number is looked up, never printed. A nonce value on the same page
-# is random alphanumerics, and "0043" could in principle turn up inside one; the
+# is random alphanumerics, and "00043" could in principle turn up inside one; the
 # nonce values are taken out first so that this check can only fail because the
 # number really is on the page.
 ohne_nonce=$(printf '%s' "$body" | sed -E 's/(name="[^"]*nonce[^"]*"[^>]*value=")[^"]*"/\1"/g')
-hasnt "page shows no member number" "$ohne_nonce" "0043"
+hasnt "page shows no member number" "$ohne_nonce" "00043"
 hasnt "page hides the event address" "$body" "anton@angeln.example.org"
 hasnt "page hides the creator address" "$body" "berta@angeln.example.org"
 hasnt "page hides the event uuid" "$body" "$EVENT_UUID"
@@ -93,7 +93,7 @@ head=$(curl -sk -D - -o "$DIR/confirm.html" "$BASE/?fg_ride_action=view&ride_ref
 html=$(cat "$DIR/confirm.html")
 has "delete page renders" "$html" "Fahrgemeinschaft löschen"
 has "delete page shows the first name of the member" "$html" "Anton"
-has "delete page shows the member number to the member itself" "$html" "0042"
+has "delete page shows the member number to the member itself" "$html" "00042"
 has "delete page names the entry that is meant" "$html" "Innenstadt"
 hasnt "delete page hides the address" "$html" "anton@angeln.example.org"
 has "delete page says what is about to happen" "$html" "sofort und ohne weitere Rückfrage"
@@ -193,7 +193,7 @@ contact_nonce=$(curl -sk "$BASE/?page_id=$PAGE_ID&ride_ref=$PUBLISHED_REF" | gre
 # four cases that matter: two members of the duty (forwarded), the creator
 # asking about the own entry (dropped silently), a member who did not sign up
 # (refused), and an address of no member at all (refused).
-ERSTELLER_NR=0043
+ERSTELLER_NR=00043
 ERSTELLER_MAIL=berta@angeln.example.org
 s drop-registration "$(jq event_id)" "$ERSTELLER_NR" > /dev/null 2>&1
 s register "$(jq event_id)" "$ERSTELLER_NR" "$ERSTELLER_MAIL" > /dev/null
@@ -292,7 +292,7 @@ if [ -n "$anchor" ]; then has "that place exists on the page" "$notice_page" "id
 loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_contact_ride" \
 	--data-urlencode "ride_ref=$PUBLISHED_REF" \
-	--data-urlencode "fg_contact_member_no=0044" \
+	--data-urlencode "fg_contact_member_no=00044" \
 	--data-urlencode "fg_contact_email=cem@angeln.example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "source_url=$BASE/?page_id=$PAGE_ID" \
@@ -671,7 +671,7 @@ has "the address of the form stops at the width of the column" "$body" 'name="fg
 has "the member number of the form stops at five digits" "$body" 'name="fg_member_no" maxlength="5"'
 # --- the label says how many digits the number has (since 1.25.10, five since
 # 1.25.12)
-# The club's numbers begin with a zero (0042), and a member who only knows their
+# The club's numbers begin with a zero (00042), and a member who only knows their
 # number as "42" has no way of knowing that. The label says it, and it says it in
 # all three forms that ask for a number on these two pages: one form that names the
 # length and two that do not is the more confusing state, not the tidier one. The
@@ -761,7 +761,7 @@ probe() {
 		--data-urlencode "action=fg_submit_ride" \
 		--data-urlencode "fg_mode=offer" \
 		--data-urlencode "fg_event_ref=$event_ref" \
-		--data-urlencode "fg_member_no=0042" \
+		--data-urlencode "fg_member_no=00042" \
 		--data-urlencode "fg_origin=$1" \
 		--data-urlencode "fg_member_email=fremd@example.com" \
 		--data-urlencode "fg_consent=1" \
@@ -909,7 +909,7 @@ loc=$(curl -sk -o /dev/null -w '%{redirect_url}' -X POST "$BASE/wp-admin/admin-p
 	--data-urlencode "action=fg_submit_ride" \
 	--data-urlencode "fg_event_ref=$event_ref" \
 	--data-urlencode "fg_mode=search" \
-	--data-urlencode "fg_member_no=0044" \
+	--data-urlencode "fg_member_no=00044" \
 	--data-urlencode "fg_origin=Manipuliert" \
 	--data-urlencode "fg_member_email=cem@angeln.example.org" \
 	--data-urlencode "fg_consent=1" \
@@ -2470,7 +2470,7 @@ status_post() {
 		--data-urlencode "source_url=$BASE$STATUS_PATH"
 }
 
-# A member who is in no upcoming duty. 0044 is in the member administration and
+# A member who is in no upcoming duty. 00044 is in the member administration and
 # in no duty of the fixture, and it is the case the answer has to cover with the
 # same sentence as a pair that belongs to nobody.
 clear_mails
@@ -2511,7 +2511,7 @@ else
 	bad "and the refusal is the same sentence as the empty answer" "refusal: $FREMD_TEXT"
 fi
 
-# The member who is registered. 0042 is in the main duty of the fixture.
+# The member who is registered. 00042 is in the main duty of the fixture.
 ANZAHL_VORHER=$(s count-registrations "$DIENST")
 VORHER_NOTIFIED=$(s notified "$DIENST" "$FREMDE_NR" | cut -f1)
 VORHER_TOKENS=$(s notified "$DIENST" "$FREMDE_NR" | cut -f2)
@@ -2592,7 +2592,7 @@ fi
 
 # A member who is on two upcoming duties gets two mails, and the sentence says
 # so. The second duty is built here and taken away again, so the fixture keeps
-# the shape the other sections expect. 0043 is on the full duty of the fixture
+# the shape the other sections expect. 00043 is on the full duty of the fixture
 # and is not the member the throttle above was set for.
 ZWEITER=$(s make-event "Zweiter Dienst für die Statusabfrage" "$(date -d '+40 days' +%Y-%m-%d)" 2)
 s register "$ZWEITER" "$FULL_NR" "$FULL_MAIL" >/dev/null

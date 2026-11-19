@@ -4,7 +4,14 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 19.11.2026 — **öffentliches HTTP 309, 0 Fehler**, gegen den Stand **Plugin 1.25.13,
+Letzter Lauf: 19.11.2026 — **CLI 545, öffentliches HTTP 309, Mail-Ebene 124, Admin-Ebene 758,
+0 Fehler**, gegen den Stand **Plugin 1.25.13, Schema 1.9.0**. Alle vier Suiten sind über den ganzen
+Bestand gefahren, weil die Mitgliedsnummern der Testdaten und der Test-CSV fünfstellig wurden (siehe
+„Fassung 1.25.12“). Am Plugin hat sich keine Zeile geändert, die Zahlen sind dieselben wie im Lauf
+darunter. Die CLI-Suite lief mit ausdrücklicher Zustimmung, weil sie am Anfang alle Arbeitsdienste,
+Fahrgemeinschaften und Mitglieder löscht.
+
+Vorheriger Lauf: 19.11.2026 — **öffentliches HTTP 309, 0 Fehler**, gegen den Stand **Plugin 1.25.13,
 Schema 1.9.0**. Gefahren wurde nur die öffentliche Suite, weil die Fassung genau eine Behauptung
 dazubekommt: Der Hinweis unter den beiden Feldern der Statusseite sagt jetzt, dass ein zu einem
 Arbeitsdienst angemeldetes Mitglied seine Bestätigungsmail erneut bekommt („the hint under the pair
@@ -329,7 +336,7 @@ Zwei Eigenheiten der Suiten, die man kennen muss, bevor man einem Fehlschlag tra
   `invalid_token` fehl — nicht, weil das Plugin etwas kaputt gemacht hätte, sondern
   weil die Werte schon verbraucht waren. Das gilt auch, wenn eine Suite von Hand
 gefahren wird statt über `run-all.sh`: `admin.sh` braucht für den Importbericht und für
-ein paar Zählerstände das Mitglied `0042` in der Datenbank und liest die Fixture-Datei nicht.
+ein paar Zählerstände das Mitglied `00042` in der Datenbank und liest die Fixture-Datei nicht.
   `http.sh` läuft dann gegen leere Werte und meldet 24 rote Zeilen, von denen keine
   einen Fehler des Plugins bezeichnet. Vor jeder von Hand gefahrenen Suite also
   `http_setup.php` laufen lassen.
@@ -832,9 +839,9 @@ sind umgestellt, und die drei Bruchstellen sind nachgelaufen:
 
 | Fundstelle | Was die Prüfung behauptete | Warum sie immer grün war |
 | --- | --- | --- |
-| `if ( false )` statt des Honigtopf-Zweigs in `register_member()` | Eine Anmeldung mit gefülltem Honigtopf-Feld schreibt nichts | Sie sandte die Nummer `0851`, und das ist ein Mitglied, das für den getesteten Dienst **schon** angemeldet war. Die Prüfung bekam `already_registered` und las das für die Honigtopf-Antwort. Sie prüfte nie die Honigtopf-Falle, sondern dass sich ein Mitglied nicht zweimal eintragen lässt. Auch richtig, aber etwas anderes. |
+| `if ( false )` statt des Honigtopf-Zweigs in `register_member()` | Eine Anmeldung mit gefülltem Honigtopf-Feld schreibt nichts | Sie sandte die Nummer `00851`, und das ist ein Mitglied, das für den getesteten Dienst **schon** angemeldet war. Die Prüfung bekam `already_registered` und las das für die Honigtopf-Antwort. Sie prüfte nie die Honigtopf-Falle, sondern dass sich ein Mitglied nicht zweimal eintragen lässt. Auch richtig, aber etwas anderes. |
 | Suche nach `name="fg_first_name"` und die Aussage „alle vier Felder sind als Pflicht markiert“ | Das Formular führt vier Pflichtfelder | Zwei getrennte Behauptungen an einer ganzen Seite. Die erste findet den Feldnamen auch bei `type="hidden"`; die zweite findet `required` irgendwo im Dokument, und das `required` der Dateiauswahl im Import-Formular stand schon vorher darin. Beide blieben grün, als das Vornamefeld zum versteckten Feld gemacht wurde. |
-| Suche nach `0042` im ganzen Seitenquelltext | Der Bericht nennt ein Mitglied, das nicht in der Datei steht | Bericht und Mitgliederliste stehen auf **derselben** Seite, und `0042` steht in beiden. Die Prüfung fand die Nummer in der Liste und meldete den Bericht als geprüft. Sie blieb grün, als der Bericht niemanden mehr nannte. |
+| Suche nach `00042` im ganzen Seitenquelltext | Der Bericht nennt ein Mitglied, das nicht in der Datei steht | Bericht und Mitgliederliste stehen auf **derselben** Seite, und `00042` steht in beiden. Die Prüfung fand die Nummer in der Liste und meldete den Bericht als geprüft. Sie blieb grün, als der Bericht niemanden mehr nannte. |
 
 Daraus sind drei Dinge entstanden, zwei im Plugin und eines in der Suite:
 
@@ -845,7 +852,7 @@ Daraus sind drei Dinge entstanden, zwei im Plugin und eines in der Suite:
   Klammer zählt statt die nächste zu nehmen: Der Bericht enthält eine eigene Hinweisbox,
   und ein Suchen nach der ersten schließenden `</div>` hätte genau den ersten Absatz
   geliefert und die Tabelle darunter verschluckt.
-- Die Honigtopf-Probe sendet jetzt `0852 / zwei@example.org`, ein Mitglied, das für
+- Die Honigtopf-Probe sendet jetzt `00852 / zwei@example.org`, ein Mitglied, das für
   keinen der getesteten Dienste eingetragen ist, und prüft zusätzlich die Meldung.
 - Die Formularprüfung liest je Feld ein einzelnes `<input>`-Element und verlangt
   Feldtype und `required` **im selben Tag**; das Adressfeld wird als `type="email"`
@@ -982,7 +989,7 @@ Stelle:
 | `DELETE FROM fg_members` ohne die Bedingung | die beiden angemeldeten Mitglieder bleiben | beide „survived“, dazu die Memberzahl und der Hinweis: 4 Prüfungen |
 | `render()` ruft vor der Übersicht die Löschung auf | das Aufrufen der Übersicht löscht nichts | 8 Prüfungen, zuerst „the overview deletes nothing“ — und die Übersicht stand danach leer, ohne Schaltfläche und ohne Formular |
 | `check_admin_referer()` entfernt | ein falscher Nonce wird abgewiesen | „a wrong nonce is refused“ meldete 303 statt 403, danach waren alle drei weg; die Hinweisprüfung sah zusätzlich **zwei** Hinweise |
-| die Übersicht zeigt nur den ersten Betroffenen | sie nennt genau die Mitglieder, die sie nimmt | 3 Prüfungen: die Schaltfläche meldete „1 Mitglied endgültig löschen“, die Mengenprüfung fand 0960 gegen 0960 0961 0962 |
+| die Übersicht zeigt nur den ersten Betroffenen | sie nennt genau die Mitglieder, die sie nimmt | 3 Prüfungen: die Schaltfläche meldete „1 Mitglied endgültig löschen“, die Mengenprüfung fand 00960 gegen 00960 00961 00962 |
 | der Hinweis nennt für beide Zahlen dieselbe | der Hinweis nennt beide Zahlen | genau 1 Prüfung |
 | die beiden Zahlen auf der Liste sind vertauscht | die Liste nennt beide Zahlen richtig | 3 Prüfungen, zuerst „it names how many would be deleted“ |
 | `current_user_can( 'delete_posts' )` entfernt | — | **keine**, und das ist keine Wirkung des Fehlers, sondern eine Lücke der Umgebung; siehe unten |
@@ -1006,7 +1013,7 @@ Drei Dinge sind dabei mitgefallen, und alle drei waren Fehler im Prüfrahmen, ni
 - **Eine Prüfung suchte eine Zahl an der falschen Stelle.** Die Nummern der Betroffenen
   standen in der Seite der Übersicht und wurden einzeln gesucht. Eine Mitgliedsnummer ist
   Text, und die eines einen Anfänger haben kann: Die Suche nach `004` wird von der Zeile
-  der 0042 beantwortet. Gehalten werden jetzt beide Mengen als **satz**, sortiert, und
+  der 00042 beantwortet. Gehalten werden jetzt beide Mengen als **satz**, sortiert, und
   verglichen; die Adressen zusätzlich einzeln, denn zwei Adressen können sich nicht wie
   zwei Nummern ähneln.
 
@@ -1023,7 +1030,7 @@ spüren: Er löscht alle Mitglieder, die für keinen Dienst angemeldet sind — 
 einem Lauf der HTTP-Suite auch die, die `http_setup.php` angelegt hat. `http.sh` und
 `mail.sh` bauen ihre Fixture ohnehin vor ihrem Lauf neu, was hier keine neue Vorschrift ist;
 `admin.sh` braucht für seinen Bericht über fehlende Dateizeilen ein Mitglied, das nicht in
-der Datei steht, und nimmt dafür 0042 aus der Fixture. Nach einem Lauf der neuen Reihe ist
+der Datei steht, und nimmt dafür 00042 aus der Fixture. Nach einem Lauf der neuen Reihe ist
 deshalb `http_setup.php` zu fahren, bevor `admin.sh` wieder etwas über den Importbericht
 behauptet. Beim ersten Lauf nach den Fehlerbildern ist genau das passiert: Zwei rote
 Zeilen in `[10]` über den Bericht, weil Bild 1 in seiner Variante ohne Bedingung auch die
@@ -1589,7 +1596,7 @@ Werkzeug und nicht in der Suite. Die Lehre ist die alte: Ein Symptom, das nur im
 auftritt und nie im normalen Lauf, ist kein Befund über den geprüften Code, sondern einer über
 das Werkzeug — und es gehört die **vollständige** Ausgabe eines solchen Laufs gesichert, nicht
 nur die Zeilen mit `FAIL`, weil die Antwort im verworfenen Teil stand. Was die Prüfungen gemeinsam haben: Sie bauen ihre Mitglieder vorher selbst
-(`neu 7201 …`) und schicken eine echte Anfrage an einen echten Dienst; wenn das Anlegen des
+(`neu 07201 …`) und schicken eine echte Anfrage an einen echten Dienst; wenn das Anlegen des
 Mitglieds scheitert, entfällt die Nachricht und der Befehl meldet `KEINE-MAIL`. Für den nächsten
 Fall dieser Art ist der vollständige Lauf zu sichern, nicht nur die Zeilen mit `FAIL` — das
 Werkzeug der Gegenproben wirft genau den Teil weg, in dem die Antwort stünde.
@@ -3163,6 +3170,12 @@ refused“, „a member with the longest number and the longest names is stored�
 back with every character“ — die drei liefen vorher mit einem 40-stelligen Wert und laufen jetzt mit
 einem fünfstelligen. Gegenprobe 20 wurde gefahren und macht **genau** die Behauptung „all three forms
 say how many digits the number has“ rot, wie sie soll.
+
+Nachgezogen am 19.11.2026: Die Mitgliedsnummern der Testdaten sind fünfstellig geworden — die
+Fixture-Mitglieder, die Importdateien der Admin-Suite, die Nummern der CLI-Suite und die versionierte
+Test-CSV `tests/gruppe.csv`. Die Nummern bleiben Zeichenketten, an keiner Behauptung hat sich eine
+Zeile geändert, und alle vier Suiten laufen mit denselben Zahlen wie zuvor (CLI 545, HTTP 309, Mail
+124, Admin 758, 0 Fehler).
 
 ## Mail-Auswertung
 

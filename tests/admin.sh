@@ -142,7 +142,7 @@ print(html.unescape(m.group(1)).strip() if m else '')"; }
 # taken from the tbody and not from the whole table, so the heading row is not read
 # as a member. A caller compares the result with the tables instead of searching
 # for one number at a time: a member number is text, one of them can be the
-# beginning of another, and a search for 004 is answered by the row of 0042.
+# beginning of another, and a search for 0004 is answered by the row of 00042.
 nummern() { python3 -c "
 import re,sys,html
 h=sys.stdin.read()
@@ -340,9 +340,9 @@ if [ "$EVENT_ID" -gt 0 ]; then ok "the work duty of this suite exists ($EVENT_ID
 # exist for a duty somebody has registered for. It used to be somebody else's
 # registration, left behind by the HTTP suite: the check passed only because
 # another suite had filled the duty it was reading.
-EVENTMITGLIED=$(neu "0842" "verwalter@example.org" "Verwalter" "Test")
+EVENTMITGLIED=$(neu "00842" "verwalter@example.org" "Verwalter" "Test")
 if [ "$EVENTMITGLIED" -gt 0 ]; then
-	s register "$EVENT_ID" "0842" "verwalter@example.org" > /dev/null
+	s register "$EVENT_ID" "00842" "verwalter@example.org" > /dev/null
 	if [ "$(s count-registrations "$EVENT_ID")" = "1" ]; then ok "one member of this suite is on the duty"; else bad "one member of this suite is on the duty" "$(s count-registrations "$EVENT_ID")"; fi
 else
 	bad "one member of this suite is on the duty" "member $EVENTMITGLIED was refused"
@@ -547,14 +547,14 @@ echo "[4] ride screens"
 # a ride belongs to a member and the list names the member, so the rows have to
 # be built here as well — otherwise the checks would be about whatever the
 # environment happens to hold.
-neu 7301 fahrer@angeln.example.org Frieda Fahrlich
-RIDE_ID=$(s make-ride "$EVENT_ID" offer Innenstadt 7301)
-PUBLISHED_RIDE=$(s make-ride "$EVENT_ID" search Suedstadt 7301)
+neu 07301 fahrer@angeln.example.org Frieda Fahrlich
+RIDE_ID=$(s make-ride "$EVENT_ID" offer Innenstadt 07301)
+PUBLISHED_RIDE=$(s make-ride "$EVENT_ID" search Suedstadt 07301)
 rides=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides")
 has "ride list renders" "$rides" "Fahrgemeinschaften"
 has "event filter present" "$rides" 'name="fg_event_filter"'
 has "the list names the ride after the first name of its member" "$rides" "Frieda"
-has "the list names the member by number" "$rides" "7301"
+has "the list names the member by number" "$rides" "07301"
 has "the list names the member by first and last name" "$rides" "Frieda Fahrlich"
 hasnt "the list does not show the member address" "$rides" "fahrer@angeln.example.org"
 hasnt "no form to change a ride" "$rides" 'name="fg_origin"'
@@ -568,7 +568,7 @@ hasnt "detail shows no confirmation date any more" "$detail" "Bestätigt am"
 hasnt "detail shows no status any more" "$detail" "Vorgemerkt"
 has "detail shows the first name of the member" "$detail" "Frieda"
 has "detail shows the last name of the member" "$detail" "Fahrlich"
-has "detail shows the member number" "$detail" "7301"
+has "detail shows the member number" "$detail" "07301"
 has "detail gives the address of the member" "$detail" "fahrer@angeln.example.org"
 has "detail offers the permanent delete" "$detail" "action=fg_delete_record"
 hasnt "detail has no save button" "$detail" 'name="fg_alias"'
@@ -585,7 +585,7 @@ echo "[4b] filtering the ride list"
 # name column is the same on all three rows and cannot serve as the marker. Only
 # the area can, and it is the one free text a ride has.
 ZWEITER=$(s make-event "Zweiter Arbeitsdienst" "$(date -d '+50 days' +%Y-%m-%d)" 4 "10:00")
-FREMDE_RIDE=$(s make-ride "$ZWEITER" search Fernstadt 7301)
+FREMDE_RIDE=$(s make-ride "$ZWEITER" search Fernstadt 07301)
 filtered=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides&fg_event_filter=$EVENT_ID")
 has "the duty filter keeps the offered ride of that duty" "$filtered" "Innenstadt"
 has "and the searched ride of the same duty" "$filtered" "Suedstadt"
@@ -601,8 +601,8 @@ echo "[4c] a member who left the club after offering a ride"
 # The list says so in words instead of naming nobody, and the detail screen
 # stands the four member rows up in one, because four empty cells read like a
 # form nobody filled in.
-VERWAIST=$(s make-ride "$EVENT_ID" offer Geistereck 7301)
-s delete-member "$(s member-by-no 7301 id)" > /dev/null
+VERWAIST=$(s make-ride "$EVENT_ID" offer Geistereck 07301)
+s delete-member "$(s member-by-no 07301 id)" > /dev/null
 verwaist_list=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-rides")
 has "the list names a ride without a member" "$verwaist_list" "Fahrgemeinschaft ohne Mitglied"
 hasnt "the list does not name the member that is gone" "$verwaist_list" "Frieda Fahrlich"
@@ -933,19 +933,19 @@ echo "[5e1] the registration list of the duty as a CSV file"
 # after it is shifted, and it looks plausible while it is wrong.
 CSV_DIENST=$(s make-event "CSV Datei" "$(date -d '+68 days' +%Y-%m-%d)" 9 "09:00")
 UMBRUCH=$(printf 'Zeile eins\nZeile zwei')
-CSV_SOLL="0951|Müller; Anna
-0952|Sagt \"Hallo\"
-0953|$UMBRUCH
-0954|Normal"
+CSV_SOLL="00951|Müller; Anna
+00952|Sagt \"Hallo\"
+00953|$UMBRUCH
+00954|Normal"
 # The work group of the fourth member is a formula. It is not there to prove that
 # this plugin cares about formulas — it is there to keep the decision visible: A
 # file with such a value in it runs code on the machine of whoever opens it.
 FORMEL='=HYPERLINK("http://example.org")'
-neu 0951 csv1@example.org Anna 'Müller; Anna'
-neu 0952 csv2@example.org Bernd 'Sagt "Hallo"'
-neu 0953 csv3@example.org Celine "$UMBRUCH"
-neu 0954 csv4@example.org Dora Normal "$FORMEL"
-for nr in 0951 0952 0953 0954; do
+neu 00951 csv1@example.org Anna 'Müller; Anna'
+neu 00952 csv2@example.org Bernd 'Sagt "Hallo"'
+neu 00953 csv3@example.org Celine "$UMBRUCH"
+neu 00954 csv4@example.org Dora Normal "$FORMEL"
+for nr in 00951 00952 00953 00954; do
 	s drop-registration "$CSV_DIENST" "$nr" > /dev/null 2>&1
 	s register "$CSV_DIENST" "$nr" "$(s member-by-no $nr email)" > /dev/null
 done
@@ -982,10 +982,10 @@ import csv, io, sys
 h = io.open('$DIR/export.csv', encoding='utf-8-sig').read()
 zeilen = list(csv.reader(io.StringIO(h), delimiter=';'))
 soll = {
-    '0951': ('Anna', 'Müller; Anna'),
-    '0952': ('Bernd', 'Sagt \"Hallo\"'),
-    '0953': ('Celine', 'Zeile eins\nZeile zwei'),
-    '0954': ('Dora', 'Normal'),
+    '00951': ('Anna', 'Müller; Anna'),
+    '00952': ('Bernd', 'Sagt \"Hallo\"'),
+    '00953': ('Celine', 'Zeile eins\nZeile zwei'),
+    '00954': ('Dora', 'Normal'),
 }
 if len(zeilen) != 5:
     print('the file has %d lines for 4 members' % len(zeilen), file=sys.stderr)
@@ -1041,7 +1041,7 @@ struct "$(cat "$DIR/export.csv")" "a value that a spreadsheet would take for a f
 import csv, io, sys
 h = io.open('$DIR/export.csv', encoding='utf-8-sig').read()
 zeilen = list(csv.reader(io.StringIO(h), delimiter=';'))
-gefunden = [z for z in zeilen[1:] if z[3] == '0954']
+gefunden = [z for z in zeilen[1:] if z[3] == '00954']
 if not gefunden:
     sys.exit(1)
 wert = gefunden[0][7]
@@ -1147,7 +1147,7 @@ clean "$DIR/export-fehlt.csv" "an export for a duty that does not exist"
 #   user without the permission is refused by the plugin — and a check that only
 #   looked for "no file" would be green even if the refusal had come from
 #   somewhere else entirely.
-ABO_NR=0905
+ABO_NR=00905
 ABO_LOGIN=fgabo
 ABO_PASS='Probe1234!'
 s delete-user "$ABO_LOGIN" > /dev/null 2>&1
@@ -1187,7 +1187,7 @@ fi
 clean "$DIR/abo-antwort.txt" "the export refused to an account without permission"
 s delete-user "$ABO_LOGIN" > /dev/null
 
-for nr in 0951 0952 0953 0954; do
+for nr in 00951 00952 00953 00954; do
 	s drop-registration "$CSV_DIENST" "$nr" > /dev/null 2>&1
 	s delete-member "$(s member-by-no $nr id)" > /dev/null 2>&1
 done
@@ -1206,8 +1206,8 @@ ZUWEISUNG=$(s make-event "Zuweisung" "$(date -d '+70 days' +%Y-%m-%d)" 2 "10:00"
 # cannot be delivered to. Both are real rows of the member list, and the second
 # one is the case that decides whether the entry survives a mail that does not
 # arrive.
-neu 0950 zuweisung@example.org Zuweisung Test
-neu 0951 kaputt@example.org Kaputt Test
+neu 00950 zuweisung@example.org Zuweisung Test
+neu 00951 kaputt@example.org Kaputt Test
 ZUWEISUNG_MAIL="zuweisung@example.org"
 ZUWEISUNG_KAPUTT="kaputt@example.org"
 
@@ -1231,8 +1231,8 @@ hasnt "and the duty list is empty before anybody was entered" "$seite" "Benachri
 suchen() {
 	curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_event_member_search=$1"
 }
-nach_nummer=$(suchen 0950)
-has "the search finds the member by number" "$nach_nummer" "0950"
+nach_nummer=$(suchen 00950)
+has "the search finds the member by number" "$nach_nummer" "00950"
 has "and the name with it" "$nach_nummer" "Zuweisung Test"
 has "and shows the address with it" "$nach_nummer" "zuweisung@example.org"
 # A space in a query string has to travel encoded. A raw one ends the
@@ -1240,7 +1240,7 @@ has "and shows the address with it" "$nach_nummer" "zuweisung@example.org"
 # "Kaputt" — which still finds the member and would have let a broken
 # search pass.
 nach_name=$(suchen "Kaputt%20Test")
-has "and by name" "$nach_name" "0951"
+has "and by name" "$nach_name" "00951"
 has "and the name with it" "$nach_name" "Kaputt Test"
 has "the search term comes back into the field" "$nach_name" 'value="Kaputt Test"'
 nichts=$(suchen "gibtesnicht")
@@ -1249,7 +1249,7 @@ hasnt "and offers nothing to choose" "$nichts" "<option value="
 
 # --- entering without the box: the entry stands, no mail goes out
 nonce=$(printf '%s' "$nach_nummer" | hidden fg_assign_nonce)
-mitglied_id=$(s member-by-no 0950 id)
+mitglied_id=$(s member-by-no 00950 id)
 mailen_vorher=$(s mail-count)
 # The third argument switches the checkbox on. It is a separate branch and not
 # a ${3:+...} expansion, because a command with a nested pair of quotes inside it
@@ -1276,13 +1276,13 @@ sende_zuweisung() {
 			--data-urlencode "fg_assign_nonce=$nonce"
 	fi
 }
-sende_zuweisung 0950 "$mitglied_id" "$ZUWEISUNG"
+sende_zuweisung 00950 "$mitglied_id" "$ZUWEISUNG"
 if [ "$(s mail-count)" = "$mailen_vorher" ]; then
 	ok "entering a member without the box sends no mail"
 else
 	bad "entering a member without the box sends no mail" "$(s mail-count) instead of $mailen_vorher"
 fi
-IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 0950)"
+IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 00950)"
 if [ "$anzahl" = "0" ] && [ "$quelle" = "redaktion" ]; then
 	ok "and the counter stands at zero (row $gelesene_id)"
 else
@@ -1293,14 +1293,14 @@ if [ "$token" = "0" ]; then
 else
 	bad "and no unregistration link was issued for a mail that was not sent" "$token token rows"
 fi
-seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_event_member_search=0950")
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_event_member_search=00950")
 has "the list names the member as entered by the editor" "$seite" "Redaktion"
 has "and the search says who is already in" "$seite" "Bereits für diesen Arbeitsdienst eingetragen"
-hasnt "and does not offer that member again" "$seite" "0950 — Zuweisung Test"
+hasnt "and does not offer that member again" "$seite" "00950 — Zuweisung Test"
 
 # --- entering with the box: one mail, counter one
 nonce=$(printf '%s' "$seite" | hidden fg_assign_nonce)
-kaputt_id=$(s member-by-no 0951 id)
+kaputt_id=$(s member-by-no 00951 id)
 mailen_vorher=$(s mail-count)
 sende_zuweisung Kaputt "$kaputt_id" "$ZUWEISUNG" mail
 if [ "$(s mail-count)" = "$((mailen_vorher + 1))" ]; then
@@ -1308,7 +1308,7 @@ if [ "$(s mail-count)" = "$((mailen_vorher + 1))" ]; then
 else
 	bad "entering a member with the box sends one mail" "$(s mail-count) instead of $((mailen_vorher + 1))"
 fi
-IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 0951)"
+IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 00951)"
 if [ "$anzahl" = "1" ] && [ "$token" = "1" ]; then
 	ok "and the counter stands at one with one link (row $gelesene_id)"
 else
@@ -1331,7 +1331,7 @@ else
 fi
 
 # --- the same mail again: counter two, and the first link still opens
-seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_event_member_search=0951")
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_event_member_search=00951")
 has "the list offers the notification for the member" "$seite" "Benachrichtigung senden"
 # Both values come out of the row of that member and not out of the page. The
 # list shows every member of the duty and the search above it only fills the
@@ -1339,8 +1339,8 @@ has "the list offers the notification for the member" "$seite" "Benachrichtigung
 # whoever the list starts with. Reading them there and sending them notifies one
 # member and measures another — which is what happened on the first run of this
 # section and cost two rounds of guessing.
-registration_id=$(printf '%s' "$seite" | hidden_in_row 0951 fg_registration_id)
-notify_nonce=$(printf '%s' "$seite" | hidden_in_row 0951 fg_notify_nonce)
+registration_id=$(printf '%s' "$seite" | hidden_in_row 00951 fg_registration_id)
+notify_nonce=$(printf '%s' "$seite" | hidden_in_row 00951 fg_notify_nonce)
 if [ -n "$registration_id" ]; then
 	ok "the row of the member carries its own registration ($registration_id)"
 else
@@ -1357,7 +1357,7 @@ if [ "$(s mail-count)" = "$((mailen_vorher + 1))" ]; then
 else
 	bad "the button in the list sends the mail again" "$(s mail-count) instead of $((mailen_vorher + 1))"
 fi
-IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 0951)"
+IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 00951)"
 if [ "$anzahl" = "2" ] && [ "$token" = "2" ] && [ "$gelesene_id" = "$registration_id" ]; then
 	ok "and the counter and the links both went up ($anzahl, $token, row $gelesene_id)"
 else
@@ -1387,7 +1387,7 @@ curl -sk -b "$JAR" -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "fg_registration_id=$registration_id" \
 	--data-urlencode "fg_notify_nonce=$notify_nonce"
 s mail-fail off > /dev/null
-IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 0951)"
+IFS=$'\t' read -r anzahl token quelle gelesene_id <<< "$(s notified "$ZUWEISUNG" 00951)"
 if [ "$anzahl" = "2" ] && [ "$token" = "2" ]; then
 	ok "a mail that does not arrive does not raise the counter and leaves no link behind ($anzahl, $token)"
 else
@@ -1406,7 +1406,7 @@ has "and the link of the first mail still opens" "$seite_link" "Anmeldung lösch
 # than the club announced; the screen has to say so, because the public page will
 # show that duty as full.
 UEBER=$(s make-event "Über dem Bedarf" "$(date -d '+71 days' +%Y-%m-%d)" 1 "11:00")
-for nr in 0950 0951; do
+for nr in 00950 00951; do
 	seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$UEBER&fg_event_member_search=$nr")
 	nonce=$(printf '%s' "$seite" | hidden fg_assign_nonce)
 	sende_zuweisung "$nr" "$(s member-by-no "$nr" id)" "$UEBER"
@@ -1425,7 +1425,7 @@ out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/wp-admin/
 	--data-urlencode "fg_notify_member=1" \
 	--data-urlencode "fg_assign_nonce=manipuliert")
 if [ "$out" = "403" ] || [ "$out" = "302" ]; then ok "an assignment without a valid nonce is refused ($out)"; else bad "an assignment without a valid nonce is refused" "$out"; fi
-IFS=$'\t' read -r anzahl2 token2 quelle2 gelesene2 <<< "$(s notified "$ZUWEISUNG" 0950)"
+IFS=$'\t' read -r anzahl2 token2 quelle2 gelesene2 <<< "$(s notified "$ZUWEISUNG" 00950)"
 if [ "$anzahl2" = "0" ] && [ "$token2" = "0" ]; then
 	ok "and it changed nothing (counter $anzahl2, links $token2)"
 else
@@ -1435,7 +1435,7 @@ out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' "$BASE/wp-admin/admin.ph
 if [ "$out" = "200" ]; then ok "a GET parameter cannot ask for a mail ($out)"; else bad "a GET parameter cannot ask for a mail" "$out"; fi
 # The same member the checks above read, and compared with its own value from
 # two lines up: $anzahl belongs to the member of the failure case.
-IFS=$'\t' read -r anzahl3 token3 quelle3 gelesene3 <<< "$(s notified "$ZUWEISUNG" 0950)"
+IFS=$'\t' read -r anzahl3 token3 quelle3 gelesene3 <<< "$(s notified "$ZUWEISUNG" 00950)"
 if [ "$anzahl3" = "$anzahl2" ] && [ "$token3" = "$token2" ]; then
 	ok "and the counter did not move for it ($anzahl3, $token3)"
 else
@@ -1461,9 +1461,9 @@ fi
 # duty would be refused by the unique key of the table — the registration is
 # unique per duty and member — and the probe would then count the rows of
 # somebody else's registration instead of its own.
-neu 0952 migration@example.org Migration Probe
-IFS=$'\t' read -r vorher nachher nochmal <<< "$(s migrate-tokens "$ZUWEISUNG" 0952)"
-s delete-member "$(s member-by-no 0952 id)" > /dev/null
+neu 00952 migration@example.org Migration Probe
+IFS=$'\t' read -r vorher nachher nochmal <<< "$(s migrate-tokens "$ZUWEISUNG" 00952)"
+s delete-member "$(s member-by-no 00952 id)" > /dev/null
 if [ "$vorher" = "0" ] && [ "$nachher" = "1" ] && [ "$nochmal" = "1" ]; then
 	ok "a token in the old place is copied into the new one, and a second run copies nothing ($vorher -> $nachher -> $nochmal)"
 else
@@ -1485,9 +1485,9 @@ fi
 # check that clicked it would delete a different registration than the one it
 # measured. One member, one link, nothing to choose.
 LOESCHEN=$(s make-event "Löschen der Anmeldung" "$(date -d '+72 days' +%Y-%m-%d)" 2 "12:00")
-seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$LOESCHEN&fg_event_member_search=0950")
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$LOESCHEN&fg_event_member_search=00950")
 nonce=$(printf '%s' "$seite" | hidden fg_assign_nonce)
-sende_zuweisung 0950 "$mitglied_id" "$LOESCHEN" mail
+sende_zuweisung 00950 "$mitglied_id" "$LOESCHEN" mail
 seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$LOESCHEN")
 loesch_url=$(printf '%s' "$seite" | link registration)
 tokenen_vorher=$(s schema zeilen fg_event_member_tokens)
@@ -1499,10 +1499,10 @@ if [ "$tokenen_nachher" = "$((tokenen_vorher - 1))" ]; then
 else
 	bad "and it takes the unregistration link of that registration with it" "$tokenen_vorher -> $tokenen_nachher, expected $((tokenen_vorher - 1))"
 fi
-if [ "$(s notified "$LOESCHEN" 0950 | cut -f1)" = "keine" ]; then
+if [ "$(s notified "$LOESCHEN" 00950 | cut -f1)" = "keine" ]; then
 	ok "and the registration itself is gone"
 else
-	bad "and the registration itself is gone" "$(s notified "$LOESCHEN" 0950)"
+	bad "and the registration itself is gone" "$(s notified "$LOESCHEN" 00950)"
 fi
 # And the member is told about it. This is the second of the two ways a member
 # comes off a duty, and it has to be the same message: a member who signs out
@@ -1530,9 +1530,9 @@ has "and the greeting with both names" "$(s mail-bodies)" "Hallo Zuweisung Test"
 s delete-event "$LOESCHEN" > /dev/null
 
 # The member page, which goes through the statement for all registrations of one
-# member. Member 0951 still has its two registrations' worth of links here.
+# member. Member 00951 still has its two registrations' worth of links here.
 tokenen_vorher=$(s schema zeilen fg_event_member_tokens)
-s delete-member "$(s member-by-no 0951 id)" > /dev/null
+s delete-member "$(s member-by-no 00951 id)" > /dev/null
 tokenen_nachher=$(s schema zeilen fg_event_member_tokens)
 if [ "$tokenen_nachher" = "$((tokenen_vorher - 2))" ]; then
 	ok "removing a member takes their two unregistration links out of the table ($tokenen_vorher -> $tokenen_nachher)"
@@ -1544,9 +1544,9 @@ fi
 # member is notified once first, so that the
 # duty has a registration with a link in it; a duty whose registrations carry no
 # link would let a broken cascade pass.
-seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_event_member_search=0950")
-zeilen_id=$(printf '%s' "$seite" | hidden_in_row 0950 fg_registration_id)
-zeile_nonce=$(printf '%s' "$seite" | hidden_in_row 0950 fg_notify_nonce)
+seite=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG&fg_event_member_search=00950")
+zeilen_id=$(printf '%s' "$seite" | hidden_in_row 00950 fg_registration_id)
+zeile_nonce=$(printf '%s' "$seite" | hidden_in_row 00950 fg_notify_nonce)
 curl -sk -b "$JAR" -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_notify_participant" \
 	--data-urlencode "fg_event_id=$ZUWEISUNG" \
@@ -1576,7 +1576,7 @@ fi
 # same reason as before: the duty of the section above is deleted before this
 # line, and a page without a table cannot answer anything about a column.
 GRUPPE_DIENST=$(s make-event "Arbeitsgruppe in der Teilnehmerliste" "$(date -d '+73 days' +%Y-%m-%d)" 2 "13:00")
-GRUPPE_NR="0992"
+GRUPPE_NR="00992"
 GRUPPE_WERT="Gartenkolonne Nord"
 neu "$GRUPPE_NR" dienstgruppe@example.org Dienst Teilnehmer "$GRUPPE_WERT"
 if [ "$(s member-by-no "$GRUPPE_NR" work_group)" = "$GRUPPE_WERT" ]; then
@@ -1608,8 +1608,8 @@ fi
 hasnt "and the column is not called Gruppe, which is the group of the duty" "$seite" "<th>Gruppe</th>"
 s delete-event "$GRUPPE_DIENST" > /dev/null
 s delete-member "$(s member-by-no "$GRUPPE_NR" id)" > /dev/null
-s delete-member "$(s member-by-no 0951 id)" > /dev/null
-s delete-member "$(s member-by-no 0950 id)" > /dev/null
+s delete-member "$(s member-by-no 00951 id)" > /dev/null
+s delete-member "$(s member-by-no 00950 id)" > /dev/null
 clean "$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$ZUWEISUNG")" "assignment screen"
 
 echo "[5f] a new record is not reachable without a nonce"
@@ -1647,10 +1647,10 @@ echo "[7] permanent deletion of a work duty"
 CASCADE=$(s make-event "Kaskade" "$(date -d '+30 days' +%Y-%m-%d)" 3)
 # One member is signed in for the duty, so the delete question has to count a
 # registration next to the two rides.
-KASKADE_MEMBER=$(neu "0900" "kette@example.org" "Kette" "Probe")
-s register "$CASCADE" "0900" "kette@example.org" >/dev/null
-s make-ride "$CASCADE" offer Innenstadt 0900 published >/dev/null
-s make-ride "$CASCADE" search Suedstadt 0900 >/dev/null
+KASKADE_MEMBER=$(neu "00900" "kette@example.org" "Kette" "Probe")
+s register "$CASCADE" "00900" "kette@example.org" >/dev/null
+s make-ride "$CASCADE" offer Innenstadt 00900 published >/dev/null
+s make-ride "$CASCADE" search Suedstadt 00900 >/dev/null
 if [ "$(s count-event-rides "$CASCADE")" = "2" ]; then ok "cascade source has two rides"; else bad "cascade source has two rides" "$(s count-event-rides "$CASCADE")"; fi
 form=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$CASCADE")
 has "the delete link itself asks what it takes" "$form" "return confirm("
@@ -1671,7 +1671,7 @@ if [ "$(s exists-event "$CASCADE")" = "0" ]; then ok "work duty is gone"; else b
 # A duty goes, the member does not. The registration is what belonged to the
 # duty; the person it was made for belongs to the club.
 if [ -n "$KASKADE_MEMBER" ] && [ "$KASKADE_MEMBER" -gt 0 ]; then
-	if [ "$(s member "$KASKADE_MEMBER" member_no)" = "0900" ]; then
+	if [ "$(s member "$KASKADE_MEMBER" member_no)" = "00900" ]; then
 		ok "the member who was signed in is still in the club"
 	else
 		bad "the member who was signed in is still in the club" "$(s member "$KASKADE_MEMBER" member_no)"
@@ -1964,7 +1964,7 @@ clean "$members" "member list"
 # — a required one. Looking for the name alone would be answered by a hidden
 # field, and "required" somewhere on the page says nothing about which field it
 # belongs to.
-s delete-member "$(s member-by-no "0700" id)" > /dev/null 2>&1
+s delete-member "$(s member-by-no "00700" id)" > /dev/null 2>&1
 form=$(curl -sk -b "$JAR" "$MEMBERS&member=0")
 for feldangabe in 'fg_member_no:text' 'fg_member_email:email' 'fg_first_name:text' 'fg_last_name:text'; do
 	feldname=${feldangabe%%:*}
@@ -1991,7 +1991,7 @@ fi
 
 # --- the work group: on the form, in the list, and through the import
 echo "[10a] the work group of a member"
-GRUPPE_NR="0991"
+GRUPPE_NR="00991"
 neu "$GRUPPE_NR" gruppen@example.org Gruppen Test
 
 # The form, because a club that types its groups in by hand is the normal case.
@@ -2071,19 +2071,19 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-new.html" -w '%{url_effect
 	--data-urlencode "action=fg_save_member" \
 	--data-urlencode "fg_member_id=0" \
 	--data-urlencode "fg_member_nonce=$MNONCE" \
-	--data-urlencode "fg_member_no=0700" \
+	--data-urlencode "fg_member_no=00700" \
 	--data-urlencode "fg_member_email=neu@example.org" \
 	--data-urlencode "fg_first_name=Neu" \
 	--data-urlencode "fg_last_name=Probe")
 neu=$(cat "$DIR/member-new.html")
 has "save confirms the new member" "$neu" "Das Mitglied wurde angelegt."
-NEU_ID=$(s member-by-no "0700" id)
+NEU_ID=$(s member-by-no "00700" id)
 if [ "$NEU_ID" -gt 0 ]; then ok "the new member is stored ($NEU_ID)"; else bad "the new member is stored" "$NEU_ID"; fi
 if [ "$(s member "$NEU_ID" email)" = "neu@example.org" ]; then ok "the address is stored"; else bad "the address is stored" "$(s member "$NEU_ID" email)"; fi
 # The number is a text, not a count, so a leading zero has to survive the round
-# trip. A club whose numbers are 700 and 0700 has two members.
-if [ "$(s member "$NEU_ID" member_no)" = "0700" ]; then ok "the leading zero of the number survives"; else bad "the leading zero of the number survives" "$(s member "$NEU_ID" member_no)"; fi
-has "the new member is in the list" "$(curl -sk -b "$JAR" "$MEMBERS")" "0700"
+# trip. A club whose numbers are 0700 and 00700 has two members.
+if [ "$(s member "$NEU_ID" member_no)" = "00700" ]; then ok "the leading zero of the number survives"; else bad "the leading zero of the number survives" "$(s member "$NEU_ID" member_no)"; fi
+has "the new member is in the list" "$(curl -sk -b "$JAR" "$MEMBERS")" "00700"
 clean "$neu" "member create"
 
 # The member number is the key, and a refusal says which number it was. A
@@ -2096,21 +2096,21 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-dup.html" -X POST "$BASE/w
 	--data-urlencode "action=fg_save_member" \
 	--data-urlencode "fg_member_id=0" \
 	--data-urlencode "fg_member_nonce=$MNONCE" \
-	--data-urlencode "fg_member_no=0700" \
+	--data-urlencode "fg_member_no=00700" \
 	--data-urlencode "fg_member_email=anders@example.org" \
 	--data-urlencode "fg_first_name=Doppelt" \
 	--data-urlencode "fg_last_name=Probe")
 dup=$(cat "$DIR/member-dup.html")
-has "a taken number is named" "$dup" "Die Mitgliedsnummer 0700 ist bereits vergeben"
+has "a taken number is named" "$dup" "Die Mitgliedsnummer 00700 ist bereits vergeben"
 has "and it says nothing was saved" "$dup" "Bitte wähle eine andere"
-if [ "$(s member-by-no "0700" email)" = "neu@example.org" ]; then ok "the member that holds the number is untouched"; else bad "the member that holds the number is untouched" "$(s member-by-no "0700" email)"; fi
+if [ "$(s member-by-no "00700" email)" = "neu@example.org" ]; then ok "the member that holds the number is untouched"; else bad "the member that holds the number is untouched" "$(s member-by-no "00700" email)"; fi
 clean "$dup" "member with a taken number"
 
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-mail.html" -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_save_member" \
 	--data-urlencode "fg_member_id=0" \
 	--data-urlencode "fg_member_nonce=$MNONCE" \
-	--data-urlencode "fg_member_no=0701" \
+	--data-urlencode "fg_member_no=00701" \
 	--data-urlencode "fg_member_email=neu@example.org" \
 	--data-urlencode "fg_first_name=Doppelt" \
 	--data-urlencode "fg_last_name=Probe")
@@ -2122,11 +2122,11 @@ mail=$(cat "$DIR/member-mail.html")
 # check for the message alone would also pass if the save had been refused and
 # the message were a leftover from an earlier run.
 has "a shared address is saved" "$mail" "Das Mitglied wurde angelegt"
-has "and the note names the member that already holds it" "$mail" "Mitglied 0700"
-has "and it says that the address is shared" "$mail" "steht auch bei 1 weiterem Mitglied: Mitglied 0700"
+has "and the note names the member that already holds it" "$mail" "Mitglied 00700"
+has "and it says that the address is shared" "$mail" "steht auch bei 1 weiterem Mitglied: Mitglied 00700"
 hasnt "and the old refusal is gone" "$mail" "Jede E-Mail-Adresse gehört zu genau einem Mitglied"
-if [ "$(s member-by-no "0701" id)" = "missing" ]; then bad "the second member is written" "0701 fehlt"; else ok "the second member is written"; fi
-if [ "$(s member-by-no "0701" email)" = "$(s member-by-no "0700" email)" ]; then ok "and both rows carry the same address"; else bad "and both rows carry the same address" "$(s member-by-no "0701" email) / $(s member-by-no "0700" email)"; fi
+if [ "$(s member-by-no "00701" id)" = "missing" ]; then bad "the second member is written" "00701 fehlt"; else ok "the second member is written"; fi
+if [ "$(s member-by-no "00701" email)" = "$(s member-by-no "00700" email)" ]; then ok "and both rows carry the same address"; else bad "and both rows carry the same address" "$(s member-by-no "00701" email) / $(s member-by-no "00700" email)"; fi
 clean "$mail" "member with a shared address"
 
 # Four of the fields are required, and the form marks them as such; a request that
@@ -2136,26 +2136,26 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-leer.html" -X POST "$BASE/
 	--data-urlencode "action=fg_save_member" \
 	--data-urlencode "fg_member_id=0" \
 	--data-urlencode "fg_member_nonce=$MNONCE" \
-	--data-urlencode "fg_member_no=0702" \
+	--data-urlencode "fg_member_no=00702" \
 	--data-urlencode "fg_member_email=leer@example.org" \
 	--data-urlencode "fg_first_name=" \
 	--data-urlencode "fg_last_name=Probe")
 leer=$(cat "$DIR/member-leer.html")
 has "a missing name is named" "$leer" "Bitte Vor- und Nachnamen eingeben"
-if [ "$(s member-by-no "0702" id)" = "missing" ]; then ok "nothing was written"; else bad "nothing was written" "$(s member-by-no "0702" id)"; fi
+if [ "$(s member-by-no "00702" id)" = "missing" ]; then ok "nothing was written"; else bad "nothing was written" "$(s member-by-no "00702" id)"; fi
 clean "$leer" "member without a name"
 
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-uns.html" -X POST "$BASE/wp-admin/admin-post.php" \
 	--data-urlencode "action=fg_save_member" \
 	--data-urlencode "fg_member_id=0" \
 	--data-urlencode "fg_member_nonce=$MNONCE" \
-	--data-urlencode "fg_member_no=0703" \
+	--data-urlencode "fg_member_no=00703" \
 	--data-urlencode "fg_member_email=keine-mail" \
 	--data-urlencode "fg_first_name=Ohne" \
 	--data-urlencode "fg_last_name=Mail")
 uns=$(cat "$DIR/member-uns.html")
 has "an address that is not one is named" "$uns" "Bitte eine gültige E-Mail-Adresse eingeben"
-if [ "$(s member-by-no "0703" id)" = "missing" ]; then ok "nothing was written"; else bad "nothing was written" "$(s member-by-no "0703" id)"; fi
+if [ "$(s member-by-no "00703" id)" = "missing" ]; then ok "nothing was written"; else bad "nothing was written" "$(s member-by-no "00703" id)"; fi
 clean "$uns" "member with an address that is not one"
 
 # An address can be a proper address and still be too long for the column. It is
@@ -2168,14 +2168,14 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-lang.html" -X POST "$BASE/
 	--data-urlencode "action=fg_save_member" \
 	--data-urlencode "fg_member_id=0" \
 	--data-urlencode "fg_member_nonce=$MNONCE" \
-	--data-urlencode "fg_member_no=0705" \
+	--data-urlencode "fg_member_no=00705" \
 	--data-urlencode "fg_member_email=$LANGE_MAIL" \
 	--data-urlencode "fg_first_name=Lang" \
 	--data-urlencode "fg_last_name=Adresse")
 lang=$(cat "$DIR/member-lang.html")
 has "an address longer than the column is named as the address" "$lang" "Bitte eine gültige E-Mail-Adresse eingeben"
 hasnt "and it is not the vague message" "$lang" "Das Mitglied konnte nicht angelegt werden"
-if [ "$(s member-by-no "0705" id)" = "missing" ]; then ok "and no member was written for it"; else bad "and no member was written for it" "$(s member-by-no "0705" id)"; fi
+if [ "$(s member-by-no "00705" id)" = "missing" ]; then ok "and no member was written for it"; else bad "and no member was written for it" "$(s member-by-no "00705" id)"; fi
 clean "$lang" "member with an address longer than the column"
 
 
@@ -2338,7 +2338,7 @@ else
 fi
 # A member of its own for the message, and gone again below: the numbers of the
 # other sections are read by checks of their own, and this section takes none.
-TRAGEND_NR=0771
+TRAGEND_NR=00771
 s delete-member "$(s member-by-no "$TRAGEND_NR" id)" > /dev/null 2>&1
 s make-member "$TRAGEND_NR" treffpunkt@example.org Anton Berger > /dev/null
 if [ "$(s duty-removed-mail "$TRAGEND_NR" "$LEER_DIENST")" = "sent" ]; then
@@ -2366,7 +2366,7 @@ s delete-member "$(s member-by-no "$TRAGEND_NR" id)" > /dev/null
 
 # The optional fields come back into the form, and a change is stored.
 edit=$(curl -sk -b "$JAR" "$MEMBERS&member=$NEU_ID")
-has "the form is filled with the number" "$edit" 'value="0700"'
+has "the form is filled with the number" "$edit" 'value="00700"'
 has "the form is filled with the address" "$edit" 'value="neu@example.org"'
 has "the form is filled with the first name" "$edit" 'value="Neu"'
 has "the form is filled with the last name" "$edit" 'value="Probe"'
@@ -2375,7 +2375,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/member-edit.html" -X POST "$BASE/
 	--data-urlencode "action=fg_save_member" \
 	--data-urlencode "fg_member_id=$NEU_ID" \
 	--data-urlencode "fg_member_nonce=$ENONCE2" \
-	--data-urlencode "fg_member_no=0700" \
+	--data-urlencode "fg_member_no=00700" \
 	--data-urlencode "fg_member_email=neuanders@example.org" \
 	--data-urlencode "fg_first_name=Neu" \
 	--data-urlencode "fg_last_name=Geaendert")
@@ -2390,7 +2390,7 @@ out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/wp-admin/
 	--data-urlencode "action=fg_save_member" \
 	--data-urlencode "fg_member_id=$NEU_ID" \
 	--data-urlencode "fg_member_nonce=manipuliert" \
-	--data-urlencode "fg_member_no=0700" \
+	--data-urlencode "fg_member_no=00700" \
 	--data-urlencode "fg_member_email=ohne@example.org" \
 	--data-urlencode "fg_first_name=Ohne" \
 	--data-urlencode "fg_last_name=Erlaubnis")
@@ -2400,7 +2400,7 @@ if [ "$(s member "$NEU_ID" email)" = "neuanders@example.org" ]; then ok "the add
 # The member of [5] is registered for a duty of this run, so the removal has to
 # take the registration with it.
 LOESCH=$(s make-event "Loeschprobe" "$(date -d '+30 days' +%Y-%m-%d)" 2)
-s register "$LOESCH" "0700" "neuanders@example.org" >/dev/null
+s register "$LOESCH" "00700" "neuanders@example.org" >/dev/null
 if [ "$(s count-registrations "$LOESCH")" = "1" ]; then ok "the member of the list is signed in for a duty"; else bad "the member of the list is signed in for a duty" "$(s count-registrations "$LOESCH")"; fi
 del=$(curl -sk -b "$JAR" "$MEMBERS&member=$NEU_ID")
 has "the delete link asks what it takes" "$del" "return confirm("
@@ -2458,7 +2458,7 @@ clean "$erster" "import report of the whole list read back"
 # them apart. The file below is the case that ERROR_DUPLICATE_EMAIL and
 # ERROR_EMAIL_TAKEN used to turn away — both are gone, and this is what replaced
 # them: not a message about the address, but two rows in the report.
-printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n0811;ehepaar@example.org;Ehe;Eins\n0812;ehepaar@example.org;Ehe;Zwei\n' > "$IMPORT_CSV"
+printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n00811;ehepaar@example.org;Ehe;Eins\n00812;ehepaar@example.org;Ehe;Zwei\n' > "$IMPORT_CSV"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import-paar.html" -w '%{url_effective}' \
 	-X POST "$BASE/wp-admin/admin-post.php" \
 	-F "action=fg_import_members" \
@@ -2467,17 +2467,17 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import-paar.html" -w '%{url_effec
 paarbericht=$(printf '%s' "$(cat "$DIR/import-paar.html")" | report)
 has "a file with one address on two lines is imported" "$paarbericht" "2 neue Mitglieder angelegt"
 has "and the report names neither of them as wrong" "$paarbericht" "0 Mitglieder geändert"
-if [ "$(s member-by-no "0811" email)" = "ehepaar@example.org" ] && [ "$(s member-by-no "0812" email)" = "ehepaar@example.org" ]; then
+if [ "$(s member-by-no "00811" email)" = "ehepaar@example.org" ] && [ "$(s member-by-no "00812" email)" = "ehepaar@example.org" ]; then
 	ok "and both rows are stored with that address"
 else
-	bad "and both rows are stored with that address" "$(s member-by-no "0811" email) / $(s member-by-no "0812" email)"
+	bad "and both rows are stored with that address" "$(s member-by-no "00811" email) / $(s member-by-no "00812" email)"
 fi
 
 # The number is still a key, and that is the refusal that remains. Until this
 # change there was no case for it anywhere in this section: both keys were
 # unique, but only the address was exercised. Two lines with one number are one
 # member twice, and the second would quietly undo the first.
-printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n0813;doppelt@example.org;Doppelt;Eins\n0813;anders@example.org;Doppelt;Zwei\n' > "$IMPORT_CSV"
+printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n00813;doppelt@example.org;Doppelt;Eins\n00813;anders@example.org;Doppelt;Zwei\n' > "$IMPORT_CSV"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import-nummer.html" -w '%{url_effective}' \
 	-X POST "$BASE/wp-admin/admin-post.php" \
 	-F "action=fg_import_members" \
@@ -2488,13 +2488,13 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import-nummer.html" -w '%{url_eff
 # here would have found nothing at all and the two checks below would have been
 # red for the wrong reason.
 nummerfehler=$(cat "$DIR/import-nummer.html")
-has "a number that stands twice in the file is named" "$nummerfehler" "Die Mitgliedsnummer 0813 steht zweimal in der Datei"
+has "a number that stands twice in the file is named" "$nummerfehler" "Die Mitgliedsnummer 00813 steht zweimal in der Datei"
 has "and both of its lines are named" "$nummerfehler" "in Zeile 3 und in Zeile 2"
 has "and it says nothing was imported" "$nummerfehler" "Es wurde nichts importiert"
-if [ "$(s member-by-no "0813" id)" = "missing" ]; then ok "and nothing was imported from that file"; else bad "and nothing was imported from that file" "$(s member-by-no "0813" id)"; fi
+if [ "$(s member-by-no "00813" id)" = "missing" ]; then ok "and nothing was imported from that file"; else bad "and nothing was imported from that file" "$(s member-by-no "00813" id)"; fi
 
 # A file with two members the database does not have.
-printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n0801;import1@example.org;Import;Eins\n0802;import2@example.org;Import;Zwei\n' > "$IMPORT_CSV"
+printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n00801;import1@example.org;Import;Eins\n00802;import2@example.org;Import;Zwei\n' > "$IMPORT_CSV"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import2.html" -w '%{url_effective}' \
 	-X POST "$BASE/wp-admin/admin-post.php" \
 	-F "action=fg_import_members" \
@@ -2508,15 +2508,15 @@ has "the report says nothing changed" "$zweitesbericht" "0 Mitglieder geändert"
 # The three fixture members are in the database and not in this file, so the
 # list of who is missing has to name them. That list is the whole point of the
 # report: without it "2 angelegt" could just as well mean "2 of forty". It is
-# read out of the report and not out of the page, because 0042 stands on the
+# read out of the report and not out of the page, because 00042 stands on the
 # page as a row of the member list as well, and a check that finds it there says
 # nothing about the report.
-has "the report names a member that is not in the file" "$zweitesbericht" "0042"
+has "the report names a member that is not in the file" "$zweitesbericht" "00042"
 has "and the name that goes with it" "$zweitesbericht" "Anton"
 has "and says how many are missing" "$zweitesbericht" "stehen in der Datenbank, aber nicht in der Datei"
-hasnt "and the two new members are not in the missing list" "$zweitesbericht" "0801"
-if [ "$(s member-by-no "0801" id)" != "missing" ]; then ok "the first row of the file is in the database"; else bad "the first row of the file is in the database" "missing"; fi
-if [ "$(s member-by-no "0802" first_name)" = "Import" ]; then ok "and its names land in the right columns"; else bad "and its names land in the right columns" "$(s member-by-no "0802" first_name)"; fi
+hasnt "and the two new members are not in the missing list" "$zweitesbericht" "00801"
+if [ "$(s member-by-no "00801" id)" != "missing" ]; then ok "the first row of the file is in the database"; else bad "the first row of the file is in the database" "missing"; fi
+if [ "$(s member-by-no "00802" first_name)" = "Import" ]; then ok "and its names land in the right columns"; else bad "and its names land in the right columns" "$(s member-by-no "00802" first_name)"; fi
 clean "$zweites" "import report of a file with new members"
 
 # The same file a second time changes nothing and says so. An import that
@@ -2535,7 +2535,7 @@ has "and it says they are unchanged" "$drittesbericht" "2 unverändert"
 clean "$drittes" "import report of the same file again"
 
 # A file with a changed name updates that member and leaves the other alone.
-printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n0801;import1@example.org;Import;EinsGeaendert\n0802;import2@example.org;Import;Zwei\n' > "$IMPORT_CSV"
+printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n00801;import1@example.org;Import;EinsGeaendert\n00802;import2@example.org;Import;Zwei\n' > "$IMPORT_CSV"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import4.html" -w '%{url_effective}' \
 	-X POST "$BASE/wp-admin/admin-post.php" \
 	-F "action=fg_import_members" \
@@ -2545,14 +2545,14 @@ viertes=$(cat "$DIR/import4.html")
 viertesbericht=$(printf '%s' "$viertes" | report)
 has "the report counts the changed member" "$viertesbericht" "1 Mitglieder geändert"
 has "and the unchanged one" "$viertesbericht" "1 unverändert"
-if [ "$(s member-by-no "0801" last_name)" = "EinsGeaendert" ]; then ok "the changed name is stored"; else bad "the changed name is stored" "$(s member-by-no "0801" last_name)"; fi
-if [ "$(s member-by-no "0802" last_name)" = "Zwei" ]; then ok "the other name is kept"; else bad "the other name is kept" "$(s member-by-no "0802" last_name)"; fi
+if [ "$(s member-by-no "00801" last_name)" = "EinsGeaendert" ]; then ok "the changed name is stored"; else bad "the changed name is stored" "$(s member-by-no "00801" last_name)"; fi
+if [ "$(s member-by-no "00802" last_name)" = "Zwei" ]; then ok "the other name is kept"; else bad "the other name is kept" "$(s member-by-no "00802" last_name)"; fi
 clean "$viertes" "import report of a changed file"
 
 # The third question, on its own: who is in the database but not in the file.
 # The club has to be able to see that list, because an import that only ever
 # adds can otherwise never be used to remove a member who has left.
-printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n0802;import2@example.org;Import;Zwei\n' > "$IMPORT_CSV"
+printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n00802;import2@example.org;Import;Zwei\n' > "$IMPORT_CSV"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import5.html" -w '%{url_effective}' \
 	-X POST "$BASE/wp-admin/admin-post.php" \
 	-F "action=fg_import_members" \
@@ -2560,20 +2560,20 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import5.html" -w '%{url_effective
 	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
 funftes=$(cat "$DIR/import5.html")
 funftesbericht=$(printf '%s' "$funftes" | report)
-# 0801 is in the database and stands on the screen as a row of the member list,
+# 00801 is in the database and stands on the screen as a row of the member list,
 # so both of these are read out of the report. Otherwise they hold for a report
 # that names nobody at all.
-has "the report names the number of a missing member" "$funftesbericht" "0801"
+has "the report names the number of a missing member" "$funftesbericht" "00801"
 has "and the name that goes with it" "$funftesbericht" "EinsGeaendert"
 has "and its address" "$funftesbericht" "import1@example.org"
 has "it says nobody was deleted" "$funftesbericht" "Ein Import entfernt nie jemanden"
-if [ "$(s member-by-no "0801" id)" != "missing" ]; then ok "the member missing from the file is still there"; else bad "the member missing from the file is still there" "gone"; fi
+if [ "$(s member-by-no "00801" id)" != "missing" ]; then ok "the member missing from the file is still there"; else bad "the member missing from the file is still there" "gone"; fi
 clean "$funftes" "import report with a member missing from the file"
 
 # A file the parser cannot read is refused with the line it is on, and the
 # whole file is refused: a half-imported member list is worse than none.
 KOPF='Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname'
-printf '%s\n0803;kaputt\n' "$KOPF" > "$IMPORT_CSV"
+printf '%s\n00803;kaputt\n' "$KOPF" > "$IMPORT_CSV"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import6.html" -w '%{url_effective}' \
 	-X POST "$BASE/wp-admin/admin-post.php" \
 	-F "action=fg_import_members" \
@@ -2582,13 +2582,13 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import6.html" -w '%{url_effective
 sechstes=$(cat "$DIR/import6.html")
 has "a short row is named by its line" "$sechstes" "Zeile 2 hat 2 Felder"
 has "and it says nothing was imported" "$sechstes" "Es wurde nichts importiert"
-if [ "$(s member-by-no "0803" id)" = "missing" ]; then ok "the refused file wrote nothing"; else bad "the refused file wrote nothing" "$(s member-by-no "0803" id)"; fi
+if [ "$(s member-by-no "00803" id)" = "missing" ]; then ok "the refused file wrote nothing"; else bad "the refused file wrote nothing" "$(s member-by-no "00803" id)"; fi
 clean "$sechstes" "refused import"
 
 # The good row in front of the bad one is not written either. Half a file is not
 # a state a member list should ever be in, and a report that said "2 von 3
 # Zeilen übernommen" would be an invitation to do it again next week.
-printf '%s\n0804;gueltig@example.org;Gueltig;Probe\n;leer@example.org;Leer;Probe\n' "$KOPF" > "$IMPORT_CSV"
+printf '%s\n00804;gueltig@example.org;Gueltig;Probe\n;leer@example.org;Leer;Probe\n' "$KOPF" > "$IMPORT_CSV"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import7.html" -w '%{url_effective}' \
 	-X POST "$BASE/wp-admin/admin-post.php" \
 	-F "action=fg_import_members" \
@@ -2596,12 +2596,12 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import7.html" -w '%{url_effective
 	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
 siebtes=$(cat "$DIR/import7.html")
 has "a row without a number is named by its line" "$siebtes" "In Zeile 3 fehlt die Mitgliedsnummer"
-if [ "$(s member-by-no "0804" id)" = "missing" ]; then ok "the good row in front of it was not written either"; else bad "the good row in front of it was not written either" "$(s member-by-no "0804" id)"; fi
+if [ "$(s member-by-no "00804" id)" = "missing" ]; then ok "the good row in front of it was not written either"; else bad "the good row in front of it was not written either" "$(s member-by-no "00804" id)"; fi
 clean "$siebtes" "refused import with a good row in front"
 
 # A file without the column the plugin reads is named by its name, because the
 # club has to know which column to rename in their export.
-printf 'Nummer;Vorname;Nachname\n0805;falsch@example.org;Falsch;Probe\n' > "$IMPORT_CSV"
+printf 'Nummer;Vorname;Nachname\n00805;falsch@example.org;Falsch;Probe\n' > "$IMPORT_CSV"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import8.html" -w '%{url_effective}' \
 	-X POST "$BASE/wp-admin/admin-post.php" \
 	-F "action=fg_import_members" \
@@ -2610,13 +2610,13 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import8.html" -w '%{url_effective
 achtes=$(cat "$DIR/import8.html")
 has "the missing column is named" "$achtes" "fehlt: E-Mail-Adresse"
 has "and nothing was imported" "$achtes" "Es wurde nichts importiert"
-if [ "$(s member-by-no "0805" id)" = "missing" ]; then ok "and no row of the file was written"; else bad "and no row of the file was written" "$(s member-by-no "0805" id)"; fi
+if [ "$(s member-by-no "00805" id)" = "missing" ]; then ok "and no row of the file was written"; else bad "and no row of the file was written" "$(s member-by-no "00805" id)"; fi
 clean "$achtes" "import with the wrong header"
 
 # The short names of the columns are read on purpose. A club that exports
 # "Nummer" and "Mail" does not have to rename anything for this import, so a
 # file it exports must not be refused over the names.
-printf 'Nummer;Mail;Vorname;Nachname\n0806;kurz@example.org;Kurz;Form\n' > "$IMPORT_CSV"
+printf 'Nummer;Mail;Vorname;Nachname\n00806;kurz@example.org;Kurz;Form\n' > "$IMPORT_CSV"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import9.html" -w '%{url_effective}' \
 	-X POST "$BASE/wp-admin/admin-post.php" \
 	-F "action=fg_import_members" \
@@ -2624,16 +2624,16 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import9.html" -w '%{url_effective
 	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
 neuntes=$(cat "$DIR/import9.html")
 has "a header with the short names is read" "$neuntes" "1 neue Mitglieder angelegt"
-if [ "$(s member-by-no "0806" email)" = "kurz@example.org" ]; then ok "and the address lands in its column"; else bad "and the address lands in its column" "$(s member-by-no "0806" email)"; fi
+if [ "$(s member-by-no "00806" email)" = "kurz@example.org" ]; then ok "and the address lands in its column"; else bad "and the address lands in its column" "$(s member-by-no "00806" email)"; fi
 clean "$neuntes" "import with the short header names"
-s delete-member "$(s member-by-no 0806 id)" > /dev/null
+s delete-member "$(s member-by-no 00806 id)" > /dev/null
 
 # An address longer than the column is not a valid address for this plugin, and
 # the export of another system does not know that. It has to be refused like
 # every other bad row, with its line named — and the whole file with it, because
 # a member list that took the good rows and dropped this one is a list the club
 # believes to be complete.
-printf '%s\n0807;%s;Zu;Lang\n' "$KOPF" "$LANGE_MAIL" > "$IMPORT_CSV"
+printf '%s\n00807;%s;Zu;Lang\n' "$KOPF" "$LANGE_MAIL" > "$IMPORT_CSV"
 out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import10.html" -w '%{url_effective}' \
 	-X POST "$BASE/wp-admin/admin-post.php" \
 	-F "action=fg_import_members" \
@@ -2642,7 +2642,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import10.html" -w '%{url_effectiv
 zehntes=$(cat "$DIR/import10.html")
 has "an address longer than the column is named" "$zehntes" "In Zeile 2 steht keine gültige E-Mail-Adresse"
 has "and nothing of that file was imported" "$zehntes" "Es wurde nichts importiert"
-if [ "$(s member-by-no "0807" id)" = "missing" ]; then ok "and the row was not written behind the message"; else bad "the refused row was not written" "$(s member-by-no "0807" id)"; fi
+if [ "$(s member-by-no "00807" id)" = "missing" ]; then ok "and the row was not written behind the message"; else bad "the refused row was not written" "$(s member-by-no "00807" id)"; fi
 clean "$zehntes" "import with an address longer than the column"
 
 # A file that is not a file at all is refused by the upload, not by the parser.
@@ -2659,17 +2659,17 @@ out=$(curl -sk -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$BASE/wp-admin/
 	-F "fg_import_nonce=manipuliert" \
 	-F "fg_member_file=@$IMPORT_CSV;type=text/csv")
 if [ "$out" = "403" ]; then ok "an import with a wrong nonce is refused ($out)"; else bad "an import with a wrong nonce is refused" "$out"; fi
-if [ "$(s member-by-no "0805" id)" = "missing" ]; then ok "and it wrote nothing"; else bad "and it wrote nothing" "$(s member-by-no "0805" id)"; fi
+if [ "$(s member-by-no "00805" id)" = "missing" ]; then ok "and it wrote nothing"; else bad "and it wrote nothing" "$(s member-by-no "00805" id)"; fi
 
 # The members of this run are removed again, so the screen is not left filled
 # with import probes.
-for nummer in 0801 0802; do
+for nummer in 00801 00802; do
 	s delete-member "$(s member-by-no "$nummer" id)" > /dev/null
 done
-if [ "$(s member-by-no "0801" id)" = "missing" ] && [ "$(s member-by-no "0802" id)" = "missing" ]; then
+if [ "$(s member-by-no "00801" id)" = "missing" ] && [ "$(s member-by-no "00802" id)" = "missing" ]; then
 	ok "the imported members are gone again"
 else
-	bad "the imported members are gone again" "0801=$(s member-by-no "0801" id) 0802=$(s member-by-no "0802" id)"
+	bad "the imported members are gone again" "00801=$(s member-by-no "00801" id) 00802=$(s member-by-no "00802" id)"
 fi
 
 # --- the header names the import accepts, and the screen that names them
@@ -2720,17 +2720,17 @@ fi
 # field. Were "name" in the list of the first names instead, the fourth column
 # would find the first name already taken and the file would be refused; were it
 # in both lists at once, the values below would land in the wrong place.
-printf 'Nummer;E-Mail;Vorname;Name\n0930;name@example.org;Aliase;Musterfrau\n' > "$IMPORT_CSV"
+printf 'Nummer;E-Mail;Vorname;Name\n00930;name@example.org;Aliase;Musterfrau\n' > "$IMPORT_CSV"
 curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/import-name.html" -X POST "$BASE/wp-admin/admin-post.php" \
 	-F "action=fg_import_members" \
 	-F "fg_import_nonce=$INONCE" \
 	-F "fg_member_file=@$IMPORT_CSV;type=text/csv" > /dev/null
 namensbericht=$(report < "$DIR/import-name.html")
 has "a header of Name is not refused" "$namensbericht" "1 neue Mitglieder angelegt"
-if [ "$(s member-by-no "0930" first_name)" = "Aliase" ] && [ "$(s member-by-no "0930" last_name)" = "Musterfrau" ]; then
+if [ "$(s member-by-no "00930" first_name)" = "Aliase" ] && [ "$(s member-by-no "00930" last_name)" = "Musterfrau" ]; then
 	ok "and its values land in the surname, not in the forename"
 else
-	bad "and its values land in the surname, not in the forename" "forename=$(s member-by-no "0930" first_name) surname=$(s member-by-no "0930" last_name)"
+	bad "and its values land in the surname, not in the forename" "forename=$(s member-by-no "00930" first_name) surname=$(s member-by-no "00930" last_name)"
 fi
 clean "$(cat "$DIR/import-name.html")" "import of a file with a header of Name"
 # And the other way round. "name" is a surname, so it must not be offered as a
@@ -2822,11 +2822,11 @@ for nummer in $(seq -f '17%02g' 1 "$LAUF"); do
 	s delete-member "$(s member-by-no "$nummer" id)" > /dev/null 2>&1
 	[ "$(s member-by-no "$nummer" id)" = "missing" ] && GERAUMT=$((GERAUMT+1))
 done
-s delete-member "$(s member-by-no "0930" id)" > /dev/null 2>&1
-if [ "$GERAUMT" = "$LAUF" ] && [ "$(s member-by-no "0930" id)" = "missing" ]; then
+s delete-member "$(s member-by-no "00930" id)" > /dev/null 2>&1
+if [ "$GERAUMT" = "$LAUF" ] && [ "$(s member-by-no "00930" id)" = "missing" ]; then
 	ok "the members of the name tests are gone again ($GERAUMT)"
 else
-	bad "the members of the name tests are gone again" "$GERAUMT of $LAUF, 0930=$(s member-by-no "0930" id)"
+	bad "the members of the name tests are gone again" "$GERAUMT of $LAUF, 00930=$(s member-by-no "00930" id)"
 fi
 
 
@@ -2856,7 +2856,7 @@ seite_nach_import() { cat "$DIR/gruppe-import.html"; }
 # front of it. The member does not exist yet: an import of a number that is
 # already in the table changes that member, and the report would then say
 # "changed" where the claim here is "created".
-NEU_NR="1990"
+NEU_NR="01990"
 s delete-member "$(s member-by-no "$NEU_NR" id)" > /dev/null 2>&1
 importiere "$(printf 'Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname;E001: Arbeitsdienst\n%s;neu1990@example.org;Neu;Import;Gartenbau\n' "$NEU_NR")"
 has "the import takes the column under the name of the club's system" "$(zahlen)" "1 neue Mitglieder angelegt"
@@ -2898,7 +2898,7 @@ fi
 # Its own member, created here and not taken over from the section above: a
 # member that the previous section removed would have no form left to write into,
 # and a save with a nonce for a record that is gone is refused.
-GRUPPE_NR="0993"
+GRUPPE_NR="00993"
 neu "$GRUPPE_NR" gruppen@example.org Gruppen Test
 GRUPPE_NONCE=$(val /dev/stdin fg_member_nonce <<< "$(curl -sk -b "$JAR" "$MEMBERS&member=$(s member-by-no "$GRUPPE_NR" id)")")
 curl -sk -b "$JAR" -L -o /dev/null -X POST "$BASE/wp-admin/admin-post.php" \
@@ -2948,14 +2948,14 @@ fi
 s delete-member "$(s member-by-no "$GRUPPE_NR" id)" > /dev/null
 echo "[11] a full duty refuses the registration on the server"
 VOLLEDUTY=$(s make-event "Voller Dienst aus dem Admin" "$(date -d '+30 days' +%Y-%m-%d)" 1)
-VOLLMITGLIED=$(neu "0850" "voll@example.org" "Voll" "Belegt")
-s register "$VOLLEDUTY" "0850" "voll@example.org" >/dev/null
+VOLLMITGLIED=$(neu "00850" "voll@example.org" "Voll" "Belegt")
+s register "$VOLLEDUTY" "00850" "voll@example.org" >/dev/null
 FREIES=$(s make-event "Dienst mit freiem Platz" "$(date -d '+30 days' +%Y-%m-%d)" 2)
 # The member who tries to get in is created first. A pair that does not belong
 # to anybody is refused before the places are even looked at, and a check of
 # the full-duty refusal that ran against a member who did not exist would be
 # measuring that earlier refusal.
-FREIMITGLIED=$(neu "0851" "frei@example.org" "Frei" "Platz")
+FREIMITGLIED=$(neu "00851" "frei@example.org" "Frei" "Platz")
 if [ "$FREIMITGLIED" -gt 0 ]; then ok "the member who signs up was created"; else bad "the member who signs up was created" "$FREIMITGLIED"; fi
 
 LIST_PATH=$(s list-page-path)
@@ -2973,7 +2973,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/voller-duty.html" -w '%{url_effec
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=$SNONCE" \
 	--data-urlencode "fg_event_ref=$(s event "$VOLLEDUTY" public_ref)" \
-	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_no=00851" \
 	--data-urlencode "fg_member_email=frei@example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
@@ -2992,7 +2992,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/freier-duty.html" -w '%{url_effec
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=$SNONCE" \
 	--data-urlencode "fg_event_ref=$(s event "$FREIES" public_ref)" \
-	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_no=00851" \
 	--data-urlencode "fg_member_email=frei@example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
@@ -3009,7 +3009,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/zweite-anmeldung.html" -X POST "$
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=$SNONCE" \
 	--data-urlencode "fg_event_ref=$(s event "$FREIES" public_ref)" \
-	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_no=00851" \
 	--data-urlencode "fg_member_email=frei@example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
@@ -3045,8 +3045,8 @@ clean "$overview" "overview with the two count columns"
 # the count has to follow. A registration that was made and then removed must
 # not leave its mark in the list.
 ANZAHL_VORHER=$(s count-registrations "$NEW_ID")
-neu "0852" "zwei@example.org" "Zwei" "Platz" >/dev/null
-s register "$NEW_ID" "0852" "zwei@example.org" >/dev/null
+neu "00852" "zwei@example.org" "Zwei" "Platz" >/dev/null
+s register "$NEW_ID" "00852" "zwei@example.org" >/dev/null
 ANZAHL_DAZU=$(s count-registrations "$NEW_ID")
 if [ "$ANZAHL_DAZU" = "$((ANZAHL_VORHER + 1))" ]; then
 	ok "a registration on this run's duty is counted"
@@ -3064,7 +3064,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/ohne-bedarf.html" -X POST "$BASE/
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=$SNONCE" \
 	--data-urlencode "fg_event_ref=$(s event "$OHNE" public_ref)" \
-	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_no=00851" \
 	--data-urlencode "fg_member_email=frei@example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
@@ -3082,7 +3082,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/unsichtbar.html" -X POST "$BASE/w
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=$SNONCE" \
 	--data-urlencode "fg_event_ref=$(s event "$WEG" public_ref)" \
-	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_no=00851" \
 	--data-urlencode "fg_member_email=frei@example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
@@ -3099,7 +3099,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/ohne-ref.html" -X POST "$BASE/wp-
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=$SNONCE" \
 	--data-urlencode "fg_event_ref=0000000000000000000000000000" \
-	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_no=00851" \
 	--data-urlencode "fg_member_email=frei@example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
@@ -3115,7 +3115,7 @@ out=$(curl -sk -b "$JAR" -L -o "$DIR/falsches-paar.html" -X POST "$BASE/wp-admin
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=$SNONCE" \
 	--data-urlencode "fg_event_ref=$(s event "$FREIES" public_ref)" \
-	--data-urlencode "fg_member_no=0850" \
+	--data-urlencode "fg_member_no=00850" \
 	--data-urlencode "fg_member_email=frei@example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
@@ -3133,7 +3133,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/ohne-erlaubnis.html" -X POST "$BA
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=manipuliert" \
 	--data-urlencode "fg_event_ref=$(s event "$FREIES" public_ref)" \
-	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_no=00851" \
 	--data-urlencode "fg_member_email=frei@example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
@@ -3156,7 +3156,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/honigtopf.html" -X POST "$BASE/wp
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=$SNONCE" \
 	--data-urlencode "fg_event_ref=$(s event "$FREIES" public_ref)" \
-	--data-urlencode "fg_member_no=0852" \
+	--data-urlencode "fg_member_no=00852" \
 	--data-urlencode "fg_member_email=zwei@example.org" \
 	--data-urlencode "fg_website=http://spam.example.org" \
 	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
@@ -3173,7 +3173,7 @@ out=$(curl -sk -b "$JAR" -L -c "$JAR" -o "$DIR/mit-id.html" -X POST "$BASE/wp-ad
 	--data-urlencode "action=fg_register_member" \
 	--data-urlencode "fg_register_nonce=$SNONCE" \
 	--data-urlencode "fg_event_ref=$FREIES" \
-	--data-urlencode "fg_member_no=0851" \
+	--data-urlencode "fg_member_no=00851" \
 	--data-urlencode "fg_member_email=frei@example.org" \
 	--data-urlencode "fg_website=" \
 	--data-urlencode "form_started_at=$(($(date +%s) - 30))" \
@@ -3188,7 +3188,7 @@ clean "$(cat "$DIR/mit-id.html")" "signup with the record number as reference"
 # up for. Removing a place is the one thing the club has to be able to do
 # itself, and it has to be the one link, not the one for the duty.
 detail=$(curl -sk -b "$JAR" "$BASE/wp-admin/admin.php?page=fahrgemeinschaften-events&event=$FREIES")
-has "the duty screen lists the member number that signed up" "$detail" "0851"
+has "the duty screen lists the member number that signed up" "$detail" "00851"
 has "and the address" "$detail" "frei@example.org"
 has "it says what a removal does" "$detail" "Das Löschen einer Anmeldung gibt nur den Platz in diesem Arbeitsdienst frei"
 reg_url=$(printf '%s' "$detail" | link "registration")
@@ -3196,13 +3196,13 @@ if [ -n "$reg_url" ]; then ok "the registration has its own delete link"; else b
 # The question names the member, so the person clicking knows which of several
 # rows they are about to remove.
 if [ -n "$reg_url" ]; then
-	has "the question names the member it is about" "$detail" "Die Anmeldung von Mitglied 0851 für diesen Arbeitsdienst löschen?"
+	has "the question names the member it is about" "$detail" "Die Anmeldung von Mitglied 00851 für diesen Arbeitsdienst löschen?"
 	out=$(curl -sk -b "$JAR" -L "$reg_url")
 	has "the removal is confirmed" "$out" "wurde endgültig gelöscht"
 	clean "$out" "removal of one registration"
 fi
 if [ "$(s count-registrations "$FREIES")" = "0" ]; then ok "the place is free again"; else bad "the place is free again" "$(s count-registrations "$FREIES")"; fi
-if [ "$(s member "$FREIMITGLIED" member_no)" = "0851" ]; then ok "and the member is still in the club"; else bad "and the member is still in the club" "$(s member "$FREIMITGLIED" member_no)"; fi
+if [ "$(s member "$FREIMITGLIED" member_no)" = "00851" ]; then ok "and the member is still in the club"; else bad "and the member is still in the club" "$(s member "$FREIMITGLIED" member_no)"; fi
 # The same member is still in the other duty they signed up for. A removal that
 # took the member out of the club would be a different operation, and one the
 # club does on the member screen.
@@ -3215,14 +3215,14 @@ list=$(curl -sk -b "$JAR" "$BASE$LIST_PATH")
 FREIREF=$(s event "$FREIES" public_ref)
 has "the card of this duty offers the place again" "$(printf '%s' "$list" | karte "$FREIREF")" "Eintragen"
 has "and the free places it reads are its own" "$(printf '%s' "$list" | karte "$FREIREF")" "Verfügbare freie Plätze 2"
-hasnt "and it does not name the member who took the other place" "$(printf '%s' "$list" | karte "$FREIREF")" "0850"
+hasnt "and it does not name the member who took the other place" "$(printf '%s' "$list" | karte "$FREIREF")" "00850"
 clean "$list" "duty list after a place was freed"
 
 # --- removing every member that is not registered for a work service
 echo "[12] deleting the members without a work service"
 # Three members who are in no duty at all, so the operation has something to take
 # and the plural of the notice is certain whatever the fixture holds.
-for nummer in 0960 0961 0962; do
+for nummer in 00960 00961 00962; do
 	neu "$nummer" "muell$nummer@example.org" "Muell" "Probe$nummer" > /dev/null
 done
 PRUNE_VORHER=$(s unlinked)
@@ -3271,7 +3271,7 @@ if [ "$(s unlinked)" = "$PRUNE_VORHER" ]; then ok "opening the overview deletes 
 # from a screen that said they would stay. Both lists are sorted before they are
 # compared, because the claim is about the two sets and not about their order, and
 # a member number is text: one of them can be the beginning of another, so a
-# search for 004 would be answered by the row of 0042.
+# search for 0004 would be answered by the row of 00042.
 betroffen=$(printf '%s' "$uebersicht" | rahmen 'fg-prune-report')
 AUF_SCREEN=$(printf '%s' "$uebersicht" | nummern | tr ' ' '\n' | sed '/^$/d' | sort | tr '\n' ' ')
 IN_TABELLE=$(printf '%s' "$PRUNE_VORHER" | tr ' ' '\n' | sed 's/|.*$//; /^$/d' | sort | tr '\n' ' ')
@@ -3296,7 +3296,7 @@ fi
 # ones the operation must not touch. They are named by their number and not by
 # theirs: "Verwalter Test" and "Voll Belegt" are the kind of name an overview
 # would print, and a check that read a name would pass on the wrong member.
-for angemeldet in 0842 0850; do
+for angemeldet in 00842 00850; do
 	hasnt "the registered member $angemeldet is not in the overview" "$betroffen" "$angemeldet"
 done
 has "the overview offers the way back" "$uebersicht" "Zurück zur Liste"
@@ -3336,7 +3336,7 @@ fi
 # Two members of this suite are signed up for a duty of this run, and both must
 # have survived with their registration. A group deletion that took the registered
 # ones with it would empty the club on the second click of a test run.
-for behalten in 0842 0850; do
+for behalten in 00842 00850; do
 	if [ "$(s member-by-no "$behalten" id)" != "missing" ]; then
 		ok "the registered member $behalten survived"
 	else
@@ -3360,8 +3360,8 @@ clean "$screen" "the member screen after the cleanup"
 
 s delete-member "$VOLLMITGLIED" >/dev/null
 s delete-member "$FREIMITGLIED" >/dev/null
-s delete-member "$(s member-by-no 0852 id)" >/dev/null
-s delete-member "$(s member-by-no 0900 id)" >/dev/null
+s delete-member "$(s member-by-no 00852 id)" >/dev/null
+s delete-member "$(s member-by-no 00900 id)" >/dev/null
 s delete-member "$EVENTMITGLIED" >/dev/null
 
 
@@ -3961,9 +3961,9 @@ echo "[13c] the greeting of the messages"
 # the sections before this prunes every member without a work service and the
 # check would then be green for a reason that has nothing to do with the code
 # under test.
-neu 7201 ersteller@angeln.example.org Greta Gruen
-neu 7202 fragende@angeln.example.org Frieda Fraglich
-IFS=$'\t' read -r an_ersteller an_fragend gesendet_e gesendet_f <<< "$(s mail-anrede "$ANREDE" 7201 7202)"
+neu 07201 ersteller@angeln.example.org Greta Gruen
+neu 07202 fragende@angeln.example.org Frieda Fraglich
+IFS=$'\t' read -r an_ersteller an_fragend gesendet_e gesendet_f <<< "$(s mail-anrede "$ANREDE" 07201 07202)"
 if [ "$an_ersteller" = "Hallo Greta Gruen," ]; then
 	ok "the member who offered the ride is greeted with both names ($an_ersteller)"
 else
@@ -3983,7 +3983,7 @@ fi
 # The member who offered the ride is deleted while the ride still points at
 # them. The list leaves the ride out, and the notifier has nothing to send to:
 # one withheld message, not two, and no greeting without a name in it.
-IFS=$'\t' read -r an_ersteller an_fragend gesendet_e gesendet_f <<< "$(s mail-anrede "$ANREDE" 7201 7202 geloescht)"
+IFS=$'\t' read -r an_ersteller an_fragend gesendet_e gesendet_f <<< "$(s mail-anrede "$ANREDE" 07201 07202 geloescht)"
 if [ "$an_ersteller" = "KEINE-MAIL" ] && [ "$an_fragend" = "KEINE-MAIL" ]; then
 	ok "a ride whose member is gone sends no message at all"
 else
@@ -3994,11 +3994,11 @@ if [ "$gesendet_e" = "0" ] && [ "$gesendet_f" = "0" ]; then
 else
 	bad "and the notifier says so" "creator=$gesendet_e requester=$gesendet_f"
 fi
-neu 7201 ersteller@angeln.example.org Greta Gruen
-s delete-member "$(s member-by-no 7201 id)" > /dev/null
-s delete-member "$(s member-by-no 7202 id)" > /dev/null
+neu 07201 ersteller@angeln.example.org Greta Gruen
+s delete-member "$(s member-by-no 07201 id)" > /dev/null
+s delete-member "$(s member-by-no 07202 id)" > /dev/null
 
-anrede_dienst=$(s mail-greeting "$ANREDE" 7101 dienst@angeln.example.org Anton Beispiel)
+anrede_dienst=$(s mail-greeting "$ANREDE" 07101 dienst@angeln.example.org Anton Beispiel)
 if [ "$anrede_dienst" = "Hallo Anton Beispiel," ]; then
 	ok "the signup mail greets the member with both names ($anrede_dienst)"
 else
@@ -4018,8 +4018,8 @@ echo "[13d] a stored text with a placeholder this version does not know"
 # A member of its own, because the ride needs a real address to be held back
 # with: a ride without one would be held back for a second reason, and the box
 # would then stay empty for a reason that has nothing to do with the wording.
-neu 7203 gehalten@angeln.example.org Gerd Gerafft
-ergebnis=$(s mail-holdback "$ANREDE" 7203)
+neu 07203 gehalten@angeln.example.org Gerd Gerafft
+ergebnis=$(s mail-holdback "$ANREDE" 07203)
 IFS=$'\t' read -r weg vorher nachher notizen <<< "$ergebnis"
 if [ "$weg" = "held-back" ]; then
 	ok "the send reports that it sent nothing ($weg)"
@@ -4059,7 +4059,7 @@ sys.exit(1 if ('Warteschlange' in h or 'geht raus, sobald' in h) else 0)
 " "the notice promises a queue that does not exist"
 
 s mail-text-clear > /dev/null
-s delete-member "$(s member-by-no 7203 id)" > /dev/null
+s delete-member "$(s member-by-no 07203 id)" > /dev/null
 if [ "$(s mail-text-notices)" = "0" ]; then ok "the notices can be cleared"; else bad "the notices can be cleared" "$(s mail-text-notices) left"; fi
 hasnt "a cleared notice is gone from the screen" "$(curl -sk -b "$JAR" "$MAILS")" "nicht verschickt"
 if [ "$(s mail-text-rows ride_published)" = "0" ]; then ok "the held-back text is gone again"; else bad "the held-back text is gone again" "$(s mail-text-rows ride_published) rows"; fi

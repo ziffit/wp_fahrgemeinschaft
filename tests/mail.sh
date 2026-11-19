@@ -23,7 +23,7 @@ s() { docker exec wpdev-wordpress-1 php /tmp/fgtests/state.php "$@"; }
 ANFRAGER_NR=$(python3 -c "import json;print(json.load(open('$F'))['member_free_no'])")
 ANFRAGER_MAIL=$(python3 -c "import json;print(json.load(open('$F'))['member_free_mail'])")
 ERSTELLER_MAIL=berta@angeln.example.org
-ERSTELLER_NR=0043
+ERSTELLER_NR=00043
 # The one who offers a ride. The form takes a member number and the address that
 # belongs to it, so a submission needs both, and the number comes from the
 # fixture next to the address rather than being written out a second time.

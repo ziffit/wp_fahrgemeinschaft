@@ -790,7 +790,7 @@ switch ( $command ) {
 		$tabelle   = $wpdb->prefix . 'fg_event_members';
 		$token     = $wpdb->prefix . 'fg_event_member_tokens';
 		$hash      = hash( 'sha256', 'migrationsprobe-' . $event_id );
-		$mitglied  = $repo->get_member_by_number( isset( $args[1] ) ? (string) $args[1] : '0000' );
+		$mitglied  = $repo->get_member_by_number( isset( $args[1] ) ? (string) $args[1] : '00000' );
 
 		if ( ! $event_id || ! $mitglied ) {
 			fg_state_out( 'kein-dienst' );
@@ -1093,8 +1093,8 @@ switch ( $command ) {
 		update_option( 'fg_test_mail_enabled', '1', false );
 
 		$event_id  = isset( $args[0] ) ? (int) $args[0] : 0;
-		$member_no = isset( $args[1] ) ? (string) $args[1] : '7001';
-		$email     = isset( $args[2] ) ? (string) $args[2] : '7001@angeln.example.org';
+		$member_no = isset( $args[1] ) ? (string) $args[1] : '07001';
+		$email     = isset( $args[2] ) ? (string) $args[2] : '07001@angeln.example.org';
 		$vorname   = isset( $args[3] ) ? (string) $args[3] : '';
 		$name      = isset( $args[4] ) ? (string) $args[4] : '';
 

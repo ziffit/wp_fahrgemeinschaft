@@ -351,9 +351,9 @@ function fg_register_fixture_trio( $event_id ) {
  */
 function fg_member_id( $which ) {
 	$members = array(
-		'teilnehmer' => '100',
-		'anbieter'   => '200',
-		'sucher'     => '300',
+		'teilnehmer' => '00100',
+		'anbieter'   => '00200',
+		'sucher'     => '00300',
 	);
 
 	if ( ! isset( $members[ $which ] ) ) {
@@ -507,7 +507,7 @@ function fg_submission_post( array $overrides = array() ) {
 		'action'          => 'fg_submit_ride',
 		'fg_event_ref'    => $event_ref,
 		'fg_mode'         => 'offer',
-		'fg_member_no'    => '100',
+		'fg_member_no'    => '00100',
 		'fg_origin'       => 'Innenstadt',
 		'fg_member_email' => 'teilnehmer@example.org',
 		'fg_consent'      => '1',
@@ -708,7 +708,7 @@ $ohne_glied = $fg_rohe_fahrt(
 		'member_id'     => 0,
 	)
 );
-$mig_mitglied = fg_make_member( '410', 'migriert@angeln.example.org', 'Migriert', 'Probe' );
+$mig_mitglied = fg_make_member( '00410', 'migriert@angeln.example.org', 'Migriert', 'Probe' );
 fg_ok(
 	$mit_glied > 0 && $ohne_glied > 0 && $mit_glied !== $ohne_glied,
 	'two rides in the shape of 1.3.0 written',
@@ -813,9 +813,9 @@ $past      = current_datetime()->modify( '-3 days' )->format( 'Y-m-d' );
 // The three addresses the other sections use. They are members now, so they
 // have a number and a name, and being a member is what lets them sign in for a
 // work service and offer a ride for it.
-$teilnehmer = fg_make_member( '100', 'teilnehmer@example.org', 'Teilnehmer', 'Probe' );
-$anbieter   = fg_make_member( '200', 'anbieter@example.org', 'Anbieter', 'Probe' );
-$sucher     = fg_make_member( '300', 'sucher@example.org', 'Sucher', 'Probe' );
+$teilnehmer = fg_make_member( '00100', 'teilnehmer@example.org', 'Teilnehmer', 'Probe' );
+$anbieter   = fg_make_member( '00200', 'anbieter@example.org', 'Anbieter', 'Probe' );
+$sucher     = fg_make_member( '00300', 'sucher@example.org', 'Sucher', 'Probe' );
 fg_ok( 'teilnehmer@example.org' === $teilnehmer->email, 'the address of a member is stored lower-cased', $teilnehmer->email );
 
 $event_id    = fg_make_event( 'Testarbeit', $soon );
@@ -1452,7 +1452,7 @@ fg_not_contains( 'Fatal error', $html, 'no fatal error on token page' );
 fg_not_contains( 'Warning:', $html, 'no PHP warning on token page' );
 fg_contains( 'Fahrgemeinschaft löschen', $html, 'delete page heading' );
 fg_contains( 'Teilnehmer', $html, 'delete page shows the first name of the member' );
-fg_contains( '100', $html, 'delete page shows the member number' );
+fg_contains( '00100', $html, 'delete page shows the member number' );
 fg_not_contains( 'teilnehmer@example.org', $html, 'token page hides the address' );
 fg_contains( 'name="token_nonce"', $html, 'token form carries its verifier' );
 fg_contains( 'name="intent" value="delete"', $html, 'token form carries the intent' );
@@ -1533,7 +1533,7 @@ list( $location ) = fg_call(
 	array(
 		'action'                 => 'fg_contact_ride',
 		'ride_ref'               => $ride_ref,
-		'fg_contact_member_no'   => '300',
+		'fg_contact_member_no'   => '00300',
 		'fg_contact_email'       => 'fremd@example.com',
 		'fg_website'             => '',
 		'form_started_at'        => (string) ( time() - 30 ),
@@ -1552,7 +1552,7 @@ list( $location ) = fg_call(
 	array(
 		'action'                 => 'fg_contact_ride',
 		'ride_ref'               => $ride_ref,
-		'fg_contact_member_no'   => '300',
+		'fg_contact_member_no'   => '00300',
 		'fg_contact_email'       => 'anbieter@example.org',
 		'fg_website'             => '',
 		'form_started_at'        => (string) ( time() - 30 ),
@@ -1568,7 +1568,7 @@ list( $location ) = fg_call(
 	array(
 		'action'                 => 'fg_contact_ride',
 		'ride_ref'               => $ride_ref,
-		'fg_contact_member_no'   => '300',
+		'fg_contact_member_no'   => '00300',
 		'fg_contact_email'       => 'sucher@example.org',
 		'fg_website'             => '',
 		'form_started_at'        => (string) ( time() - 30 ),
@@ -1594,7 +1594,7 @@ list( $location ) = fg_call(
 	array(
 		'action'                 => 'fg_contact_ride',
 		'ride_ref'               => $ride_ref,
-		'fg_contact_member_no'   => '200',
+		'fg_contact_member_no'   => '00200',
 		'fg_contact_email'       => 'anbieter@example.org',
 		'fg_website'             => 'https://spam.example',
 		'form_started_at'        => (string) ( time() - 30 ),
@@ -1674,7 +1674,7 @@ echo "[10] Rejected submissions\n";
 // those three values, and a refusal for a value that no longer exists would
 // test nothing at all.
 $cases = array(
-	'unknown number'     => array( 'fg_member_no' => '9000' ),
+	'unknown number'     => array( 'fg_member_no' => '09000' ),
 	'address of nobody'  => array( 'fg_member_email' => 'nicht-teilnehmer@example.com' ),
 	'invalid address'    => array( 'fg_member_email' => 'keine-mail' ),
 	// The number of one member with the address of another: both values are
@@ -1738,7 +1738,7 @@ fg_ok( $published_before === fg_count_rides( FG_RIDE_STATUS_PUBLISHED ), 'refuse
 /* ------------------------------------------------------------------ 11 */
 echo "[11] Rides are read-only for administrators\n";
 $admin_event = fg_make_event( 'Admin-Dienst', $soon );
-$admin_member = fg_make_member( '400', 'admin@example.org', 'Admina', 'Probe' );
+$admin_member = fg_make_member( '00400', 'admin@example.org', 'Admina', 'Probe' );
 $admin_ride   = $fg_repo->create_ride(
 	array(
 		'event_id'  => $admin_event,
@@ -1855,11 +1855,11 @@ foreach ( $cascade_signups as $row ) {
 }
 fg_ok( 0 === $left_signups, 'deleting an event deletes its registrations' );
 fg_ok( null === $fg_repo->get_event( $cascade_event ), 'work duty removed' );
-fg_ok( null !== $fg_repo->get_member_by_number( '300' ), 'the member itself survives the loss of the duty' );
+fg_ok( null !== $fg_repo->get_member_by_number( '00300' ), 'the member itself survives the loss of the duty' );
 
 /* ------------------------------------------------------------------ 13 */
 echo "[13] Daily cleanup and statistics retention\n";
-$abgelaufen = fg_make_member( '401', 'abgelaufen@example.org', 'Abgelaufen', 'Probe' );
+$abgelaufen = fg_make_member( '00401', 'abgelaufen@example.org', 'Abgelaufen', 'Probe' );
 // Two entries, both published and both public: one whose deletion link has run
 // out, one whose link is still good. Since the state before publication is gone
 // there is no third kind of row the cleanup could delete, which is the point of
@@ -1924,8 +1924,8 @@ $bulk_event = fg_make_event( 'Datenschutz', $soon, '', true, array( 'demand' => 
 // The data subject has to be a member, because a registration belongs to a
 // member. An address that is not in the member list has no registrations and
 // nothing for the exporter to find beyond the rides.
-$opfer = fg_make_member( '900', 'opfer@example.org', 'Opfer', 'Probe' );
-$ander = fg_make_member( '901', 'ander@example.org', 'Ander', 'Probe' );
+$opfer = fg_make_member( '00900', 'opfer@example.org', 'Opfer', 'Probe' );
+$ander = fg_make_member( '00901', 'ander@example.org', 'Ander', 'Probe' );
 fg_register( $bulk_event, $opfer->id );
 fg_register( $bulk_event, $ander->id );
 
@@ -1967,7 +1967,7 @@ $left = $fg_repo->get_event_ride_ids( $bulk_event );
 fg_ok( 0 === count( $left ), 'all rides of the data subject removed', (string) count( $left ) );
 fg_ok( ! $fg_repo->has_registration( $bulk_event, $opfer->id ), 'the registration of the data subject is gone' );
 fg_ok( $fg_repo->has_registration( $bulk_event, $ander->id ), 'other registrations untouched' );
-fg_ok( null !== $fg_repo->get_member_by_number( '900' ), 'the member record of the club itself is left alone' );
+fg_ok( null !== $fg_repo->get_member_by_number( '00900' ), 'the member record of the club itself is left alone' );
 fg_ok( ! $fg_repo->is_event_participant( $bulk_event, 'opfer@example.org' ), 'an erased member can no longer offer a ride' );
 
 // One address, two members. WordPress hands the exporter and the eraser an
@@ -1978,8 +1978,8 @@ fg_ok( ! $fg_repo->is_event_participant( $bulk_event, 'opfer@example.org' ), 'an
 // the two were covered, which is why the count is read out of the report and the
 // two first names out of the data, instead of counting rows.
 $geteilt_ma  = 'ehepaar@example.org';
-$erst_ehe    = fg_make_member( '910', $geteilt_ma, 'Erst', 'Ehe' );
-$zweit_ehe   = fg_make_member( '911', $geteilt_ma, 'Zweit', 'Ehe' );
+$erst_ehe    = fg_make_member( '00910', $geteilt_ma, 'Erst', 'Ehe' );
+$zweit_ehe   = fg_make_member( '00911', $geteilt_ma, 'Zweit', 'Ehe' );
 $ehe_dienst  = fg_make_event( 'Ehepaar aus dem CLI-Test', $soon, '', true, array( 'demand' => 10 ) );
 fg_register( $ehe_dienst, $erst_ehe->id );
 fg_register( $ehe_dienst, $zweit_ehe->id );
@@ -2014,7 +2014,7 @@ $paar_erase = $privacy->erase( $geteilt_ma, 1 );
 fg_ok( (bool) $paar_erase['items_removed'], 'the erasure of a shared address removes something', wp_json_encode( $paar_erase['messages'] ) );
 fg_ok( 0 === count( $fg_repo->get_event_ride_ids( $ehe_dienst ) ), 'and it takes the rides of both members', (string) count( $fg_repo->get_event_ride_ids( $ehe_dienst ) ) );
 fg_ok( ! $fg_repo->has_registration( $ehe_dienst, $erst_ehe->id ) && ! $fg_repo->has_registration( $ehe_dienst, $zweit_ehe->id ), 'and the registrations of both', '' );
-fg_ok( null !== $fg_repo->get_member_by_number( '910' ) && null !== $fg_repo->get_member_by_number( '911' ), 'while the member records of the club are left alone', '' );
+fg_ok( null !== $fg_repo->get_member_by_number( '00910' ) && null !== $fg_repo->get_member_by_number( '00911' ), 'while the member records of the club are left alone', '' );
 fg_ok( false !== strpos( implode( ' ', $paar_erase['messages'] ), '2 Mitgliedern' ), 'and the report names the number of members as well', implode( ' / ', $paar_erase['messages'] ) );
 
 /* ------------------------------------------------------------------ 15 */
@@ -2147,7 +2147,7 @@ echo "[17] The member administration\n";
 
 $neu = $fg_repo->insert_member(
 	array(
-		'member_no'  => '  0042  ',
+		'member_no'  => '  00042  ',
 		'email'      => 'Neu.Probe@Example.ORG',
 		'first_name' => 'Neu',
 		'last_name'  => 'Probe',
@@ -2155,38 +2155,38 @@ $neu = $fg_repo->insert_member(
 );
 fg_ok( (bool) $neu, 'a member is created', var_export( $neu, true ) );
 $neu_row = $fg_repo->get_member( $neu );
-fg_ok( '0042' === $neu_row->member_no, 'spaces around the number are not part of it', var_export( $neu_row->member_no, true ) );
+fg_ok( '00042' === $neu_row->member_no, 'spaces around the number are not part of it', var_export( $neu_row->member_no, true ) );
 fg_ok( 'neu.probe@example.org' === $neu_row->email, 'the address is stored lower-cased', $neu_row->email );
-fg_ok( null !== $fg_repo->get_member_by_number( '0042' ), 'the member is found by the number it is given with' );
-fg_ok( null !== $fg_repo->get_member_by_number( ' 0042 ' ), 'the number is found whatever spaces are typed around it' );
+fg_ok( null !== $fg_repo->get_member_by_number( '00042' ), 'the member is found by the number it is given with' );
+fg_ok( null !== $fg_repo->get_member_by_number( ' 00042 ' ), 'the number is found whatever spaces are typed around it' );
 fg_ok( array() !== $fg_repo->get_members_by_email( 'Neu.Probe@Example.ORG' ), 'the address is found whatever case it is typed with' );
 
 // A leading zero is a part of the number and not a digit that was lost. This is
 // the reason the column is text and not a number.
-$nullprobe = fg_make_member( '007', 'nullprobe@example.org', 'Null', 'Probe' );
-fg_ok( '007' === $nullprobe->member_no, 'a leading zero survives the round trip', var_export( $nullprobe->member_no, true ) );
+$nullprobe = fg_make_member( '00007', 'nullprobe@example.org', 'Null', 'Probe' );
+fg_ok( '00007' === $nullprobe->member_no, 'a leading zero survives the round trip', var_export( $nullprobe->member_no, true ) );
 fg_ok( null === $fg_repo->get_member_by_number( '7' ), 'and the number without it is a different member' );
 
 // The number is the key and it is the database that says so, not PHP counting
 // rows: this refusal holds under two requests at the same moment too.
-fg_ok( ! $fg_repo->insert_member( array( 'member_no' => '0042', 'email' => 'anders@example.org', 'first_name' => 'A', 'last_name' => 'B' ) ), 'a number belongs to one member only' );
+fg_ok( ! $fg_repo->insert_member( array( 'member_no' => '00042', 'email' => 'anders@example.org', 'first_name' => 'A', 'last_name' => 'B' ) ), 'a number belongs to one member only' );
 
 // The address is not a key since schema 1.6.0, because a married pair with one
 // mailbox is a normal case in a club and the number tells the two apart. Four
 // checks, and the order matters: the pair has to find each of them on its own,
 // or "two members with one address" would be one member found twice.
 $geteilt = 'geteilt@example.org';
-$erst    = $fg_repo->insert_member( array( 'member_no' => '0060', 'email' => $geteilt, 'first_name' => 'Erst', 'last_name' => 'Paar' ) );
-$zweit   = $fg_repo->insert_member( array( 'member_no' => '0061', 'email' => $geteilt, 'first_name' => 'Zweit', 'last_name' => 'Paar' ) );
+$erst    = $fg_repo->insert_member( array( 'member_no' => '00060', 'email' => $geteilt, 'first_name' => 'Erst', 'last_name' => 'Paar' ) );
+$zweit   = $fg_repo->insert_member( array( 'member_no' => '00061', 'email' => $geteilt, 'first_name' => 'Zweit', 'last_name' => 'Paar' ) );
 fg_ok( $erst > 0 && $zweit > 0, 'two members may share one address', $erst . ' / ' . $zweit );
 $hinter  = $fg_repo->get_members_by_email( $geteilt );
 fg_ok( 2 === count( $hinter ), 'and the address reads back as two members', (string) count( $hinter ) );
 fg_ok( $erst === $hinter[0]->id && $zweit === $hinter[1]->id, 'in the order the rows were written', $hinter[0]->member_no . ' / ' . $hinter[1]->member_no );
-$paar_e = $fg_repo->find_member_for_registration( '0060', $geteilt );
-$paar_z = $fg_repo->find_member_for_registration( '0061', $geteilt );
+$paar_e = $fg_repo->find_member_for_registration( '00060', $geteilt );
+$paar_z = $fg_repo->find_member_for_registration( '00061', $geteilt );
 fg_ok( $paar_e && 'Erst' === $paar_e->first_name, 'and the pair of number and address finds the first of them', $paar_e ? $paar_e->first_name : 'null' );
 fg_ok( $paar_z && 'Zweit' === $paar_z->first_name, 'and the same address with the other number finds the second', $paar_z ? $paar_z->first_name : 'null' );
-fg_ok( null === $fg_repo->find_member_for_registration( '0062', $geteilt ), 'while a number of nobody is still refused on that address' );
+fg_ok( null === $fg_repo->find_member_for_registration( '00062', $geteilt ), 'while a number of nobody is still refused on that address' );
 
 // All four fields are required on an update too. A partial set would have to be
 // completed from the stored row, and then a mistyped field name in the form
@@ -2195,7 +2195,7 @@ fg_ok( ! $fg_repo->update_member( $neu, array( 'email' => 'anders@example.org' )
 fg_ok( 'neu.probe@example.org' === $fg_repo->get_member( $neu )->email, 'and it left the stored address alone', $fg_repo->get_member( $neu )->email );
 
 $neu_felder = array(
-	'member_no'  => '0042',
+	'member_no'  => '00042',
 	'email'      => 'anders@example.org',
 	'first_name' => 'Neu',
 	'last_name'  => 'Probe',
@@ -2205,11 +2205,11 @@ fg_ok( array() !== $fg_repo->get_members_by_email( 'anders@example.org' ), 'and 
 fg_ok( $fg_repo->update_member( $neu, array_merge( $neu_felder, array( 'email' => 'neu.probe@example.org' ) ) ), 'and take it back' );
 
 // The member number may be changed too, but not onto one that is spoken for.
-fg_ok( ! $fg_repo->update_member( $neu, array_merge( $neu_felder, array( 'member_no' => '100' ) ) ), 'a member number cannot be moved onto one that is taken' );
-fg_ok( '0042' === $fg_repo->get_member( $neu )->member_no, 'and the stored number is unchanged', $fg_repo->get_member( $neu )->member_no );
-fg_ok( $fg_repo->update_member( $neu, array_merge( $neu_felder, array( 'member_no' => '0043' ) ) ), 'a member number may be changed' );
-fg_ok( null === $fg_repo->get_member_by_number( '0042' ), 'and the old number finds nobody any more' );
-fg_ok( $fg_repo->update_member( $neu, array_merge( $neu_felder, array( 'member_no' => '0042' ) ) ), 'and changed back' );
+fg_ok( ! $fg_repo->update_member( $neu, array_merge( $neu_felder, array( 'member_no' => '00100' ) ) ), 'a member number cannot be moved onto one that is taken' );
+fg_ok( '00042' === $fg_repo->get_member( $neu )->member_no, 'and the stored number is unchanged', $fg_repo->get_member( $neu )->member_no );
+fg_ok( $fg_repo->update_member( $neu, array_merge( $neu_felder, array( 'member_no' => '00043' ) ) ), 'a member number may be changed' );
+fg_ok( null === $fg_repo->get_member_by_number( '00042' ), 'and the old number finds nobody any more' );
+fg_ok( $fg_repo->update_member( $neu, array_merge( $neu_felder, array( 'member_no' => '00042' ) ) ), 'and changed back' );
 
 // A change to the same values is not a change, and is not written.
 $updated_at_vorher = $fg_repo->get_member( $neu )->updated_at;
@@ -2223,7 +2223,7 @@ fg_ok( ! $fg_repo->update_member( 999999, $neu_felder ), 'an update of a member 
 // own number and its own address, so a refusal is never a second member
 // colliding with the first one.
 $vollstaendig = array(
-	'member_no'  => '0600',
+	'member_no'  => '00600',
 	'email'      => 'voll@example.org',
 	'first_name' => 'Voll',
 	'last_name'  => 'Probe',
@@ -2235,13 +2235,13 @@ foreach ( array( 'member_no', 'email', 'first_name', 'last_name' ) as $leer ) {
 	fg_ok( ! $fg_repo->insert_member( $fall ), 'a member without ' . $leer . ' is refused' );
 }
 fg_ok( (bool) $fg_repo->insert_member( $vollstaendig ), 'a complete member is accepted after the refusals' );
-$voll_id = (int) $fg_repo->get_member_by_number( '0600' )->id;
+$voll_id = (int) $fg_repo->get_member_by_number( '00600' )->id;
 $vor_der_leeren_zeile = $voll_id;
 
 // A field that is nothing but spaces is the same as an empty one, because that
 // is what a browser sends for a field nobody touched.
 $mit_leerem_feld = $vollstaendig;
-$mit_leerem_feld['member_no'] = '0602';
+$mit_leerem_feld['member_no'] = '00602';
 $mit_leerem_feld['email']     = 'nurLeer@example.org';
 $mit_leerem_feld['first_name'] = '   ';
 fg_ok( ! $fg_repo->insert_member( $mit_leerem_feld ), 'a name of nothing but spaces is refused' );
@@ -2249,7 +2249,7 @@ fg_ok( ! $fg_repo->insert_member( $mit_leerem_feld ), 'a name of nothing but spa
 // A value that would not fit is refused rather than cut off, because a cut-off
 // member number is a different member to everyone who reads it back.
 $lang_fall = array(
-	'member_no'  => '0700',
+	'member_no'  => '00700',
 	'email'      => 'lang@example.org',
 	'first_name' => 'Lang',
 	'last_name'  => 'Probe',
@@ -2257,7 +2257,7 @@ $lang_fall = array(
 $lang_fall['member_no'] = str_repeat( '9', FG_Schema::MEMBER_NO_MAX + 1 );
 fg_ok( ! $fg_repo->insert_member( $lang_fall ), 'an over-long number is refused' );
 
-$lang_fall['member_no']  = '0700';
+$lang_fall['member_no']  = '00700';
 $lang_fall['first_name'] = str_repeat( 'a', FG_Schema::MEMBER_NAME_MAX + 1 );
 fg_ok( ! $fg_repo->insert_member( $lang_fall ), 'an over-long first name is refused' );
 
@@ -2298,7 +2298,7 @@ fg_ok( 'Probe' === $fg_repo->get_member( $vor_der_leeren_zeile )->last_name, 'an
 // registrations with it.
 $viel_event_a = fg_make_event( 'Mitglied viel A', $soon, '', true, array( 'demand' => 5 ) );
 $viel_event_b = fg_make_event( 'Mitglied viel B', $soon, '', true, array( 'demand' => 5 ) );
-$viel         = fg_make_member( '1234', 'viel@example.org', 'Viel', 'Probe' );
+$viel         = fg_make_member( '01234', 'viel@example.org', 'Viel', 'Probe' );
 fg_register( $viel_event_a, $viel->id );
 fg_register( $viel_event_b, $viel->id );
 fg_ok( 2 === $fg_repo->count_member_registrations( $viel->id ), 'a member can be signed in for two duties', (string) $fg_repo->count_member_registrations( $viel->id ) );
@@ -2342,10 +2342,10 @@ echo "[18] The CSV import\n";
 $import = new FG_Member_Import( $fg_repo );
 
 $kopf = "Mitgliedsnummer;E-Mail-Adresse;Vorname;Nachname\n";
-$gut  = $import->parse( $kopf . "700;import1@example.org;Import;Eins\n701;import2@example.org;Import;Zwei\n" );
+$gut  = $import->parse( $kopf . "07000;import1@example.org;Import;Eins\n07001;import2@example.org;Import;Zwei\n" );
 fg_ok( $gut['ok'], 'a clean file is read', wp_json_encode( $gut['error'] ) );
 fg_ok( 2 === count( $gut['rows'] ), 'both rows are read', (string) count( $gut['rows'] ) );
-fg_ok( '700' === $gut['rows'][0]['member_no'], 'the number is taken from the column it is named in', wp_json_encode( $gut['rows'][0] ) );
+fg_ok( '07000' === $gut['rows'][0]['member_no'], 'the number is taken from the column it is named in', wp_json_encode( $gut['rows'][0] ) );
 fg_ok( 2 === $gut['rows'][0]['zeile'], 'the first data row is line 2 of the file', (string) $gut['rows'][0]['zeile'] );
 
 $erster = $import->apply( $gut['rows'] );
@@ -2355,7 +2355,7 @@ $fehlende_nummern = array();
 foreach ( $erster['missing'] as $fehlend ) {
 	$fehlende_nummern[] = $fehlend->member_no;
 }
-fg_ok( in_array( '0042', $fehlende_nummern, true ) && in_array( '100', $fehlende_nummern, true ), 'the list names the members that are in the file nowhere', implode( ',', $fehlende_nummern ) );
+fg_ok( in_array( '00042', $fehlende_nummern, true ) && in_array( '00100', $fehlende_nummern, true ), 'the list names the members that are in the file nowhere', implode( ',', $fehlende_nummern ) );
 
 // A second run of the same file changes nothing and says so, instead of
 // reporting every member as updated.
@@ -2367,20 +2367,20 @@ fg_ok( $zweiter['ok'] && 0 === $zweiter['created'] && 0 === $zweiter['updated'] 
 $dritter = $import->apply(
 	$import->parse(
 		$kopf
-		. "700;import1@example.org;Import;EinsGeaendert\n"
-		. "701;import2@example.org;Import;Zwei\n"
-		. "702;import3@example.org;Import;Drei\n"
+		. "07000;import1@example.org;Import;EinsGeaendert\n"
+		. "07001;import2@example.org;Import;Zwei\n"
+		. "07002;import3@example.org;Import;Drei\n"
 	)['rows']
 );
 fg_ok( $dritter['ok'] && 1 === $dritter['created'] && 1 === $dritter['updated'] && 1 === $dritter['unchanged'], 'one change is told apart from one new member and one untouched', wp_json_encode( $dritter ) );
-fg_ok( 'EinsGeaendert' === $fg_repo->get_member_by_number( '700' )->last_name, 'the changed name is the one that is stored', $fg_repo->get_member_by_number( '700' )->last_name );
-fg_ok( null !== $fg_repo->get_member_by_number( '702' ), 'the new member is in the club' );
+fg_ok( 'EinsGeaendert' === $fg_repo->get_member_by_number( '07000' )->last_name, 'the changed name is the one that is stored', $fg_repo->get_member_by_number( '07000' )->last_name );
+fg_ok( null !== $fg_repo->get_member_by_number( '07002' ), 'the new member is in the club' );
 
 // An import never removes anybody. A file of one member is the smallest file
 // there is and still must not empty the list.
-$ohne_neue = $import->apply( $import->parse( $kopf . "700;import1@example.org;Import;EinsGeaendert\n" )['rows'] );
+$ohne_neue = $import->apply( $import->parse( $kopf . "07000;import1@example.org;Import;EinsGeaendert\n" )['rows'] );
 fg_ok( $ohne_neue['ok'] && 0 === $ohne_neue['created'] && 0 === $ohne_neue['updated'], 'a file with one member deletes nobody', wp_json_encode( $ohne_neue ) );
-fg_ok( null !== $fg_repo->get_member_by_number( '701' ) && null !== $fg_repo->get_member_by_number( '702' ), 'the members missing from the file are still there' );
+fg_ok( null !== $fg_repo->get_member_by_number( '07001' ) && null !== $fg_repo->get_member_by_number( '07002' ), 'the members missing from the file are still there' );
 $fehlend_nach_einem = count( $ohne_neue['missing'] );
 fg_ok( $fehlend_nach_einem > 0, 'and they are named in the report', (string) $fehlend_nach_einem );
 
@@ -2391,33 +2391,33 @@ fg_ok( $fehlend_nach_einem > 0, 'and they are named in the report', (string) $fe
 $stand_vorher = $fg_repo->count_members();
 
 $ablehnungen = array(
-	'a missing column'            => array( "Mitgliedsnummer;E-Mail-Adresse;Vorname\n800;a@example.org;Ohne\n", 'fehlt: Nachname' ),
-	'a header that is not one'    => array( "800;a@example.org;Ohne;Nachname\n", 'fehlt' ),
+	'a missing column'            => array( "Mitgliedsnummer;E-Mail-Adresse;Vorname\n00800;a@example.org;Ohne\n", 'fehlt: Nachname' ),
+	'a header that is not one'    => array( "00800;a@example.org;Ohne;Nachname\n", 'fehlt' ),
 	'an empty file'               => array( '', 'konnte nicht gelesen werden' ),
 	'a file of nothing but spaces' => array( "   \n  \n", 'konnte nicht gelesen werden' ),
 	'a header and nothing else'   => array( $kopf, 'keine Datenzeile' ),
 	'no number'                   => array( $kopf . ";leer@example.org;Leer;Probe\n", 'Zeile 2' ),
-	'a blank line in the middle'  => array( $kopf . "800;eins@example.org;Eins;Probe\n\n801;zwei@example.org;Zwei;Probe\n", 'Zeile 3' ),
-	'an address that is not one'  => array( $kopf . "800;keine-mail;Ungueltig;Probe\n", 'Zeile 2' ),
-	'an address without a name'   => array( $kopf . "800;anonym@example.org;;Probe\n", 'Zeile 2' ),
-	'a last name missing'         => array( $kopf . "800;ohneNachname@example.org;Ohne;\n", 'Zeile 2' ),
-	'one number twice'            => array( $kopf . "800;eins@example.org;Eins;Probe\n800;zwei@example.org;Zwei;Probe\n", 'Zeile 3' ),
-	'one number twice, once padded with a space' => array( $kopf . "800;eins@example.org;Eins;Probe\n 800 ;zwei@example.org;Zwei;Probe\n", 'Zeile 3' ),
+	'a blank line in the middle'  => array( $kopf . "00800;eins@example.org;Eins;Probe\n\n00801;zwei@example.org;Zwei;Probe\n", 'Zeile 3' ),
+	'an address that is not one'  => array( $kopf . "00800;keine-mail;Ungueltig;Probe\n", 'Zeile 2' ),
+	'an address without a name'   => array( $kopf . "00800;anonym@example.org;;Probe\n", 'Zeile 2' ),
+	'a last name missing'         => array( $kopf . "00800;ohneNachname@example.org;Ohne;\n", 'Zeile 2' ),
+	'one number twice'            => array( $kopf . "00800;eins@example.org;Eins;Probe\n00800;zwei@example.org;Zwei;Probe\n", 'Zeile 3' ),
+	'one number twice, once padded with a space' => array( $kopf . "00800;eins@example.org;Eins;Probe\n 00800 ;zwei@example.org;Zwei;Probe\n", 'Zeile 3' ),
 	'one number twice in a different case' => array( $kopf . "abc;eins@example.org;Eins;Probe\nABC;zwei@example.org;Zwei;Probe\n", 'Zeile 3' ),
-	'a row with too few fields'   => array( $kopf . "800;eins@example.org;Eins\n", 'Zeile 2' ),
+	'a row with too few fields'   => array( $kopf . "00800;eins@example.org;Eins\n", 'Zeile 2' ),
 	'too many rows'               => array( $kopf . str_repeat( "1;eins@example.org;Eins;Probe\n", FG_Schema::MEMBER_IMPORT_MAX + 1 ), 'höchstens' ),
 	'an over-long number'         => array( $kopf . str_repeat( '8', FG_Schema::MEMBER_NO_MAX + 1 ) . ";lang@example.org;Lang;Probe\n", 'zu lang' ),
 );
 
 // A row may carry more columns than the plugin reads: an export of the club's
 // member administration very likely does. That is no reason for a complaint.
-$mit_zusatz = $import->parse( $kopf . "810;zusatz@example.org;Zusatz;Probe;Strasse 3;Ort\n" );
+$mit_zusatz = $import->parse( $kopf . "00810;zusatz@example.org;Zusatz;Probe;Strasse 3;Ort\n" );
 fg_ok( $mit_zusatz['ok'] && 1 === count( $mit_zusatz['rows'] ), 'a row with more columns than needed is read', wp_json_encode( $mit_zusatz ) );
 
-// A leading zero is part of the number, so 800 and 0800 are two members and a
+// A leading zero is part of the number, so 0800 and 00800 are two members and a
 // file holding both is no reason for a complaint.
-$mit_null = $import->parse( $kopf . "800;acht@example.org;Acht;Probe\n0800;achtNull@example.org;Acht;ProbeNull\n" );
-fg_ok( $mit_null['ok'] && 2 === count( $mit_null['rows'] ), '800 and 0800 are two members, not one', wp_json_encode( $mit_null ) );
+$mit_null = $import->parse( $kopf . "00800;acht@example.org;Acht;Probe\n0800;achtNull@example.org;Acht;ProbeNull\n" );
+fg_ok( $mit_null['ok'] && 2 === count( $mit_null['rows'] ), '0800 and 00800 are two members, not one', wp_json_encode( $mit_null ) );
 
 foreach ( $ablehnungen as $bezeichnung => $fall ) {
 	$ergebnis = $import->parse( $fall[0] );
@@ -2436,12 +2436,12 @@ $vor_der_anwendung = $fg_repo->count_members();
 $geteilt_import    = $import->apply(
 	$import->parse(
 		$kopf
-		. "810;import1@example.org;Kollision;Probe\n"
-		. "811;import1@example.org;Zweite;Probe\n"
+		. "00810;import1@example.org;Kollision;Probe\n"
+		. "00811;import1@example.org;Zweite;Probe\n"
 	)['rows']
 );
 fg_ok( $geteilt_import['ok'] && 2 === $geteilt_import['created'], 'a file may take and repeat the address of a member', wp_json_encode( $geteilt_import ) );
-fg_ok( null !== $fg_repo->get_member_by_number( '810' ) && null !== $fg_repo->get_member_by_number( '811' ), 'both members of the file are in the club' );
+fg_ok( null !== $fg_repo->get_member_by_number( '00810' ) && null !== $fg_repo->get_member_by_number( '00811' ), 'both members of the file are in the club' );
 fg_ok( 3 === count( $fg_repo->get_members_by_email( 'import1@example.org' ) ), 'and the address reads back as three members', (string) count( $fg_repo->get_members_by_email( 'import1@example.org' ) ) );
 fg_ok( $vor_der_anwendung + 2 === $fg_repo->count_members(), 'and the file added two members, not one row for the same address', $vor_der_anwendung . ' -> ' . $fg_repo->count_members() );
 
@@ -2449,29 +2449,29 @@ fg_ok( $vor_der_anwendung + 2 === $fg_repo->count_members(), 'and the file added
  * line, an upper-case header, a byte order mark, more columns than needed and
  * a name with an umlaut.
  */
-$komma = $import->parse( "\xEF\xBB\xBFMitgliedsnummer,E-Mail,First Name,Last Name,Strasse\r\n960,komma@example.org,Komma,Probe,Hauptstr. 3\r\n" );
+$komma = $import->parse( "\xEF\xBB\xBFMitgliedsnummer,E-Mail,First Name,Last Name,Strasse\r\n00960,komma@example.org,Komma,Probe,Hauptstr. 3\r\n" );
 fg_ok( $komma['ok'], 'a comma file with a mark and a declaration-free header is read', wp_json_encode( $komma['error'] ) );
 fg_ok( 1 === count( $komma['rows'] ) && 'Komma' === $komma['rows'][0]['first_name'], 'and the names land in the right columns', wp_json_encode( $komma['rows'] ) );
 
-$mit_sep = $import->parse( "sep=;\n" . $kopf . "970;umlaut@example.org;Müller;Ötzi\n" );
+$mit_sep = $import->parse( "sep=;\n" . $kopf . "00970;umlaut@example.org;Müller;Ötzi\n" );
 fg_ok( $mit_sep['ok'], 'a declaration line is understood', wp_json_encode( $mit_sep['error'] ) );
 fg_ok( 1 === count( $mit_sep['rows'] ) && 'Müller' === $mit_sep['rows'][0]['first_name'], 'and the umlauts survive', wp_json_encode( $mit_sep['rows'] ) );
 fg_ok( 3 === (int) $mit_sep['rows'][0]['zeile'], 'and the line it is on counts the declaration line', wp_json_encode( $mit_sep['rows'][0] ) );
 
-$latein = $import->parse( "sep=;\n" . $kopf . "971;iso@example.org;M\xfcller;Probe\n" );
+$latein = $import->parse( "sep=;\n" . $kopf . "00971;iso@example.org;M\xfcller;Probe\n" );
 fg_ok( $latein['ok'], 'a file in the old German encoding is read', wp_json_encode( $latein['error'] ) );
 fg_ok( 1 === count( $latein['rows'] ) && 'Müller' === $latein['rows'][0]['first_name'], 'and converted rather than guessed at', wp_json_encode( $latein['rows'] ) );
 
 // A complaint about a line has to name the line of the file, and a declaration
 // line in front pushes everything one down.
-$mit_sep_fehler = $import->parse( "sep=;\n" . $kopf . "972;ok@example.org;Ok;Probe\n;keine-nummer@example.org;Leer;Probe\n" );
+$mit_sep_fehler = $import->parse( "sep=;\n" . $kopf . "00972;ok@example.org;Ok;Probe\n;keine-nummer@example.org;Leer;Probe\n" );
 fg_ok( ! $mit_sep_fehler['ok'], 'a file with a declaration line is refused all the same', wp_json_encode( $mit_sep_fehler ) );
 fg_ok( 4 === (int) $mit_sep_fehler['error']['zeile'], 'and the line it names is the line of the file', wp_json_encode( $mit_sep_fehler['error'] ) );
 
-$gross = $import->parse( "MITGLIEDSNUMMER;E-MAIL-ADRESSE;VORNAME;NACHNAME\n950;gross@example.org;Gross;Schreibung\n" );
+$gross = $import->parse( "MITGLIEDSNUMMER;E-MAIL-ADRESSE;VORNAME;NACHNAME\n00950;gross@example.org;Gross;Schreibung\n" );
 fg_ok( $gross['ok'], 'a header in capitals is understood', wp_json_encode( $gross['error'] ) );
 
-$mit_leerzeile = $import->parse( $kopf . "980;mitLeer@example.org;Mit;Leerzeile\n\n981;nachLeer@example.org;Nach;Leerzeile\n" );
+$mit_leerzeile = $import->parse( $kopf . "00980;mitLeer@example.org;Mit;Leerzeile\n\n00981;nachLeer@example.org;Nach;Leerzeile\n" );
 fg_ok( ! $mit_leerzeile['ok'] && FG_Member_Import::ERROR_EMPTY_NUMBER === $mit_leerzeile['error']['code'], 'a blank line in the middle of the file is a row without a number, not a short row', wp_json_encode( $mit_leerzeile['error'] ) );
 fg_ok( 3 === (int) $mit_leerzeile['error']['zeile'], 'and the line it is on is the real one', wp_json_encode( $mit_leerzeile['error'] ) );
 
@@ -2493,7 +2493,7 @@ function fg_signup_post( array $overrides = array() ) {
 	$base = array(
 		'action'           => 'fg_register_member',
 		'fg_event_ref'     => $fg_repo->get_event( (int) $GLOBALS['fg_state']['event_id'] )->public_ref,
-		'fg_member_no'     => '100',
+		'fg_member_no'     => '00100',
 		'fg_member_email'  => 'teilnehmer@example.org',
 		'fg_website'       => '',
 		'form_started_at'  => (string) ( time() - 30 ),
@@ -2506,7 +2506,7 @@ function fg_signup_post( array $overrides = array() ) {
 
 $anmelde_event = fg_make_event( 'Anmeldung Server', $soon, '', true, array( 'demand' => 2 ) );
 $anmelde_ref   = $fg_repo->get_event( $anmelde_event )->public_ref;
-$ander         = fg_make_member( '500', 'ander500@example.org', 'Ander', 'Probe' );
+$ander         = fg_make_member( '00500', 'ander500@example.org', 'Ander', 'Probe' );
 
 fg_mail_reset();
 list( $ort ) = fg_call(
@@ -2551,10 +2551,10 @@ fg_ok( 0 === count( fg_mail_recipients() ), 'a second mail is not sent', implode
  * wrong, because that would tell a passer-by whether a guessed number exists.
  */
 $paare = array(
-	'unknown number'        => array( 'fg_member_no' => '999999', 'fg_member_email' => 'teilnehmer@example.org' ),
-	'number of another'     => array( 'fg_member_no' => '500', 'fg_member_email' => 'teilnehmer@example.org' ),
-	'address of another'    => array( 'fg_member_no' => '100', 'fg_member_email' => 'ander500@example.org' ),
-	'unknown address'       => array( 'fg_member_no' => '100', 'fg_member_email' => 'gibtesnicht@example.org' ),
+	'unknown number'        => array( 'fg_member_no' => '09999', 'fg_member_email' => 'teilnehmer@example.org' ),
+	'number of another'     => array( 'fg_member_no' => '00500', 'fg_member_email' => 'teilnehmer@example.org' ),
+	'address of another'    => array( 'fg_member_no' => '00100', 'fg_member_email' => 'ander500@example.org' ),
+	'unknown address'       => array( 'fg_member_no' => '00100', 'fg_member_email' => 'gibtesnicht@example.org' ),
 	'no number at all'      => array( 'fg_member_no' => '' ),
 	'no address'            => array( 'fg_member_email' => '' ),
 	'address that is not one' => array( 'fg_member_email' => 'keine-mail' ),
@@ -2585,14 +2585,14 @@ $fg_repo->delete_event( $zurueck );
  * that the server says no on its own. A check that only looked at the button
  * would pass on a page that has no button for a reason nobody knows.
  */
-fg_call( array( $fg_actions, 'register_member' ), fg_signup_post( array( 'fg_event_ref' => $anmelde_ref, 'fg_member_no' => '500', 'fg_member_email' => 'ander500@example.org' ) ) );
+fg_call( array( $fg_actions, 'register_member' ), fg_signup_post( array( 'fg_event_ref' => $anmelde_ref, 'fg_member_no' => '00500', 'fg_member_email' => 'ander500@example.org' ) ) );
 fg_ok( 2 === $fg_repo->count_event_registrations( $anmelde_event ), 'the second place is taken', (string) $fg_repo->count_event_registrations( $anmelde_event ) );
 fg_ok( ! $fg_repo->can_register( $fg_repo->get_event( $anmelde_event ), 2 ), 'the duty reports itself as full' );
 
 fg_mail_reset();
 list( $ort ) = fg_call(
 	array( $fg_actions, 'register_member' ),
-	fg_signup_post( array( 'fg_event_ref' => $anmelde_ref, 'fg_member_no' => '300', 'fg_member_email' => 'sucher@example.org' ) )
+	fg_signup_post( array( 'fg_event_ref' => $anmelde_ref, 'fg_member_no' => '00300', 'fg_member_email' => 'sucher@example.org' ) )
 );
 fg_ok( 'duty_full' === fg_notice_of( $ort ), 'a full duty refuses the registration on the server', (string) $ort );
 fg_ok( 2 === $fg_repo->count_event_registrations( $anmelde_event ), 'and the refusal wrote nothing', (string) $fg_repo->count_event_registrations( $anmelde_event ) );
@@ -2605,7 +2605,7 @@ $honig_event = fg_make_event( 'Anmeldung Honig', $soon, '', true, array( 'demand
 fg_mail_reset();
 list( $ort ) = fg_call(
 	array( $fg_actions, 'register_member' ),
-	fg_signup_post( array( 'fg_event_ref' => $fg_repo->get_event( $honig_event )->public_ref, 'fg_member_no' => '500', 'fg_member_email' => 'ander500@example.org', 'fg_website' => 'http://spam.example' ) )
+	fg_signup_post( array( 'fg_event_ref' => $fg_repo->get_event( $honig_event )->public_ref, 'fg_member_no' => '00500', 'fg_member_email' => 'ander500@example.org', 'fg_website' => 'http://spam.example' ) )
 );
 fg_ok( 'not_registered' === fg_notice_of( $ort ), 'a filled honeypot is refused', (string) $ort );
 fg_ok( 0 === $fg_repo->count_event_registrations( $honig_event ), 'and writes nothing' );
@@ -2646,7 +2646,7 @@ list( $html, $err, $code, $out ) = fg_render_duty_action_page(
 );
 fg_ok( false !== strpos( $html, 'Anmeldung löschen' ), 'the link opens a page that asks before it deletes', trim( $err . ' ' . $out ) );
 fg_contains( 'Anmeldung Abmeldung', $html, 'the page names the duty' );
-fg_contains( '500', $html, 'the page names the member number' );
+fg_contains( '00500', $html, 'the page names the member number' );
 fg_contains( 'name="token_nonce"', $html, 'the page carries a nonce of its own' );
 fg_contains( 'name="token"', $html, 'the page carries the token' );
 fg_contains( 'name="action" value="fg_process_duty_token"', $html, 'the page posts to the handler of the registration' );
@@ -2723,7 +2723,7 @@ list( $ort ) = fg_call( array( $fg_actions, 'process_duty_token' ), $abmelde_pos
 fg_ok( 'unregistered' === fg_notice_of( $ort ), 'the deliberate POST removes the registration', (string) $ort );
 fg_ok( 1 === $fg_repo->count_event_registrations( $abmelde_event ), 'the row is gone', (string) $fg_repo->count_event_registrations( $abmelde_event ) );
 fg_ok( ! $fg_repo->has_registration( $abmelde_event, $ander->id ), 'and the pair no longer exists' );
-fg_ok( null !== $fg_repo->get_member_by_number( '500' ), 'the member stays in the club' );
+fg_ok( null !== $fg_repo->get_member_by_number( '00500' ), 'the member stays in the club' );
 fg_ok( 1 === $fg_repo->free_places( $fg_repo->get_event( $abmelde_event ), 1 ), 'and the place it held is free again' );
 
 /* A link that is used twice removes nothing the second time. The removal is one

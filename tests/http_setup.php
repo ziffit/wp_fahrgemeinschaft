@@ -165,9 +165,9 @@ $event_id = $repo->insert_event(
 // with a number that keeps its leading zero, because the number is a string
 // and the club's own numbers have them.
 $mitglieder = array(
-	array( '0042', 'anton@angeln.example.org', 'Anton', 'Angeln' ),
-	array( '0043', 'berta@angeln.example.org', 'Berta', 'Beispiel' ),
-	array( '0044', 'cem@angeln.example.org', 'Cem', 'Cemu' ),
+	array( '00042', 'anton@angeln.example.org', 'Anton', 'Angeln' ),
+	array( '00043', 'berta@angeln.example.org', 'Berta', 'Beispiel' ),
+	array( '00044', 'cem@angeln.example.org', 'Cem', 'Cemu' ),
 );
 
 $mitglied_ids = array();
@@ -192,7 +192,7 @@ foreach ( $mitglieder as $felder ) {
 // One member is already in. The page must not show a name, but it must show
 // the free places one lower than the demand, and the list has to have
 // something in it for the admin suite to look at.
-$drin = $repo->create_registration( $event_id, $mitglied_ids['0042'], home_url( '/arbeitsdienste/' ) );
+$drin = $repo->create_registration( $event_id, $mitglied_ids['00042'], home_url( '/arbeitsdienste/' ) );
 if ( ! $drin['id'] ) {
 	fwrite( STDERR, "http_setup: the registration for the main duty could not be created\n" );
 	exit( 1 );
@@ -209,7 +209,7 @@ $voller_id = $repo->insert_event(
 		'is_active'  => true,
 	)
 );
-$voller_drin = $repo->create_registration( $voller_id, $mitglied_ids['0043'] );
+$voller_drin = $repo->create_registration( $voller_id, $mitglied_ids['00043'] );
 if ( ! $voller_drin['id'] ) {
 	fwrite( STDERR, "http_setup: the full duty could not be filled\n" );
 	exit( 1 );
@@ -252,7 +252,7 @@ $erste_id = $repo->create_ride(
 		'event_id'  => $event_id,
 		'mode'      => FG_RIDE_MODE_OFFER,
 		'origin'    => 'Innenstadt',
-		'member_id' => $mitglied_ids['0042'],
+		'member_id' => $mitglied_ids['00042'],
 	)
 );
 $erste_id = $erste_id['id'];
@@ -273,7 +273,7 @@ $zweite = $repo->create_ride(
 		'event_id'  => $event_id,
 		'mode'      => FG_RIDE_MODE_SEARCH,
 		'origin'    => 'Suedstadt',
-		'member_id' => $mitglied_ids['0043'],
+		'member_id' => $mitglied_ids['00043'],
 	)
 );
 $published_id = $zweite['id'];
@@ -307,11 +307,11 @@ $output = array(
 	'second_nonce'    => hash_hmac( 'sha256', 'delete|' . $zweite_token, wp_salt( 'nonce' ) ),
 	'home'            => home_url( '/' ),
 	'admin_post'      => admin_url( 'admin-post.php' ),
-	'member_free_no'  => '0044',
+	'member_free_no'  => '00044',
 	'member_free_mail' => 'cem@angeln.example.org',
-	'member_taken_no' => '0042',
+	'member_taken_no' => '00042',
 	'member_taken_mail' => 'anton@angeln.example.org',
-	'member_full_no'  => '0043',
+	'member_full_no'  => '00043',
 	'member_full_mail' => 'berta@angeln.example.org',
 	'full_event_id'   => $voller_id,
 	'full_event_ref'  => $repo->get_event( $voller_id )->public_ref,
