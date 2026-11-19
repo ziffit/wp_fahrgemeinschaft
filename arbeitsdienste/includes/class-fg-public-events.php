@@ -159,7 +159,7 @@ final class FG_Public_Events {
 							<input type="email" id="fg-status-member-email" name="fg_status_member_email" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_EMAIL_MAX ); ?>" autocomplete="email" required>
 						</div>
 					</div>
-					<p class="fg-hint fg-hint-row"><?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen. Dann schicken wir dir die Bestätigung zu deinen kommenden Arbeitsdiensten noch einmal zu.', 'arbeitsdienste' ); ?></p>
+					<p class="fg-hint fg-hint-row"><?php esc_html_e( 'Beide Angaben müssen zu einem Mitglied des Vereins passen. Bist du zu einem Arbeitsdienst angemeldet, erhältst du erneut deine Bestätigungsmail.', 'arbeitsdienste' ); ?></p>
 					<div class="fg-actions">
 						<button class="fg-button" type="submit"><?php esc_html_e( 'Anmeldung prüfen', 'arbeitsdienste' ); ?></button>
 					</div>

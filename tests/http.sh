@@ -2402,6 +2402,7 @@ has "the status page renders the form" "$STATUS" "Anmeldung prüfen"
 has "the status form asks for the member number" "$STATUS" 'for="fg-status-member-no"'
 has "the status form says how many digits the number has" "$STATUS" 'Mitgliedsnummer (5-stellig)'
 has "the status form asks for the address" "$STATUS" 'for="fg-status-member-email"'
+has "the hint under the pair says what the member gets" "$STATUS" "Bist du zu einem Arbeitsdienst angemeldet, erhältst du erneut deine Bestätigungsmail."
 # One button. It is the answer and the mail in one step, and a second button
 # that only looked would ask the member for a second press for the same answer.
 struct "$STATUS" "the status form carries one button" "

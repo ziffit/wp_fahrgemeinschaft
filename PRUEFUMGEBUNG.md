@@ -4,7 +4,14 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 19.11.2026 — **CLI 545, öffentliches HTTP 308, Mail-Ebene 124, Admin-Ebene 758,
+Letzter Lauf: 19.11.2026 — **öffentliches HTTP 309, 0 Fehler**, gegen den Stand **Plugin 1.25.13,
+Schema 1.9.0**. Gefahren wurde nur die öffentliche Suite, weil die Fassung genau eine Behauptung
+dazubekommt: Der Hinweis unter den beiden Feldern der Statusseite sagt jetzt, dass ein zu einem
+Arbeitsdienst angemeldetes Mitglied seine Bestätigungsmail erneut bekommt („the hint under the pair
+says what the member gets“). Der Wortlaut steht seit dem Lauf darunter; die drei anderen Suiten
+berührt ein Wortlaut nicht, ihre Zahlen bleiben stehen (CLI 545, Mail-Ebene 124, Admin-Ebene 758).
+
+Vorheriger Lauf: 19.11.2026 — **CLI 545, öffentliches HTTP 308, Mail-Ebene 124, Admin-Ebene 758,
 0 Fehler**, gegen den Stand **Plugin 1.25.12, Schema 1.9.0**. Die CLI-Suite lief mit ausdrücklicher
 Zustimmung, weil sie am Anfang alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht; sie
 prüft die geänderte Grenze am direktesten („an over-long number is refused“, „a member with the

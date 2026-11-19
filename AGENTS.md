@@ -2,7 +2,7 @@
 
 WordPress-Plugin **„Arbeitsdienste"** (Ordner `arbeitsdienste/`): Vereins-
 Arbeitsdienste planen, Mitglieder tragen sich selbst ein, und je Dienst werden
-Fahrgemeinschaften koordiniert. Fassung **1.25.12**, Schema **1.9.0**.
+Fahrgemeinschaften koordiniert. Fassung **1.25.13**, Schema **1.9.0**.
 
 Sprache: alle sichtbaren Texte und die Dokumentation auf **Deutsch**.
 Kommentare folgen dem Bestand (Plugin-Klassen überwiegend englisch, Prüfskripte
