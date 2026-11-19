@@ -67,9 +67,9 @@ mail_body()     { mails | sed -n '/^###BODY###$/,$p' | tail -n +2; }
 
 # This suite needs the recorder: it short-circuits wp_mail() and stores the
 # messages so the assertions below can read them. The recorder is off by
-# default, because an active SureMails instance also honours pre_wp_mail and
-# would never receive anything. So a standalone run switches it on here and
-# run-all.sh switches it off again afterwards.
+# default, because Mailpit would never receive anything through it. So a
+# standalone run switches it on here and run-all.sh switches it off again
+# afterwards.
 docker exec wpdev-wordpress-1 php -r "
 require '/var/www/html/wp-load.php';
 if ( '1' !== (string) get_option( 'fg_test_mail_enabled', '0' ) ) {

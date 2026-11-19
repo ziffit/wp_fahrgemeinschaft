@@ -52,10 +52,11 @@ echo '### 4/5 admin HTTP suite'
 bash admin.sh 2>&1 | tail -2
 
 # The suites above need the mail recorder: it short-circuits wp_mail() and
-# records the messages so the assertions can inspect them. SureMails also
-# honours that filter and would never see a mail. The instance is therefore
-# handed back with the recorder switched off, which is the state the manual
-# tests with SureMails need. Set KEEP_RECORDER=1 to keep it active.
+# records the messages so the assertions can inspect them. Mailpit would never
+# see a mail through it. The instance is therefore handed back with the recorder
+# switched off, which is the state the manual tests need: wp_mail() then goes to
+# Mailpit. setup.sh hands over the same state. Set KEEP_RECORDER=1 to keep it
+# active.
 echo
 echo '### 5/5 handover'
 if [ "${KEEP_RECORDER:-0}" = "1" ]; then
@@ -67,6 +68,6 @@ else
 	delete_option( "fg_test_mail_fail" );
 	printf(
 		"mail recorder: %s\n",
-		"1" === (string) get_option( "fg_test_mail_enabled", "0" ) ? "still active" : "off, wp_mail reaches SureMails"
+		"1" === (string) get_option( "fg_test_mail_enabled", "0" ) ? "still active" : "off, wp_mail reaches Mailpit"
 	);'
 fi

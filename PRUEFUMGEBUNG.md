@@ -209,17 +209,20 @@ beweist nichts.
 | Compose-Datei | `$WPDEV/docker-compose.yaml` |
 | Einrichtung | `$WPDEV/setup.sh` |
 | TLS | `$WPDEV/tls.sh`, Vhost `fg-ssl.conf`, Zertifikat in `$WPDEV/tls` |
+| Mailpit (Mailausgang) | Dienst `mailpit` im Compose-Stack, Oberfläche `http://localhost:8026` |
 | Testskripte | `tests/` in diesem Projekt |
 
 `$WPDEV` steht für das Verzeichnis mit dem Compose-Stack. Es liegt außerhalb dieses
 Projekts und ist nicht Teil des Repos, weil es die Testumgebung des jeweiligen
 Rechners beschreibt. Die Skripte erwarten es in der Umgebungsvariable `WPDEV`.
 
-- `wordpress:latest` (im letzten Lauf 7.1.2), `mariadb:10.6`, `phpmyadmin:latest`
-- `8080` HTTP, `8443` TLS, `8081` phpMyAdmin
+- `wordpress:latest` (im letzten Lauf 7.1.2), `mariadb:10.6`, `phpmyadmin:latest`,
+  `axllent/mailpit:latest`
+- `8080` HTTP, `8443` TLS, `8081` phpMyAdmin, `8026` Mailpit-Oberfläche
 - `WORDPRESS_DEBUG=1`, damit PHP-Hinweise in den Antworten sichtbar bleiben
 - Der Plugin-Ordner `arbeitsdienste/` ist als `wp-content/plugins/my-plugin` eingebunden; Änderungen wirken sofort. Die Hauptdatei darin heißt `arbeitsdienste.php`; die Tests rechnen mit dieser Datei, wenn sie das Plugin aktivieren und deaktivieren.
 - Testadresse: `https://localhost:8443`, Administrator `fg_admin` / `Test1234!`
+- Mailpit ist der Mailausgang: `fg-mailpit.php` (aus `tests/mailpit.php`) schickt jede Mail per SMTP an `mailpit:1025`. Der SMTP-Port liegt im Compose-Netz und ist nicht veröffentlicht; Port `8025` eines anderen Projekts bleibt unberührt.
 - TLS ist ein selbstsigniertes Zertifikat, daher arbeiten alle Aufrufe mit `curl -k`.
 - Das Dateisystem des WordPress-Containers ist nicht persistent. Nach jedem `docker compose up -d`
   müssen Zertifikat, Vhost und `mod_ssl` neu eingespielt werden; `setup.sh` erledigt das.
@@ -243,7 +246,7 @@ Das Skript ist idempotent und in fünf Schritten aufgeteilt:
 2. Warten, bis die Datenbank eine Verbindung annimmt
 3. TLS-Vhost und Zertifikat einspielen, danach prüfen, ob der TLS-Port antwortet
 4. Plugin-Ordner synchronisieren und die Testdateien in den Container kopieren
-5. Installation und Aktivierung: `bootstrap.php repair`, `install`, `configure`, die beiden Fixtures, Mail-Log leeren, Erreichbarkeit prüfen, Zustand ausgeben
+5. Installation und Aktivierung: `bootstrap.php repair`, `install`, `configure`, die beiden Fixtures, Mail-Log leeren und die Attrappe ausschalten, Erreichbarkeit von Startseite und Mailpit prüfen, Zustand ausgeben
 
 `tests/bootstrap.php` arbeitet in drei Phasen:
 
@@ -268,7 +271,10 @@ Nach dem Setup ist die Umgebung in dem Zustand, den die Tests erwarten: Plugin a
 `fg_schema_version` auf `1.9.0`, die fünf Tabellen `wp_fg_events`, `wp_fg_rides`,
 `wp_fg_members`, `wp_fg_event_members` und `wp_fg_mail_templates` vorhanden, die Spalte
 `member_id` in `wp_fg_rides` angelegt, `fg_daily_cleanup` geplant, keine
-Rollenberechtigung des Plugins, Mail-Log leer.
+Rollenberechtigung des Plugins, Mail-Log leer, **Mail-Attrappe aus** — `wp_mail()`
+erreicht damit Mailpit, so wie es ein Test im Browser braucht. Jede Suite, die das
+Mail-Protokoll liest, schaltet die Attrappe selbst ein (siehe „Der Recorder ist
+abschaltbar").
 
 ## Testlauf
 
@@ -743,14 +749,12 @@ findet.
 
 Die Wirkung des Stylesheets ist mit `curl` nicht prüfbar. Zweispaltigkeit, Zeilenhöhe
 und Schriftgrade der Einwilligung sind von Hand im Browser anzusehen.
-`run-all.sh` endet mit Schritt `5/5 handover`, der den Mail-Recorder wieder abschaltet. Ohne
-diesen Schritt stünde die Instanz anschließend nicht für die Handprüfung mit SureMails zur
-Verfügung (siehe unten). **Wer eine Suite von Hand fährt, fährt diesen Schritt nicht mit** —
-`http.sh` und `mail.sh` schalten den Recorder am Anfang selbst ein, und niemand schaltet ihn
-wieder aus. Danach landet keine einzige Mail in SureMails, was sich nicht wie ein Fehler des
-Plugins liest, sondern wie ein Fehler am Netz: Der Recorder hängt sich an `pre_wp_mail` und
-beantwortet `wp_mail()`, ohne es weiterzureichen. Der Zustand lässt sich abfragen und
-umschalten:
+`run-all.sh` endet mit Schritt `5/5 handover`, der den Mail-Recorder abschaltet; `setup.sh`
+tut dasselbe. Die Instanz steht damit für die Handprüfung mit Mailpit zur Verfügung (siehe
+unten). **Wer eine Suite von Hand fährt, muss nichts umschalten:** `http.sh`, `mail.sh` und
+`admin.sh` schalten den Recorder in dem Abschnitt selbst ein, der das Mail-Protokoll liest,
+und `setup.sh` sowie `run-all.sh` schalten ihn am Ende wieder aus. Der Zustand lässt sich
+abfragen und umschalten:
 
     docker exec wpdev-wordpress-1 php /tmp/fgtests/state.php recorder
     docker exec wpdev-wordpress-1 php /tmp/fgtests/state.php recorder off
@@ -1549,7 +1553,8 @@ gefahren, gab zwei rote Zeilen und keine davon; drei weitere Läufe mit dem repa
 564/0, einer davon mit `< /dev/null` an der Suite, weil das der Verdacht war.
 
 **Die Erklärung kam mit Fassung 1.21.0 und steht dort im Abschnitt über das Werkzeug der
-Gegenproben:** `admin.sh` schaltet den Mail-Recorder nicht selbst ein, und `gegenprobe.sh`
+Gegenproben:** `admin.sh` schaltete den Mail-Recorder nicht selbst ein (inzwischen tut es
+das, siehe „Der Recorder ist abschaltbar"), und `gegenprobe.sh`
 ließ ihn aus. Im normalen Lauf war er an (von Hand), im Gegenprobelauf aus — daher dieselben
 Prüfungen mit `KEINE-MAIL` nur dort. Was hier als „nicht gefunden" stand, war ein Fehler im
 Werkzeug und nicht in der Suite. Die Lehre ist die alte: Ein Symptom, das nur im Werkzeug
@@ -1670,7 +1675,7 @@ zeigt. Im Quelltext der empfangenen Mail stand `Content-Type: text/plain`.
 `FG_Mailer::send()` gab bis hier den **reinen Text** an `wp_mail()` und hängte das Layout an
 die Aktion `phpmailer_init`. Die Aktion feuert nur der eigene Mailversand von WordPress
 selbst. Eine Mail-Erweiterung, die `wp_mail()` übernimmt, baut die Nachricht selbst und feuert
-sie nie — und auf der Testinstanz ist eine aktiv (SureMails).
+sie nie — und auf der damaligen Testinstanz war eine aktiv (SureMails).
 
 Gemessen wurde an derselben Naht, an der eine Erweiterung die Nachricht übernimmt: über
 `pre_wp_mail`, also über den Filter, an dem auch der Recorder der Testumgebung hängt.
@@ -1718,8 +1723,8 @@ weiterhin; sie enthält nur nicht die zweite Hälfte des Auftrags. Die Tabelle h
   Textfassung.
 - **Was der Hinweis nicht sieht, steht im Code und nicht nur in diesem Abschnitt:** eine
   Erweiterung, die den Filter `pre_wp_mail` nur **anwendet**, statt sich an ihn zu hängen.
-  SureMails in der Testumgebung tut genau das und wird deshalb nicht erkannt. Eine Registrierung,
-  die es nicht gibt, kann man nicht anzeigen.
+  Die Testumgebung hatte damals eine solche Erweiterung (SureMails); sie wird deshalb nicht
+  erkannt. Eine Registrierung, die es nicht gibt, kann man nicht anzeigen.
 
 ### Der Preis, offen benannt
 
@@ -1790,7 +1795,8 @@ grüne Suite jetzt ausdrücklich als „die Bruchstelle hat nichts bewegt" und l
 mit aus.
 
 Dasselbe Werkzeug ließ außerdem den Mail-Recorder aus, während `admin.sh` ihn nicht selbst
-einschaltet. Damit meldete jede Admin-Gegenprobe bei den Anmeldeprüfungen `KEINE-MAIL` statt
+einschaltete (inzwischen tut es das). Damit meldete jede Admin-Gegenprobe bei den
+Anmeldeprüfungen `KEINE-MAIL` statt
 des gesuchten Fehlers — **das ist die Erklärung der offenen Beobachtung aus Fassung 1.19.0**,
 die dort als „der Auslöser ist nicht gefunden" stand: Dieselben Prüfungen, immer `KEINE-MAIL`,
 nur im Gegenprobelauf und nie im normalen Lauf. Zwei der vier Gegenproben dieser Fassung sind
@@ -3117,60 +3123,66 @@ kann. Dass danach ein zweiter Versuch mit derselben Nummer eine ganz normale
 ### Der Recorder ist abschaltbar
 
 `pre_wp_mail` bricht `wp_mail()` ab. Jedes andere Mail-Plugin, das denselben Filter
-auswertet, sieht deshalb keine Nachricht. SureMails prüft ihn an zwei Stellen
-(`inc/emails/handler/mail-handler.php` und `inc/emails/default-mail-handler.php`) und
-kehrt sofort zurück, sobald ein Filter einen Wert ungleich `null` liefert. Mit aktivem
-Recorder landet dort also nichts, und die Simulation von SureMails zeigt keinerlei
-Einträge.
+auswertet, sieht deshalb keine Nachricht. Mit aktivem Recorder landet also nichts
+im Mailausgang der Testumgebung: In Mailpit steht dann keine Zeile.
 
 Deshalb ist der Recorder **standardmäßig aus** und wird nur für den Testlauf eingeschaltet:
 
-- `tests/bootstrap.php` setzt in der Phase `configure` die Option `fg_test_mail_enabled=1`.
-- `tests/mail.sh` schaltet sie bei einem eigenständigen Lauf selbst ein und meldet das.
-- `tests/run-all.sh` schaltet sie im Schritt `5/5 handover` wieder ab. Die Instanz ist
-  danach für die Handprüfung mit SureMails oder echtem SMTP bereit. `KEEP_RECORDER=1`
-  lässt sie aktiv.
-- `WPDEV/setup.sh` gibt den Zustand als letzte Zeile aus: `mail recorder: …`.
+- `tests/bootstrap.php` setzt in der Phase `configure` die Option `fg_test_mail_enabled=1`;
+  das ist der Zustand direkt nach dem Einspielen.
+- `tests/mail.sh`, `tests/http.sh` (ab Abschnitt `[9]`) und `tests/admin.sh` (ab
+  Abschnitt `[5g]`) schalten sie bei einem eigenständigen Lauf selbst ein. Das sind die
+  einzigen Abschnitte, die das Mail-Protokoll lesen.
+- `WPDEV/setup.sh` schaltet sie am Ende **aus** und gibt den Zustand als letzte Zeile
+  aus: `mail recorder: …`. `tests/run-all.sh` schaltet sie im Schritt `5/5 handover`
+  ebenfalls aus. Die Instanz ist danach für die Handprüfung mit Mailpit bereit.
+  `KEEP_RECORDER=1` lässt sie aktiv.
 - `tests/state.php recorder on|off` schaltet ihn von Hand um und meldet es in einer Zeile.
 
 Ohne Recorder läuft der Nachrichtentransport unverändert über `wp_mail()`; am Plugin ist
 dafür keine Zeile anzufassen.
 
-**Nach jeder von Hand gefahrenen Suite ausschalten.** `run-all.sh` erledigt das im
-Schritt `5/5 handover`, eine von Hand gefahrene Suite nicht. Am Lauf vom 28.09.2026 hat
-das zwei der sechs roten Zeilen des Admin-Laufs verursacht: Die fünf Prüfungen des
-Abschnitts `[13b]` — die Anrede der Nachrichten — lesen das Mail-Protokoll, und bei
-ausgeschaltetem Recorder steht dort nichts, woraus sie lesen könnten. Sie melden
-zuverlässig `KEINE-MAIL`, was wie ein Fehler im Plugin aussieht und keiner ist. Wer
-eine Suite einzeln fährt, schaltet den Recorder vorher mit `state.php recorder on` ein
-und danach wieder aus.
+**Wer eine Suite von Hand fährt, muss nichts mehr umschalten.** Das war nicht immer so,
+und die alte Falle war: `http.sh` und `mail.sh` schalteten den Recorder selbst ein,
+`admin.sh` nicht, und niemand schaltete ihn wieder aus. Danach landete keine einzige Mail
+in Mailpit, was sich nicht wie ein Fehler des Plugins liest, sondern wie ein Fehler am
+Netz. Am Lauf vom 28.09.2026 hat das zwei der sechs roten Zeilen des Admin-Laufs
+verursacht: Die fünf Prüfungen des Abschnitts `[13b]` — die Anrede der Nachrichten —
+lesen das Mail-Protokoll, und bei ausgeschaltetem Recorder steht dort nichts, woraus sie
+lesen könnten. Sie melden zuverlässig `KEINE-MAIL`, was wie ein Fehler im Plugin aussieht
+und keiner ist. Seit dieser Fassung schaltet auch `admin.sh` ihn selbst ein.
 
-## Handprüfung mit SureMails
+## Handprüfung mit Mailpit
 
-Für die Sichtprüfung der Mails ist in der Testinstanz **SureMails** installiert und aktiv.
-Deren Simulation ist eingeschaltet (`email_simulation=yes` in `suremails_connections`), das
-Mail-Log ist aktiv (`log_emails=yes`). Eine eingetragene Verbindung ist nicht nötig, die
-Simulation versendet nichts.
+Für die Sichtprüfung der Mails läuft **Mailpit** als Dienst des Compose-Stacks
+(`axllent/mailpit:latest`, Oberfläche <http://localhost:8026>). Das mu-Plugin
+`fg-mailpit.php` (aus `tests/mailpit.php`) schickt jede Nachricht per SMTP an
+`mailpit:1025`. Ein Mailserver ist dafür nicht nötig, und Mailpit ist kein
+WordPress-Plugin: Es sitzt hinter `wp_mail()` und nicht davor.
 
-Damit die Nachrichten dort ankommen, muss der Mail-Recorder ausgeschaltet sein (siehe oben).
-Der Zustand ist die Voraussetzung für:
+Damit die Nachrichten dort ankommen, muss der Mail-Recorder ausgeschaltet sein (siehe
+oben); der Zustand nach `setup.sh` und nach `run-all.sh` ist genau das. Der Zustand ist
+die Voraussetzung für:
 
 1. Eine echte Einreichung über das öffentliche Formular. Der Löschlink steht dann
-   im Mail-Log unter SureMails → Email Log, Spalte „Body“; es ist die einzige
-   Nachricht zu der Fahrt, und der Eintrag steht im selben Moment öffentlich.
+   in der Nachricht; es ist die einzige Nachricht zu der Fahrt, und der Eintrag steht
+   im selben Moment öffentlich.
 2. Eine echte Anmeldung zu einem Arbeitsdienst auf der `[arbeitsdienste]`-Seite. Die
-   Nachricht mit dem Abmeldelink steht dort unter demselben Ersteller; sie nennt keinen
-   Namen, nur den Dienst und den Link.
+   Nachricht mit dem Abmeldelink nennt keinen Namen, nur den Dienst und den Link.
 3. Ein Kontaktaufruf zwischen zwei Mitgliedern desselben Dienstes. Erwartet werden zwei
-   Einträge: einer an den Ersteller, einer an den Anfragenden.
+   Nachrichten: eine an den Ersteller, eine an den Anfragenden.
 4. Ein Klick auf den Löschlink einer Fahrgemeinschaft. Die Rückfrageseite erscheint
    mit dem Namen des Eintrags, dem Abfahrtsbereich und einem Knopf; erst der
-   zweite Klick löscht, und danach erscheint kein Status im Log, weil keine
-   Nachricht mehr gesendet wird.
+   zweite Klick löscht, und danach erscheint keine neue Nachricht, weil keine
+   mehr gesendet wird.
 5. Ein Klick auf den Abmeldelink einer Anmeldung. Erwartet wird zuerst die Rückfrage und
    keine Löschung; gelöscht wird erst nach dem zweiten Klick.
 
-Der Recorder ist eine Einrichtung der Testumgebung. Am Plugin ist für SureMails nichts zu
+Die Links in der Nachricht zeigen auf `https://localhost:8443`. Das Zertifikat ist
+selbstsigniert, der Browser warnt also beim Klick; die Handprüfung ist der einzige Weg,
+der die Anzeige eines Clients wirklich zeigt.
+
+Der Recorder ist eine Einrichtung der Testumgebung. Am Plugin ist für Mailpit nichts zu
 tun: `class-fg-mailer.php` ruft ausschließlich `wp_mail()` auf. Davor hängt es die Filter
 `wp_mail_from` und `wp_mail_from_name` ein und danach die Aktion `phpmailer_init`, die den
 reinen Text als zweite Fassung setzt; alle drei werden nach dem Aufruf wieder entfernt. Der
@@ -3179,9 +3191,9 @@ Filter — der Filter `wp_mail_content_type`, den dieser Absatz hier früher nan
 Plugin gewesen; `git log -S` findet keine Zeile dazu, und der Satz stand hier falsch.
 
 Der Hinweis, den die Seiten **Einstellungen** und **E-Mails** für eine fremde Erweiterung
-anzeigen, erscheint in dieser Umgebung **nicht**: SureMails wendet `pre_wp_mail` an, hängt sich
-aber nicht daran, und nur eine Registrierung lässt sich anzeigen. Für die Sichtprüfung heißt
-das: Der Hinweis ist hier nicht zu sehen, und das ist richtig.
+anzeigen, erscheint in dieser Umgebung **nicht**: Mailpit ist ein Dienst neben WordPress
+und keine Erweiterung; es wendet `pre_wp_mail` nicht an und registriert sich nirgends.
+Für die Sichtprüfung heißt das: Der Hinweis ist hier nicht zu sehen, und das ist richtig.
 
 ## Was die Umgebung nicht prüft
 
@@ -3194,13 +3206,14 @@ das: Der Hinweis ist hier nicht zu sehen, und das ist richtig.
   des Vereins. Geprüft ist damit der Importweg, nicht die Erkennung der Spalten des
   Vereins — und die Liste der Alternativen steht an genau einer Stelle im Code,
   `FG_Member_Import::$header_aliases`.
-- **Keinen echten SMTP-Transport.** Es läuft kein Mailserver; die Zustellung wird nur
-  simuliert. Geprüft wird, was das Plugin übergibt; die Zustellung selbst ist eine
-  Betriebsvoraussetzung der Installation
+- **Keinen echten SMTP-Transport bis in ein fremdes Postfach.** Die Zustellung endet
+  bei Mailpit im Compose-Netz; ein Mailserver, der nach außen zustellt, läuft nicht.
+  Geprüft wird, was das Plugin an `wp_mail()` übergibt und dass es das tut; die
+  Zustellung selbst ist eine Betriebsvoraussetzung der Installation
   (siehe `arbeitsdienste/README.md`, Abschnitt „Technische Voraussetzungen“).
-- **Keine Fremd-Plugins und Themes.** SureMails ist installiert, weil der Mailversand
-  sonst nicht prüfbar wäre; es ist kein Teil der Lieferung und die Testläufe hängen
-  nicht davon ab. Alle anderen Erweiterungen Dritter sind nicht installiert; das
+- **Keine Fremd-Plugins und Themes.** Mailpit ist ein Dienst des Compose-Stacks und kein
+  WordPress-Plugin; es ist kein Teil der Lieferung, und die Testläufe hängen nicht davon
+  ab (sie laufen mit der Attrappe). Alle Erweiterungen Dritter sind nicht installiert; das
   Zusammenspiel mit ihnen ist nicht Teil dieser Prüfung.
 - **Kein Lasttest.** Die Statistik schreibt ohne Sperre zurück; das ist als bekannte
   Einschränkung dokumentiert und nicht als Test abgedeckt. Dasselbe gilt für zwei
@@ -3246,5 +3259,5 @@ das: Der Hinweis ist hier nicht zu sehen, und das ist richtig.
   Apple und die von Googlemail entfernen oder ersetzen unter Umständen einzelne
   `style`-Angaben, und ein Anker, dem der Client die Farbe und die Unterstreichung
   nimmt, ist immer noch ein Anker — aber das steht hier nicht gemessen. Die
-  Handprüfung mit SureMails zeigt die Nachricht so, wie der Client sie anzeigt, und
+  Handprüfung mit Mailpit zeigt die Nachricht so, wie der Client sie anzeigt, und
   dort ist der Link anzuklicken; sie ist der einzige Weg, der diese Lücke schließt.

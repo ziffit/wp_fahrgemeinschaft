@@ -172,8 +172,9 @@ update_option( 'blog_public', 1 );
 
 // The test instance records every wp_mail() call instead of handing the message
 // to a real transport. Without this the functional suite could not inspect
-// recipient, headers and body. It is an option, not a constant, so the manual
-// tests (ShureMail, real SMTP) only have to delete it again.
+// recipient, headers and body. It is an option, not a constant, so setup.sh and
+// run-all.sh switch it off again for the manual test, which reads the message in
+// Mailpit.
 update_option( 'fg_test_mail_enabled', '1' );
 
 $admin = get_user_by( 'login', 'fg_admin' );

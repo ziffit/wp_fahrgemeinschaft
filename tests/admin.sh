@@ -1195,6 +1195,12 @@ s delete-event "$CSV_DIENST" > /dev/null
 
 # --- a member is entered from the duty page, with a search and a counter
 echo "[5g] entering a member from the duty page"
+# This is the first section that reads the mail log, and the recorder is off
+# after setup.sh. http.sh and mail.sh switch it on the same way, run-all.sh
+# switches it off again at the end. Without this the section sends its mails to
+# Mailpit and reads an empty table: every count here would compare a zero with a
+# zero and the section would be green while saying nothing.
+s recorder on > /dev/null
 ZUWEISUNG=$(s make-event "Zuweisung" "$(date -d '+70 days' +%Y-%m-%d)" 2 "10:00")
 # Two members: one with an address that can be written to, one whose address
 # cannot be delivered to. Both are real rows of the member list, and the second

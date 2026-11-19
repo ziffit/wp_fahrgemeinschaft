@@ -585,9 +585,10 @@ switch ( $command ) {
 	//
 	// The mail recorder of the test site short-circuits wp_mail() and writes the
 	// message into a table instead of handing it on. That is what the suites need
-	// and what stops SureMail from receiving anything. A suite run by hand leaves
-	// it switched on — only run-all.sh hands it back at the end — so the way to
-	// switch it is a command here and not a php -r that has to be remembered.
+	// and what stops Mailpit from receiving anything. The instance is handed over
+	// with the recorder off — setup.sh and run-all.sh both switch it off at the
+	// end — so the way back for a suite run by hand is a command here and not a
+	// php -r that has to be remembered.
 	// "on" and "off" and nothing else: a name that is neither is answered with the
 	// current state, so a mistyped call reports instead of doing nothing.
 	case 'recorder':
@@ -603,7 +604,7 @@ switch ( $command ) {
 			$an = false;
 		}
 
-		fg_state_out( $an ? 'on, wp_mail wird in die Tabelle geschrieben' : 'off, wp_mail erreicht SureMail' );
+		fg_state_out( $an ? 'on, wp_mail wird in die Tabelle geschrieben' : 'off, wp_mail erreicht Mailpit' );
 		break;
 
 	// mail-recorded-greeting

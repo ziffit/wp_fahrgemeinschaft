@@ -13,8 +13,8 @@ const FG_TEST_MAIL_TABLE = 'fg_test_mail_log';
 /**
  * Check if the test mail log is enabled.
  *
- * Disabled by default so external mail simulators (like ShureMail) can receive
- * mails. The functional test suite explicitly enables it during bootstrap.
+ * Disabled by default so the Mailpit service of the test environment receives
+ * the mails. The functional test suite explicitly enables it during bootstrap.
  *
  * @return bool
  */
@@ -146,7 +146,8 @@ function fg_test_mail_filter( $short_circuit, $atts ) {
 }
 
 // Only record if the test mail log is enabled. Disabled means: let the mail
-// travel through to the real transport (SMTP, ShureMail, or any other handler).
+// travel through to the real transport (the SMTP route to Mailpit, or any other
+// handler).
 if ( fg_test_mail_is_enabled() ) {
 	add_filter( 'pre_wp_mail', 'fg_test_mail_filter', 10, 2 );
 }
