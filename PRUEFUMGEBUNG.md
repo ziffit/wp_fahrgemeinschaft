@@ -4,7 +4,17 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 19.11.2026 — **CLI 545, öffentliches HTTP 307, Mail-Ebene 124, Admin-Ebene 758,
+Letzter Lauf: 19.11.2026 — **CLI 545, öffentliches HTTP 308, Mail-Ebene 124, Admin-Ebene 758,
+0 Fehler**, gegen den Stand **Plugin 1.25.12, Schema 1.9.0**. Die CLI-Suite lief mit ausdrücklicher
+Zustimmung, weil sie am Anfang alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht; sie
+prüft die geänderte Grenze am direktesten („an over-long number is refused“, „a member with the
+longest number and the longest names is stored“, „the number came back with every character“). Die
+öffentliche Suite ist um **eine** Behauptung höher als am 18.11.2026 (307 → 308): die Beschriftung
+der Statusseite. Mail und Admin sind unverändert. Gegenüber dem Lauf darunter hat sich **eine**
+Sache geändert: Die Mitgliedsnummer ist fünfstellig, und das Feld lässt fünf Stellen zu (siehe
+„Fassung 1.25.12“). Am Plugin und an der Umgebung hat sich sonst nichts geändert.
+
+Vorheriger Lauf: 19.11.2026 — **CLI 545, öffentliches HTTP 307, Mail-Ebene 124, Admin-Ebene 758,
 0 Fehler**, gegen den Stand **Plugin 1.25.11, Schema 1.9.0**. Die CLI-Suite lief mit ausdrücklicher
 Zustimmung, weil sie am Anfang alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht. Der
 Lauf begann **von Null**: `docker compose down -v`, dann `setup.sh` — neues Datenbank-Volume,
@@ -3088,6 +3098,64 @@ Arbeitsdienste, Fahrgemeinschaften).
 HTTP **274**, Mail 124, Admin **758**, 0 Fehler. HTTP ist um vier höher: die Behauptungen zur
 Beschriftung. Die Admin-Suite ist zweimal hintereinander gefahren und war **beide** Male grün —
 das ist bei diesem Abschnitt die eigentliche Aussage, denn vorher wäre der zweite Lauf rot gewesen.
+
+## Fassung 1.25.12: Die Mitgliedsnummer wird fünfstellig
+
+Aus dem Verein: „In Zukunft sind alle Mitgliedsnummer 5 Stellig.“ Die vorige Fassung hatte die
+Beschriftung „Mitgliedsnummer (4-stellig)“ angebracht und **keine** Prüfung daneben gestellt, mit der
+Begründung, eine Prüfung würde Mitglieder mit einer fünf- oder sechsstelligen Nummer abweisen. Die
+neuen Nummern sind fünfstellig, und der Verein will die Angabe durchgesetzt haben. Aus der
+Beschriftung wird „(5-stellig)“, und aus dem Nebeneinander von Beschriftung und Spaltenbreite wird
+eine Grenze.
+
+### Eine Zahl, fünf Felder, drei Prüfstellen
+
+`FG_Schema::MEMBER_NO_MAX` geht von **40** auf **5**. Die Konstante steht in der `maxlength` aller
+fünf Nummernfelder — die vier öffentlichen (Angebot, Kontakt, Anmeldung, Statusseite) und das
+Adminformular — und ist dieselbe Grenze, gegen die der Server misst:
+`FG_Repository::read_member_fields()` beim Speichern eines Mitglieds, `FG_Member_Import::parse()`
+beim Einlesen der CSV und `FG_Admin_Members::invalid_reason()` beim Speichern im Adminformular. Eine
+Zahl an allen drei Prüfstellen; ein Feld, das fünf Zeichen zulässt, und ein Server, der sechs
+annimmt, wären zwei Regeln mit einer Beschriftung.
+
+Die Spalte `fg_members.member_no` bleibt `varchar(40)`. Das ist der Unterschied zur E-Mail-Adresse,
+deren Grenze die Spaltenbreite **ist** (`MEMBER_EMAIL_MAX` = 190): Eine Grenze **unter** der
+Spaltenbreite weist einen Wert nur ab und schneidet ihn nie ab, und nur das Abschneiden kostet Daten.
+Eine Schemaänderung wäre für eine Grenze, die der Verein morgen wieder verschieben kann, der falsche
+Preis. Der Kommentar an der Konstante behauptete bis hierher „the column is the limit, so the two
+cannot drift apart“ und sagt jetzt, was gilt.
+
+### Die Behauptungen, und was sich an ihnen geändert hat
+
+Die drei Behauptungen zum Wortlaut bleiben drei — die drei Formulare auf zwei Seiten —, dazu kommt
+**eine vierte** für die Statusseite, deren Beschriftung auf ihrer eigenen Seite bisher unbehauptet
+war. Aus `maxlength="40"` wird zweimal `maxlength="5"`: Die beiden Behauptungen sagen jetzt die Zahl,
+die der Verein nennt, statt der Spaltenbreite, und ihre Namen sagen das mit. Die zwei Behauptungen,
+dass **kein** `pattern` und **keine** Mindestlänge im Feld steht, bleiben und bekommen eine neue
+Begründung: Die Stellenzahl ist keine Form, und ein Mitglied mit einer kürzeren alten Nummer ist ein
+Mitglied. Bis 1.25.10 stand dort die Begründung, der Server dürfe eine Nummer nicht wegen ihrer Länge
+ablehnen — die ist mit dieser Fassung **umgedreht**: Er lehnt sie jetzt ab, und der Verein hat das
+gewollt.
+
+### Gegenprobe 20 musste enger werden
+
+Sie nimmt die Angabe aus **einem** der drei Formulare, dem Anmeldeformular, und lässt die beiden
+anderen stehen. Die Nadel griff nicht mehr: Der Wortlaut steht seit dieser Fassung **zweimal** in
+`class-fg-public-events.php` — im Anmeldeformular und im Formular der Statusseite —, und die alte
+Nadel hätte die Gegenprobe mit „die Stoerung 20 passt nicht (2 Treffer)“ abgebrochen, statt den
+Fehler einzubauen. Sie trägt jetzt das Feld (`fg-member-no-…`) mit und trifft weiterhin genau eine
+Stelle. Das ist derselbe Fall, den der Kopf der Datei beschreibt: Eine Stoerung, die an zwei Stellen
+greifen könnte, ist keine.
+
+### Läufe
+
+CLI **545**, HTTP **308**, Mail 124, Admin 758, 0 Fehler. Die öffentliche Suite ist um **eine**
+Behauptung höher als am 18.11.2026 (307 → 308): die Beschriftung der Statusseite. Die CLI-Suite lief
+mit ausdrücklicher Zustimmung und prüft die geänderte Grenze an ihrer Stelle: „an over-long number is
+refused“, „a member with the longest number and the longest names is stored“ und „the number came
+back with every character“ — die drei liefen vorher mit einem 40-stelligen Wert und laufen jetzt mit
+einem fünfstelligen. Gegenprobe 20 wurde gefahren und macht **genau** die Behauptung „all three forms
+say how many digits the number has“ rot, wie sie soll.
 
 ## Mail-Auswertung
 

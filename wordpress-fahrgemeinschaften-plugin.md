@@ -1182,3 +1182,43 @@ Fassung vorgesehen und kein Schmuckbegriff. Ihr Plan steht: exakt zuerst, dann e
 mit bis zu acht führenden Nullen (`FG_Schema::MEMBER_NO_ZEROES_MAX`), der Index bleibt über eine
 Abfrage mit `IN (…)` benutzt, mehr als ein Treffer wird abgelehnt, und die Dublettenprüfung im Admin
 sowie der Import bleiben exakt.
+
+## Umsetzungsstand: Die Mitgliedsnummer wird fünfstellig (1.25.12)
+
+Aus dem Verein: „In Zukunft sind alle Mitgliedsnummer 5 Stellig.“ Damit ist der Vorbehalt der
+vorigen Fassung eingelöst und umgedreht. 1.25.10 hatte die Beschriftung ergänzt und **keine** Prüfung
+daneben gestellt, mit der Begründung, die Zahlen könnten nächstes Jahr fünf- oder sechsstellig sein
+und eine Prüfung würde dann richtige Mitglieder abweisen. Die neuen Nummern sind fünfstellig, und der
+Verein will die Angabe jetzt durchgesetzt haben.
+
+### Was sich ändert
+
+`FG_Schema::MEMBER_NO_MAX` geht von **40** auf **5**. Die Konstante trägt die `maxlength` aller fünf
+Nummernfelder — die vier öffentlichen (Angebot, Kontakt, Anmeldung, Statusseite) und das
+Adminformular —, und sie ist dieselbe Grenze, gegen die `FG_Repository::read_member_fields()`, der
+CSV-Import (`FG_Member_Import::parse()`) und die Adminprüfung (`FG_Admin_Members::invalid_reason()`)
+messen. Eine Zahl, eine Grenze: Ein Feld, das fünf Zeichen zulässt, und ein Server, der sechs annimmt,
+wären zwei Regeln mit einer Beschriftung.
+
+Die **Spalte bleibt `varchar(40)`**. Das ist Absicht und nicht Nachlässigkeit: Eine Grenze unter der
+Spaltenbreite kann einen Wert nur **abweisen** und nie **abschneiden**, und nur das Abschneiden kostet
+Daten. Ein Schemawechsel für eine Politikgrenze wäre der falsche Preis — die Spalte hat sich nicht
+geändert, die Politik des Vereins hat sich geändert. Der Kommentar an der Konstante sagt das jetzt,
+statt weiter „die Spalte ist die Grenze“ zu behaupten, und `smoke.php` sagt dasselbe an seiner
+Prüfstelle.
+
+Die **Beschriftung** heißt an allen vier Feldern „Mitgliedsnummer (5-stellig)“. Die alten
+vierstelligen Nummern (`0042`) bleiben gültig: `maxlength` ist eine Obergrenze und keine Vorgabe, und
+eine Mindestlänge steht weiterhin an keinem Feld — ein Mitglied mit einer kürzeren alten Nummer ist
+ein Mitglied. Die Behauptungen der öffentlichen Suite sind mitgezogen: die drei Formulare auf den zwei
+Seiten (Wortlaut) und die Statusseite auf ihrer eigenen (Wortlaut), dazu die `maxlength` von 40 auf 5.
+Die Gegenprobe 20 nimmt die Angabe aus dem Anmeldeformular und muss weiterhin **genau** die
+Drei-Formulare-Behauptung rot machen; ihre Nadel trägt jetzt das Feld mit, weil der Wortlaut mit der
+Statusseite zweimal in derselben Datei steht.
+
+### Was das kostet
+
+Der alte Vorteil ist weg: Eine sechsstellige Nummer, die der Verein später doch vergibt, kommt durch
+kein Formular mehr und wird vom Import nicht eingelesen. Der Verein hat sich am 19.11.2026 so
+entschieden. Die Toleranz für führende Nullen (`MEMBER_NO_ZEROES_MAX`) steht weiterhin aus; diese
+Fassung ändert an der Zeichenketten-Gleichheit der Nummer nichts.

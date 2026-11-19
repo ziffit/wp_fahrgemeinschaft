@@ -2269,8 +2269,10 @@ $lang_fall['last_name'] = 'Probe';
 $lang_fall['email']     = str_repeat( 'a', FG_Schema::MEMBER_EMAIL_MAX + 1 ) . '@example.org';
 fg_ok( ! $fg_repo->insert_member( $lang_fall ), 'an over-long address is refused' );
 
-// The limits are the sizes the columns really have. A limit that does not match
-// the column would either refuse good data or store a truncated value.
+// The name limits are the sizes the columns really have. The member number is
+// the exception since 1.25.12: the club's numbers are five digits, the limit is
+// those five, and the column is wider. A limit below the column can only refuse a
+// value, never cut one off — the direction that keeps data intact.
 $rand_number = str_repeat( '7', FG_Schema::MEMBER_NO_MAX );
 $rand        = $fg_repo->insert_member( array( 'member_no' => $rand_number, 'email' => 'rand@example.org', 'first_name' => str_repeat( 'r', FG_Schema::MEMBER_NAME_MAX ), 'last_name' => str_repeat( 's', FG_Schema::MEMBER_NAME_MAX ) ) );
 fg_ok( (bool) $rand, 'a member with the longest number and the longest names is stored', var_export( $rand, true ) );

@@ -151,7 +151,7 @@ final class FG_Public_Events {
 					<?php // The same pair in the same words as in the three other forms of the plugin. The field names carry their own prefix because this form is meant for a page of its own and a second form beside it must not answer for it. ?>
 					<div class="fg-member-row">
 						<div class="fg-field">
-							<label for="fg-status-member-no"><?php esc_html_e( 'Mitgliedsnummer (4-stellig)', 'arbeitsdienste' ); ?></label>
+							<label for="fg-status-member-no"><?php esc_html_e( 'Mitgliedsnummer (5-stellig)', 'arbeitsdienste' ); ?></label>
 							<input type="text" id="fg-status-member-no" name="fg_status_member_no" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_NO_MAX ); ?>" required>
 						</div>
 						<div class="fg-field">
@@ -363,7 +363,7 @@ final class FG_Public_Events {
 					// another form wants it in a different order. ?>
 					<div class="fg-member-row">
 						<div class="fg-field">
-							<label for="fg-member-no-<?php echo esc_attr( $ref ); ?>"><?php esc_html_e( 'Mitgliedsnummer (4-stellig)', 'arbeitsdienste' ); ?></label>
+							<label for="fg-member-no-<?php echo esc_attr( $ref ); ?>"><?php esc_html_e( 'Mitgliedsnummer (5-stellig)', 'arbeitsdienste' ); ?></label>
 							<input type="text" id="fg-member-no-<?php echo esc_attr( $ref ); ?>" name="fg_member_no" maxlength="<?php echo esc_attr( FG_Schema::MEMBER_NO_MAX ); ?>" required>
 						</div>
 						<div class="fg-field">

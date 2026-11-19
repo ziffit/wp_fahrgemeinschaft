@@ -668,23 +668,25 @@ sys.exit(0 if -1 not in (bereich, box, nummer, adresse) and bereich < box < numm
 has "the area field carries its examples" "$body" "Abfahrtsort, Stadtteil, z. B. Langwasser, Nürnberg Nord, S-Bahnstation Ostring."
 hasnt "no address field of the form invites more than the column holds" "$body" 'maxlength="254"'
 has "the address of the form stops at the width of the column" "$body" 'name="fg_member_email" maxlength="190"'
-has "the member number of the form stops at the width of the column" "$body" 'name="fg_member_no" maxlength="40"'
-# --- the label says how many digits the number has (since 1.25.10)
-# The club's numbers are four digits and begin with a zero (0042), and a member
-# who only knows their number as "42" has no way of knowing that. The label says
-# it, and it says it in all three forms that ask for a number: one form that names
-# the length and two that do not is the more confusing state, not the tidier one.
-# The three do not stand on one page — the offer form and the contact forms on the
+has "the member number of the form stops at five digits" "$body" 'name="fg_member_no" maxlength="5"'
+# --- the label says how many digits the number has (since 1.25.10, five since
+# 1.25.12)
+# The club's numbers begin with a zero (0042), and a member who only knows their
+# number as "42" has no way of knowing that. The label says it, and it says it in
+# all three forms that ask for a number on these two pages: one form that names the
+# length and two that do not is the more confusing state, not the tidier one. The
+# three do not stand on one page — the offer form and the contact form on the
 # rides page, the signup form of the duty on the list page — so all three are read
-# from two pages and looked for one by one.
+# from two pages and looked for one by one. The status form stands on a page of
+# its own and is checked there.
 LISTE=$(curl -sk "$BASE/?page_id=$(jq list_page_id)")
 struct "$(printf '%s\n%s' "$body" "$LISTE")" "all three forms say how many digits the number has" "
 import re, sys
 h = sys.stdin.read()
 formen = {
-    'dem Anmeldeformular des Arbeitsdienstes': r'for=\"fg-member-no-[^\"]*\"[^>]*>Mitgliedsnummer \(4-stellig\)',
-    'dem Angebotformular': r'for=\"fg-ride-member-no\"[^>]*>Mitgliedsnummer \(4-stellig\)',
-    'dem Kontaktformular': r'for=\"fg-contact-no-[^\"]*\"[^>]*>Mitgliedsnummer \(4-stellig\)',
+    'dem Anmeldeformular des Arbeitsdienstes': r'for=\"fg-member-no-[^\"]*\"[^>]*>Mitgliedsnummer \(5-stellig\)',
+    'dem Angebotformular': r'for=\"fg-ride-member-no\"[^>]*>Mitgliedsnummer \(5-stellig\)',
+    'dem Kontaktformular': r'for=\"fg-contact-no-[^\"]*\"[^>]*>Mitgliedsnummer \(5-stellig\)',
 }
 fehlend = [n for n, m in formen.items() if not re.search(m, h)]
 if fehlend:
@@ -693,14 +695,14 @@ if fehlend:
 sys.exit(0)
 " "at least one of the three forms does not say how many digits the number has"
 
-# The wording is a wording and nothing else. It says four digits, and the club's
-# numbers may be five or six next year — a check that held members to the label
-# would then throw away members who are quite correct, so the three claims below
-# pin that no such check was put in. The label may be wrong in a year; the server
-# may not refuse a number because of it.
+# The wording is a wording and nothing else, and the length it names is now the
+# length the field enforces: `maxlength` and the server's own check both stop at
+# five since 1.25.12. What the field still does not do is shape the number: no
+# pattern, because a digit count is not a shape, and no minimum length, because a
+# member whose old number is shorter is a member. The three claims below pin that.
 hasnt "and no pattern was put on a field of the form" "$body" 'pattern='
 hasnt "and no minimum length was put on one either" "$body" 'minlength='
-has "and the number keeps the width the column has" "$body" 'name="fg_member_no" maxlength="40"'
+has "and the field is as wide as the label says" "$body" 'name="fg_member_no" maxlength="5"'
 # The button has to name what the press does. Until version 1.15.0 it said
 # "Eintragung vormerken" and told the visitor their entry was not in the list
 # yet; since then it is in the list the moment the page comes back, and a button
@@ -2398,6 +2400,7 @@ has "the status page names what it is for" "$STATUS" "Bin ich angemeldet?"
 has "and says what the member gets" "$STATUS" "Prüfe hier, ob du angemeldet bist und lasse dir deine Bestätigungsmail erneut zusenden."
 has "the status page renders the form" "$STATUS" "Anmeldung prüfen"
 has "the status form asks for the member number" "$STATUS" 'for="fg-status-member-no"'
+has "the status form says how many digits the number has" "$STATUS" 'Mitgliedsnummer (5-stellig)'
 has "the status form asks for the address" "$STATUS" 'for="fg-status-member-email"'
 # One button. It is the answer and the mail in one step, and a second button
 # that only looked would ask the member for a second press for the same answer.

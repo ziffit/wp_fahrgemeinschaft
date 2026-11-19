@@ -107,12 +107,17 @@ final class FG_Schema {
 	 * The number is the key of a member, so it is stored as text and never as a
 	 * number. A club number may have a leading zero, and a leading zero that
 	 * `absint()` or an `int` column would swallow would quietly make a
-	 * different member out of a different person. The column is the limit, so
-	 * the two cannot drift apart.
+	 * different member out of a different person.
+	 *
+	 * Since 1.25.12 the club's numbers are five digits, and that is this limit:
+	 * the form carries it in `maxlength` and the server checks it again. The
+	 * column is `varchar(40)` and therefore wider — a limit *below* the column
+	 * can only refuse a value, never cut one off, which is the direction that
+	 * keeps data intact, and a wider column costs no migration.
 	 *
 	 * @var int
 	 */
-	const MEMBER_NO_MAX = 40;
+	const MEMBER_NO_MAX = 5;
 
 	/**
 	 * Longest first or last name, in characters.

@@ -184,10 +184,10 @@ def stoerung_20(s):
     # Die Angabe der Stellenzahl fehlt in EINEM der drei Formulare — hier im
     # Anmeldeformular des Arbeitsdienstes, waehrend die beiden anderen sie tragen.
     # Das ist der Fehler, den man beim Umbau macht, wenn man nur an die eine Seite
-    # denkt: Zwei Formulare sagen "4-stellig", das dritte nicht, und niemand
+    # denkt: Zwei Formulare sagen "5-stellig", das dritte nicht, und niemand
     # vergleicht sie. Die Behauptung zaehlt alle drei und nennt das fehlende.
-    alt = "<?php esc_html_e( 'Mitgliedsnummer (4-stellig)', 'arbeitsdienste' ); ?>"
-    neu = "<?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?>"
+    alt = "fg-member-no-<?php echo esc_attr( $ref ); ?>\"><?php esc_html_e( 'Mitgliedsnummer (5-stellig)', 'arbeitsdienste' ); ?>"
+    neu = "fg-member-no-<?php echo esc_attr( $ref ); ?>\"><?php esc_html_e( 'Mitgliedsnummer', 'arbeitsdienste' ); ?>"
     if s.count(alt) != 1:
         raise SystemExit('die Stoerung 20 passt nicht (%d Treffer)' % s.count(alt))
     return alt, neu, 'class-fg-public-events.php'
