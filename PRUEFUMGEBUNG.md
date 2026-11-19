@@ -4,7 +4,18 @@ Diese Datei beschreibt, wie das Plugin funktional geprüft wird: welche Umgebung
 verwendet wird, wie sie jederzeit wiederherstellbar ist und was die vier Testläufe
 tatsächlich belegen. Sie gehört nicht zum Plugin und wird nicht mitgeliefert.
 
-Letzter Lauf: 18.11.2026 — **CLI 545, öffentliches HTTP 307, Mail-Ebene 124, Admin-Ebene 758,
+Letzter Lauf: 19.11.2026 — **CLI 545, öffentliches HTTP 307, Mail-Ebene 124, Admin-Ebene 758,
+0 Fehler**, gegen den Stand **Plugin 1.25.11, Schema 1.9.0**. Die CLI-Suite lief mit ausdrücklicher
+Zustimmung, weil sie am Anfang alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht. Der
+Lauf begann **von Null**: `docker compose down -v`, dann `setup.sh` — neues Datenbank-Volume,
+WordPress 7.1.4 frisch installiert, Plugin, Fixtures und Mails neu eingerichtet, danach `run-all.sh`
+über alle vier Suiten. Am Plugin hat sich gegenüber dem 18.11.2026 **keine Zeile** geändert, die
+Zahlen sind dieselben. Geändert hat sich die Umgebung: Der Mailausgang ist jetzt **Mailpit** statt
+einer Attrappe, die nichts weiterreicht (siehe „Stack“, „Der Recorder ist abschaltbar“ und
+„Handprüfung mit Mailpit“). Belegt ist damit, dass der Neuaufbau aus dem Repo allein eine
+vollständige, prüfbare Umgebung ergibt.
+
+Vorheriger Lauf: 18.11.2026 — **CLI 545, öffentliches HTTP 307, Mail-Ebene 124, Admin-Ebene 758,
 0 Fehler**, gegen den Stand **Plugin 1.25.11, Schema 1.9.0**. Die CLI-Suite lief mit ausdrücklicher
 Zustimmung, weil sie am Anfang alle Arbeitsdienste, Fahrgemeinschaften und Mitglieder löscht. Die
 zwei Behauptungen auf Kopfzeile und Knopftext der Selbstauskunft sind am selben Tag mit der
@@ -216,7 +227,7 @@ beweist nichts.
 Projekts und ist nicht Teil des Repos, weil es die Testumgebung des jeweiligen
 Rechners beschreibt. Die Skripte erwarten es in der Umgebungsvariable `WPDEV`.
 
-- `wordpress:latest` (im letzten Lauf 7.1.2), `mariadb:10.6`, `phpmyadmin:latest`,
+- `wordpress:latest` (im letzten Lauf 7.1.4), `mariadb:10.6`, `phpmyadmin:latest`,
   `axllent/mailpit:latest`
 - `8080` HTTP, `8443` TLS, `8081` phpMyAdmin, `8026` Mailpit-Oberfläche
 - `WORDPRESS_DEBUG=1`, damit PHP-Hinweise in den Antworten sichtbar bleiben
